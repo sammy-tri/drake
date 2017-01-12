@@ -1,7 +1,7 @@
 group "0.sim" {
 
   cmd "0.kuka_simulation" {
-    exec = "build/drake/examples/kuka_iiwa_arm/kuka_simulation";
+    exec = "build/drake/examples/kuka_iiwa_arm/iiwa_wsg_simulation";
     host = "localhost";
   }
 

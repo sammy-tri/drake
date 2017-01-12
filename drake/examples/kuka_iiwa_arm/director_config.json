@@ -59,7 +59,7 @@
 
    "endEffectorConfig" : {
     "endEffectorLinkNames": ["iiwa_link_ee"],
-    "graspOffsetFrame" : [[0,0,0], [0,0,0]],
+    "graspOffsetFrame" : [[0.12,0,0], [0,0,0]],
     "fixedJoints" : ["base_x","base_y","base_z","base_roll","base_pitch","base_yaw"]
   }
 
