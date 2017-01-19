@@ -252,7 +252,8 @@
   <joint name="tool0_joint" type="fixed">
     <parent link="iiwa_link_7"/>
     <child link="iiwa_link_ee"/>
-    <origin rpy="0 -1.57079632679 0" xyz="0 0 0.045"/>
+    <!--<origin rpy="0 -1.57079632679 0" xyz="0 0 0.045"/>-->
+    <origin rpy="0 -1.57079632679 -0.3922699" xyz="0 0 0.220"/>
   </joint>
   <link name="iiwa_link_ee">
   </link>
