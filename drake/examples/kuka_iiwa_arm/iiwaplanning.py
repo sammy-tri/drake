@@ -30,7 +30,7 @@ def getGraspToHandLink():
 
 _callbackId = None
 
-def planReachGoal(goalFrameName='reach goal', interactive=False):
+def planReachGoal(goalFrameName='reach goal', interactive=False, release=False):
 
     goalFrame = om.findObjectByName(goalFrameName).transform
     startPoseName = 'reach_start'
@@ -49,6 +49,16 @@ def planReachGoal(goalFrameName='reach goal', interactive=False):
     p.tspan = [1.0, 1.0]
     q.tspan = [1.0, 1.0]
 
+    #print "target orientation", transformUtils.rollPitchYawToQuaternion(q.quaternion)
+    pose = transformUtils.poseFromTransform(q.quaternion)
+    orientation = transformUtils.quaternionToRollPitchYaw(pose[1])
+    print "target pose", pose, "orientation", orientation
+
+    constraints.append(p)
+    if release:
+        ee_fixed = ikconstraints.WorldFixedOrientConstraint()
+        ee_fixed.linkName = endEffectorLinkName
+        ee_fixed.tspan = [0.0, 1.0]
 
     g = ikconstraints.WorldGazeDirConstraint()
     g.linkName = endEffectorLinkName
@@ -57,10 +67,14 @@ def planReachGoal(goalFrameName='reach goal', interactive=False):
     g.bodyAxis = list(graspOffsetFrame.TransformVector([0,1,0]))
     g.coneThreshold = 0.0
     g.tspan = [1.0, 1.0]
-
-
-    constraints.append(p)
     constraints.append(g)
+
+    # TODO(sam.creasey) Can we cache the orientation of the end
+    # effector at the last grasp (if appilcable) force it to be the
+    # same at the goal?  That way we could set something down flat no
+    # matter how we picked it up.
+    #constraints.append(q)
+    #constraints.append(new_q)
 
     constraintSet = ikplanner.ConstraintSet(ikPlanner, constraints, endPoseName, startPoseName)
 
@@ -80,6 +94,8 @@ def planReachGoal(goalFrameName='reach goal', interactive=False):
 
         robotSystem.teleopPanel.hideTeleopModel()
         constraintSet.runIk()
+        if release:
+            constraintSet.constraints.append(ee_fixed)
         print constraintSet.runIkTraj()
 
 

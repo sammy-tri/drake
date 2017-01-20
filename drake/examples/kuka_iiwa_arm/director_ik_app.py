@@ -63,13 +63,17 @@ def gripperClose():
     sendGripperCommand(15, 40)
 
 def planGrasp():
-    iiwaplanning.planReachGoal('grasp to world')
+    iiwaplanning.planReachGoal('grasp to world', release=False)
 
 def planPreGrasp():
-    iiwaplanning.planReachGoal('pregrasp to world')
+    iiwaplanning.planReachGoal('pregrasp to world', release=False)
 
-def printThing():
-    print om.findObjectByName('Task Params')
+def planRelease():
+    iiwaplanning.planReachGoal('grasp to world', release=True)
+
+def planPreRelease():
+    iiwaplanning.planReachGoal('pregrasp to world', release=True)
+
 
 class UpdateGraspTargetTask(basictasks.AsyncTask):
 
@@ -91,22 +95,50 @@ class UpdateGraspTargetTask(basictasks.AsyncTask):
         iiwaplanning.setGraspTarget(self.properties.position,
                                     self.properties.orientation,
                                     self.properties.dimensions)
+        iiwaplanning.addGraspFrames()
+
+class WaitForExecuteTask(basictasks.DelayTask):
+    def __init__(self, robotSystem, **kwargs):
+        basictasks.DelayTask.__init__(self, **kwargs)
+        self.robotSystem = robotSystem
+
+    def run(self):
+        plan = self.robotSystem.ikPlanner.lastManipPlan
+        lastPlanTime = self.robotSystem.planPlayback.getPlanElapsedTime(plan)
+        self.properties.setProperty('Delay time', 3 * lastPlanTime + 0.1)
+        yield basictasks.DelayTask.run(self)
 
 
 class KukaWsgTaskPanel(TaskUserPanel):
 
-    def __init__(self):
+    def __init__(self, robotSystem):
         TaskUserPanel.__init__(self, windowTitle='Task Panel')
+        self.ui.imageFrame.hide()
+        self.robotSystem = robotSystem
+        # Robot toy dimensions
+        self._default_target_dimensions = [0.06, 0.02, 0.09]
+        # Water bottle dimensions
+        #self._default_target_dimensions = [0.07, 0.07, 0.22]
+        # Squishy ball dimensions
+        #
+        # TODO(sam.creasey): Why does the squishy ball generate such
+        # weird / bound up plans at position 1?
+        #self._default_target_dimensions = [0.06, 0.06, 0.06]
 
-        #self.addManualButton('fit object', iiwaplanning.fitObjectOnSupport)
+
         self.addManualButton('add grasp frames', iiwaplanning.addGraspFrames)
         self.addManualButton('plan pregrasp', planPreGrasp)
         self.addManualButton('plan grasp', planGrasp)
-        self.addManualButton('print', printThing)
 
         self.params.addProperty('balls', 3)
         self.addTasks()
 
+    def onPropertyChanged(self, propertySet, propertyName):
+        print "property changed", propertyName, propertySet.getProperty(propertyName)
+
+    def commitManipPlan(self):
+        self.robotSystem.manipPlanner.commitManipPlan(
+            self.robotSystem.ikPlanner.lastManipPlan)
 
     def addTasks(self):
         # some helpers
@@ -116,21 +148,80 @@ class KukaWsgTaskPanel(TaskUserPanel):
             self.taskTree.onAddTask(task, copy=False, parent=parent)
 
         def addFunc(name, func, parent=None):
-            addTask(rt.CallbackTask(callback=func, name=name), parent=parent)
+            addTask(basictasks.CallbackTask(callback=func, name=name), parent=parent)
 
         def addFolder(name, parent=None):
             self.folder = self.taskTree.addGroup(name, parent=parent)
             return self.folder
 
+        addFolder('meh')
         addTask(UpdateGraspTargetTask(name="Update target",
                                       position=[0.81, -0.03, 0.0]))
         addTask(UpdateGraspTargetTask(name="Update target ref",
                                       position=[0.9, 0.0, 0.0],
                                       dimensions=[0.05, 0.05, 0.05]))
 
-        addTask(UpdateGraspTargetTask(name="Update toy robottarget",
+        addFolder('pick and place 1->2')
+        addTask(UpdateGraspTargetTask(name="Update target 1",
                                       position=[0.8, 0.36, 0.30],
-                                      dimensions=[0.06, 0.02, 0.09]))
+                                      dimensions=self._default_target_dimensions))
+        addFunc('plan pregrasp', planPreGrasp)
+        addTask(basictasks.DelayTask(name='wait', delayTime=0.25))
+        addFunc('execute', self.commitManipPlan)
+        addTask(WaitForExecuteTask(self.robotSystem, name='wait for execute'))
+        addFunc('plan grasp', planGrasp)
+        addTask(basictasks.DelayTask(name='wait', delayTime=0.25))
+        addFunc('execute', self.commitManipPlan)
+        addTask(WaitForExecuteTask(self.robotSystem, name='wait for execute'))
+        addFunc('close gripper', gripperClose)
+        addTask(basictasks.DelayTask(name='wait', delayTime=1.0))
+        addFunc('plan prerelease', planPreRelease)
+        addTask(basictasks.DelayTask(name='wait', delayTime=0.25))
+        addFunc('execute', self.commitManipPlan)
+        addTask(WaitForExecuteTask(self.robotSystem, name='wait for execute'))
+        addTask(UpdateGraspTargetTask(name="Update target 2",
+                                      position=[0.9, -0.36, 0.30],
+                                      dimensions=self._default_target_dimensions))
+        addFunc('plan prerelease', planPreRelease)
+        addTask(basictasks.DelayTask(name='wait', delayTime=0.25))
+        addFunc('execute', self.commitManipPlan)
+        addTask(WaitForExecuteTask(self.robotSystem, name='wait for execute'))
+        addFunc('plan release', planRelease)
+        addTask(basictasks.DelayTask(name='wait', delayTime=0.25))
+        addFunc('execute', self.commitManipPlan)
+        addTask(WaitForExecuteTask(self.robotSystem, name='wait for execute'))
+        addFunc('open gripper', gripperOpen)
+
+        addFolder('pick and place 2->1')
+        addTask(UpdateGraspTargetTask(name="Update target 2",
+                                      position=[0.9, -0.36, 0.30],
+                                      dimensions=self._default_target_dimensions))
+        addFunc('plan pregrasp', planPreGrasp)
+        addTask(basictasks.DelayTask(name='wait', delayTime=0.25))
+        addFunc('execute', self.commitManipPlan)
+        addTask(WaitForExecuteTask(self.robotSystem, name='wait for execute'))
+        addFunc('plan grasp', planGrasp)
+        addTask(basictasks.DelayTask(name='wait', delayTime=0.25))
+        addFunc('execute', self.commitManipPlan)
+        addTask(WaitForExecuteTask(self.robotSystem, name='wait for execute'))
+        addFunc('close gripper', gripperClose)
+        addTask(basictasks.DelayTask(name='wait', delayTime=1.0))
+        addFunc('plan prerelease', planPreRelease)
+        addTask(basictasks.DelayTask(name='wait', delayTime=0.25))
+        addFunc('execute', self.commitManipPlan)
+        addTask(WaitForExecuteTask(self.robotSystem, name='wait for execute'))
+        addTask(UpdateGraspTargetTask(name="Update target 1",
+                                      position=[0.8, 0.36, 0.30],
+                                      dimensions=self._default_target_dimensions))
+        addFunc('plan prerelease', planPreRelease)
+        addTask(basictasks.DelayTask(name='wait', delayTime=0.25))
+        addFunc('execute', self.commitManipPlan)
+        addTask(WaitForExecuteTask(self.robotSystem, name='wait for execute'))
+        addFunc('plan release', planRelease)
+        addTask(basictasks.DelayTask(name='wait', delayTime=0.25))
+        addFunc('execute', self.commitManipPlan)
+        addTask(WaitForExecuteTask(self.robotSystem, name='wait for execute'))
+        addFunc('open gripper', gripperOpen)
 
 
 def onOpenTaskPanel():
@@ -162,7 +253,7 @@ app.app.addWidgetToDock(robotSystem.playbackPanel.widget,
 
 setupToolbar()
 
-taskPanel = KukaWsgTaskPanel()
+taskPanel = KukaWsgTaskPanel(robotSystem)
 
 # show sim time in the status bar
 infoLabel = KukaSimInfoLabel(app.mainWindow.statusBar())
