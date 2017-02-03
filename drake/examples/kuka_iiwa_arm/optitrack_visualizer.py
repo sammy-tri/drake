@@ -1,0 +1,215 @@
+from director import lcmUtils
+from director import objectmodel as om
+from director import visualization as vis
+from director import vtkAll as vtk
+from director import transformUtils
+from director.debugVis import DebugData
+from director.shallowCopy import shallowCopy
+
+from optitrack import optitrack_frame_t
+
+import numpy as np
+
+# Test code below
+from optitrack import optitrack_marker_set_t
+from optitrack import optitrack_marker_t
+from optitrack import optitrack_rigid_body_t
+
+test_message = optitrack_frame_t.optitrack_frame_t()
+
+marker_set = optitrack_marker_set_t.optitrack_marker_set_t()
+marker_set.name = "set foo"
+marker_set.xyz = [[-0.5, 0.5, 0.5], [-0.4, 0.5, 0.5], [-0.5, 0.4, 0.5]]
+marker_set.num_markers = len(marker_set.xyz)
+test_message.marker_sets.append(marker_set)
+test_message.num_marker_sets = len(test_message.marker_sets)
+
+body = optitrack_rigid_body_t.optitrack_rigid_body_t()
+body.id = 100
+body.xyz = [1., 1., 1.]
+body.quat = [1., 0., 0., 0.]
+body.marker_xyz = [[0., 0.1, 0.1], [0., -0.1, 0.1]]
+body.marker_ids = [101, 102]
+body.num_markers = len(body.marker_ids)
+test_message.rigid_bodies.append(body)
+test_message.num_rigid_bodies = len(test_message.rigid_bodies)
+
+labeled = optitrack_marker_t.optitrack_marker_t()
+labeled.id = 200
+labeled.xyz = [0.5, 0.5, 0.5]
+test_message.labeled_markers.append(labeled)
+labeled = optitrack_marker_t.optitrack_marker_t()
+labeled.id = 201
+labeled.xyz = [0.4, 0.5, 0.5]
+test_message.labeled_markers.append(labeled)
+labeled = optitrack_marker_t.optitrack_marker_t()
+labeled.id = 202
+labeled.xyz = [0.5, 0.4, 0.5]
+test_message.labeled_markers.append(labeled)
+test_message.num_labeled_markers = len(test_message.labeled_markers)
+
+test_message.other_markers = [[0.5, -0.5, 0.5], [0.4, -0.5, 0.5], [0.5, -0.4, 0.5]]
+test_message.num_other_markers = len(test_message.other_markers)
+
+
+class OptitrackVisualizer(object):
+    '''
+    Usage:
+
+      optitrackVis = OptitrackVisualizer('OPTITRACK_CHANNEL_NAME')
+
+
+      # You can enable visualization of edges between optitrack markers,
+      # but this visualization is slower.  To enable:
+
+      optitrackVis.drawEdges = True
+
+      # By default the lcm update rate is throttled to 10 hz.
+      # To increase the update rate:
+
+      optitrackVis.subscriber.setSpeedLimit(100)
+
+      # Note, the constructor calls initSubscriber() automatically.
+      # To remove the lcm subscriber:
+
+      optitrackVis.removeSubscriber()
+
+    '''
+
+    def __init__(self, channel):
+        self.channel = channel
+        self.subscriber = None
+        self.unitConversion = 0.001
+        self.marker_sets = om.getOrCreateContainer(
+            "Marker Sets", parentObj=self.getRootFolder())
+        self.rigid_bodies = om.getOrCreateContainer(
+            "Rigid Bodies", parentObj=self.getRootFolder())
+        self.labeled_markers = om.getOrCreateContainer(
+            "Labeled Markers", parentObj=self.getRootFolder())
+        self.unlabeled_markers = om.getOrCreateContainer(
+            "Unlabeled Markers", parentObj=self.getRootFolder())
+        self.drawEdges = False
+        self.markerGeometry = None
+        self.initSubscriber()
+        self.onMessage(test_message)
+
+    def initSubscriber(self):
+        self.subscriber = lcmUtils.addSubscriber(
+            self.channel, optitrack_frame_t, self.onMessage)
+        self.subscriber.setSpeedLimit(10)
+
+    def removeSubscriber(self):
+        if not self.subscriber:
+            return
+        lcmUtils.removeSubscriber(self.subscriber)
+        self.subscriber = None
+
+    def getRootFolder(self):
+        folder = om.getOrCreateContainer(self.channel)
+        return folder
+
+    def removeRootFolder(self):
+        om.removeFromObjectModel(self.getRootFolder())
+
+    def getMarkerGeometry(self):
+        if self.markerGeometry is None:
+            d = DebugData()
+            d.addSphere(np.zeros(3), radius=0.007, resolution=12)
+            self.markerGeometry = shallowCopy(d.getPolyData())
+
+        return self.markerGeometry
+
+    def createMarkerObjects(self, marker_ids, modelFolder, modelName, modelColor):
+
+        geom = self.getMarkerGeometry()
+
+        def makeMarker(i):
+            obj = vis.showPolyData(
+                shallowCopy(geom), modelName + ' marker %d' % i, color=modelColor, parent=modelFolder)
+            vis.addChildFrame(obj)
+            return obj
+
+        return [makeMarker(i) for i in marker_ids]
+
+    def _updateMarkerCollection(self, prefix, folder, marker_ids,
+                                positions, base_transform=None):
+        markers = folder.children()
+        if len(markers) != len(positions):
+            for obj in markers:
+                om.removeFromObjectModel(obj)
+            modelColor = vis.getRandomColor()
+            markers = self.createMarkerObjects(
+                marker_ids, folder, prefix, modelColor)
+        if len(markers):
+            modelColor = markers[0].getProperty('Color')
+
+        for i, pos in enumerate(positions):
+            marker_frame = vtk.vtkTransform()
+            marker_frame.Translate(np.array(pos))
+            if base_transform is not None:
+                marker_frame = transformUtils.concatenateTransforms(
+                    [marker_frame, base_transform])
+            markers[i].getChildFrame().copyFrame(marker_frame)
+
+        # TODO(sam.creasey) we could try drawing edges here
+
+    def _handleMarkerSets(self, marker_sets):
+        # Get the list of existing marker sets so we can track any
+        # which disappear.
+        remaining_set_names = set(
+            [x.getProperty('Name') for x in self.marker_sets.children()])
+
+        for marker_set in marker_sets:
+            set_name = 'Marker set ' + marker_set.name
+            remaining_set_names.discard(set_name)
+            set_folder = om.getOrCreateContainer(
+                set_name, parentObj=self.marker_sets)
+            marker_ids = range(marker_set.num_markers)
+            self._updateMarkerCollection(
+                marker_set.name + '.', set_folder, marker_ids, marker_set.xyz)
+
+        for remaining_set in remaining_set_names:
+            obj = om.findObjectByName(remaining_set, self.marker_sets)
+            om.removeFromObjectModel(obj)
+
+    def _handleRigidBodies(self, rigid_bodies):
+        # Get the list of existing rigid bodies so we can track any
+        # which disappear.
+        remaining_body_names = set(
+            [x.getProperty('Name') for x in self.rigid_bodies.children()])
+
+        for body in rigid_bodies:
+            body_name = 'Body ' + str(body.id)
+            transform = transformUtils.transformFromPose(body.xyz, body.quat)
+            body_frame = vis.updateFrame(transform, body_name,
+                                         scale=0.1, parent=self.rigid_bodies)
+            self._updateMarkerCollection(
+                body_name + '.', body_frame, body.marker_ids,
+                body.marker_xyz, base_transform=transform)
+
+        for remaining_body in remaining_body_names:
+            obj = om.findObjectByName(remaining_body, self.rigid_bodies)
+            om.removeFromObjectModel(obj)
+
+    def _handleLabeledMarkers(self, labeled_markers):
+        marker_ids = [x.id for x in labeled_markers]
+        marker_positions = [x.xyz for x in labeled_markers]
+        # We'll rename the items ourselves later.
+        self._updateMarkerCollection(
+            "dummy prefix", self.labeled_markers, marker_ids, marker_positions)
+        for i, marker in enumerate(self.labeled_markers.children()):
+            marker_name = 'Marker ' + str(marker_ids[i])
+            if marker.getProperty('Name') != marker_name:
+                marker.rename(marker_name)
+
+    def _handleUnlabeledMarkers(self, positions):
+        self._updateMarkerCollection(
+            "Unlabeled", self.unlabeled_markers, range(len(positions)),
+            positions)
+
+    def onMessage(self, msg):
+        self.lastMessage = msg
+        self._handleMarkerSets(msg.marker_sets)
+        self._handleRigidBodies(msg.rigid_bodies)
+        self._handleLabeledMarkers(msg.labeled_markers)
+        self._handleUnlabeledMarkers(msg.other_markers)

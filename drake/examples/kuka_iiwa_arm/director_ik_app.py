@@ -18,6 +18,7 @@ from PythonQt import QtGui, QtCore
 import drake as lcmdrake
 
 import iiwaplanning
+import optitrack_visualizer
 
 
 class KukaSimInfoLabel(object):
@@ -272,6 +273,8 @@ ikPlanner.getIkOptions().setProperty('Max joint degrees/s', 60)
 
 # initialize the listener for the pose gui
 ikPlanner.addPostureGoalListener(robotSystem.robotStateJointController)
+
+optitrack_vis = optitrack_visualizer.OptitrackVisualizer('OPTITRACK_FRAMES')
 
 # set the default camera view
 applogic.resetCamera(viewDirection=[-1, 0, 0], view=app.view)
