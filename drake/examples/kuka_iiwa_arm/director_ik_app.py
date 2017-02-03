@@ -75,7 +75,6 @@ def planRelease():
 def planPreRelease():
     iiwaplanning.planReachGoal('pregrasp to world', release=True)
 
-
 class UpdateGraspTargetTask(basictasks.AsyncTask):
 
     @staticmethod
@@ -112,7 +111,9 @@ class WaitForExecuteTask(basictasks.DelayTask):
 
 class KukaWsgTaskPanel(TaskUserPanel):
 
-    def __init__(self, robotSystem):
+    rigid_body_target_name = 'Target rigid body'
+
+    def __init__(self, robotSystem, optitrack_vis):
         TaskUserPanel.__init__(self, windowTitle='Task Panel')
         self.ui.imageFrame.hide()
         self.robotSystem = robotSystem
@@ -127,12 +128,30 @@ class KukaWsgTaskPanel(TaskUserPanel):
         #self._default_target_dimensions = [0.06, 0.06, 0.06]
 
 
-        self.addManualButton('add grasp frames', iiwaplanning.addGraspFrames)
+        self.addManualButton('add grasp frames', self.addGraspFrameFromList)
         self.addManualButton('plan pregrasp', planPreGrasp)
         self.addManualButton('plan grasp', planGrasp)
 
-        self.params.addProperty('balls', 3)
+        self.params.addProperty(
+            self.rigid_body_target_name, 0,
+            attributes=propertyset.PropertyAttributes(enumNames=[""]))
+        optitrack_vis.connectRigidBodyListChanged(self.rigidBodyListChanged)
+
         self.addTasks()
+
+    def rigidBodyListChanged(self, body_list):
+        old_name = self.params.getPropertyEnumValue(self.rigid_body_target_name)
+        print "old selection", old_name
+        self.params.setProperty(self.rigid_body_target_name, 0)
+        self.params.setPropertyAttribute(self.rigid_body_target_name, 'enumNames',
+                                         body_list)
+        if old_name in body_list:
+            self.params.setProperty(self.rigid_body_target_name, old_name)
+
+    def addGraspFrameFromList(self):
+        target_name = self.params.getPropertyEnumValue(self.rigid_body_target_name)
+        if len(target_name):
+            iiwaplanning.addGraspFrames(grasp_target=target_name)
 
     def onPropertyChanged(self, propertySet, propertyName):
         print "property changed", propertyName, propertySet.getProperty(propertyName)
@@ -155,73 +174,46 @@ class KukaWsgTaskPanel(TaskUserPanel):
             self.folder = self.taskTree.addGroup(name, parent=parent)
             return self.folder
 
-        addFolder('meh')
-        addTask(UpdateGraspTargetTask(name="Update target",
-                                      position=[0.81, -0.03, 0.0]))
-        addTask(UpdateGraspTargetTask(name="Update target ref",
-                                      position=[0.9, 0.0, 0.0],
-                                      dimensions=[0.05, 0.05, 0.05]))
+        def addPlanAndExecute(name, planFunc):
+            old_folder = self.folder
+            addFolder(name, parent=self.folder)
+            addFunc(name, planFunc)
+            addTask(basictasks.DelayTask(name='wait', delayTime=0.25))
+            addFunc('execute', self.commitManipPlan)
+            addTask(WaitForExecuteTask(self.robotSystem, name='wait for execute'))
+            self.folder = old_folder
+
 
         addFolder('pick and place 1->2')
         addTask(UpdateGraspTargetTask(name="Update target 1",
                                       position=[0.8, 0.36, 0.30],
                                       dimensions=self._default_target_dimensions))
-        addFunc('plan pregrasp', planPreGrasp)
-        addTask(basictasks.DelayTask(name='wait', delayTime=0.25))
-        addFunc('execute', self.commitManipPlan)
-        addTask(WaitForExecuteTask(self.robotSystem, name='wait for execute'))
-        addFunc('plan grasp', planGrasp)
-        addTask(basictasks.DelayTask(name='wait', delayTime=0.25))
-        addFunc('execute', self.commitManipPlan)
-        addTask(WaitForExecuteTask(self.robotSystem, name='wait for execute'))
+        addPlanAndExecute('plan pregrasp', planPreGrasp)
+        addPlanAndExecute('plan grasp', planGrasp)
         addFunc('close gripper', gripperClose)
         addTask(basictasks.DelayTask(name='wait', delayTime=1.0))
-        addFunc('plan prerelease', planPreRelease)
-        addTask(basictasks.DelayTask(name='wait', delayTime=0.25))
-        addFunc('execute', self.commitManipPlan)
-        addTask(WaitForExecuteTask(self.robotSystem, name='wait for execute'))
+        addPlanAndExecute('plan prerelease', planPreRelease)
         addTask(UpdateGraspTargetTask(name="Update target 2",
                                       position=[0.9, -0.36, 0.30],
                                       dimensions=self._default_target_dimensions))
-        addFunc('plan prerelease', planPreRelease)
-        addTask(basictasks.DelayTask(name='wait', delayTime=0.25))
-        addFunc('execute', self.commitManipPlan)
-        addTask(WaitForExecuteTask(self.robotSystem, name='wait for execute'))
-        addFunc('plan release', planRelease)
-        addTask(basictasks.DelayTask(name='wait', delayTime=0.25))
-        addFunc('execute', self.commitManipPlan)
-        addTask(WaitForExecuteTask(self.robotSystem, name='wait for execute'))
+        addPlanAndExecute('plan prerelease', planPreRelease)
+        addPlanAndExecute('plan release', planRelease)
         addFunc('open gripper', gripperOpen)
 
         addFolder('pick and place 2->1')
         addTask(UpdateGraspTargetTask(name="Update target 2",
                                       position=[0.9, -0.36, 0.30],
                                       dimensions=self._default_target_dimensions))
-        addFunc('plan pregrasp', planPreGrasp)
-        addTask(basictasks.DelayTask(name='wait', delayTime=0.25))
-        addFunc('execute', self.commitManipPlan)
-        addTask(WaitForExecuteTask(self.robotSystem, name='wait for execute'))
-        addFunc('plan grasp', planGrasp)
-        addTask(basictasks.DelayTask(name='wait', delayTime=0.25))
-        addFunc('execute', self.commitManipPlan)
-        addTask(WaitForExecuteTask(self.robotSystem, name='wait for execute'))
+        addPlanAndExecute('plan pregrasp', planPreGrasp)
+        addPlanAndExecute('plan grasp', planGrasp)
         addFunc('close gripper', gripperClose)
         addTask(basictasks.DelayTask(name='wait', delayTime=1.0))
-        addFunc('plan prerelease', planPreRelease)
-        addTask(basictasks.DelayTask(name='wait', delayTime=0.25))
-        addFunc('execute', self.commitManipPlan)
-        addTask(WaitForExecuteTask(self.robotSystem, name='wait for execute'))
+        addPlanAndExecute('plan prerelease', planPreRelease)
         addTask(UpdateGraspTargetTask(name="Update target 1",
                                       position=[0.8, 0.36, 0.30],
                                       dimensions=self._default_target_dimensions))
-        addFunc('plan prerelease', planPreRelease)
-        addTask(basictasks.DelayTask(name='wait', delayTime=0.25))
-        addFunc('execute', self.commitManipPlan)
-        addTask(WaitForExecuteTask(self.robotSystem, name='wait for execute'))
-        addFunc('plan release', planRelease)
-        addTask(basictasks.DelayTask(name='wait', delayTime=0.25))
-        addFunc('execute', self.commitManipPlan)
-        addTask(WaitForExecuteTask(self.robotSystem, name='wait for execute'))
+        addPlanAndExecute('plan prerelease', planPreRelease)
+        addPlanAndExecute('plan release', planRelease)
         addFunc('open gripper', gripperOpen)
 
 
@@ -254,7 +246,9 @@ app.app.addWidgetToDock(robotSystem.playbackPanel.widget,
 
 setupToolbar()
 
-taskPanel = KukaWsgTaskPanel(robotSystem)
+optitrack_vis = optitrack_visualizer.OptitrackVisualizer('OPTITRACK_FRAMES')
+taskPanel = KukaWsgTaskPanel(robotSystem, optitrack_vis)
+optitrack_vis.onMessage(optitrack_visualizer.test_message)
 
 # show sim time in the status bar
 infoLabel = KukaSimInfoLabel(app.mainWindow.statusBar())
@@ -273,8 +267,6 @@ ikPlanner.getIkOptions().setProperty('Max joint degrees/s', 60)
 
 # initialize the listener for the pose gui
 ikPlanner.addPostureGoalListener(robotSystem.robotStateJointController)
-
-optitrack_vis = optitrack_visualizer.OptitrackVisualizer('OPTITRACK_FRAMES')
 
 # set the default camera view
 applogic.resetCamera(viewDirection=[-1, 0, 0], view=app.view)

@@ -1,3 +1,6 @@
+from director import affordanceitems
+from director import applogic
+from director import callbacks
 from director import lcmUtils
 from director import objectmodel as om
 from director import visualization as vis
@@ -26,10 +29,19 @@ test_message.num_marker_sets = len(test_message.marker_sets)
 
 body = optitrack_rigid_body_t.optitrack_rigid_body_t()
 body.id = 100
-body.xyz = [1., 1., 1.]
+body.xyz = [0.6, -0.1, 0.3]
 body.quat = [1., 0., 0., 0.]
-body.marker_xyz = [[0., 0.1, 0.1], [0., -0.1, 0.1]]
-body.marker_ids = [101, 102]
+body.marker_xyz = [[0., 0.02, 0.02], [0., -0.02, 0.02], [0., -0.02, -0.02]]
+body.marker_ids = [101, 102, 103]
+body.num_markers = len(body.marker_ids)
+test_message.rigid_bodies.append(body)
+
+body = optitrack_rigid_body_t.optitrack_rigid_body_t()
+body.id = 110
+body.xyz = [0.6, 0.1, 0.3]
+body.quat = [1., 0., 0., 0.]
+body.marker_xyz = [[0., 0.02, 0.02], [0., -0.02, 0.02], [0., -0.02, -0.02]]
+body.marker_ids = [111, 112, 113]
 body.num_markers = len(body.marker_ids)
 test_message.rigid_bodies.append(body)
 test_message.num_rigid_bodies = len(test_message.rigid_bodies)
@@ -91,7 +103,12 @@ class OptitrackVisualizer(object):
         self.drawEdges = False
         self.markerGeometry = None
         self.initSubscriber()
-        self.onMessage(test_message)
+        self.callbacks = callbacks.CallbackRegistry([
+            'RIGID_BODY_LIST_CHANGED',
+            ])
+
+    def connectRigidBodyListChanged(self, func):
+        return self.callbacks.connect('RIGID_BODY_LIST_CHANGED', func)
 
     def initSubscriber(self):
         self.subscriber = lcmUtils.addSubscriber(
@@ -177,19 +194,61 @@ class OptitrackVisualizer(object):
         # which disappear.
         remaining_body_names = set(
             [x.getProperty('Name') for x in self.rigid_bodies.children()])
+        bodies_added = False
+        bodies_removed = False
 
         for body in rigid_bodies:
             body_name = 'Body ' + str(body.id)
+            if body_name in remaining_body_names:
+                body_obj = om.findObjectByName(
+                    body_name, parent=self.rigid_bodies)
+            else:
+                bodies_added = True
+                # The use of a box here is arbitrary.
+                body_obj = affordanceitems.BoxAffordanceItem(
+                    body_name, applogic.getCurrentRenderView())
+                om.addToObjectModel(body_obj, parentObj=self.rigid_bodies)
+                vis.addChildFrame(body_obj).setProperty('Deletable', False)
+                body_obj.setProperty('Surface Mode', 'Wireframe')
+                body_obj.setProperty('Color', [1,0,0])
+            remaining_body_names.discard(body_name)
+
+            # Dimension our box based on a bounding across all of our
+            # markers.
+            all_xyz = body.marker_xyz + [[0., 0., 0.]]
+            (min_x, min_y, min_z) = (
+                min(xyz[0] for xyz in all_xyz),
+                min(xyz[1] for xyz in all_xyz),
+                min(xyz[2] for xyz in all_xyz))
+            (max_x, max_y, max_z) = (
+                max(xyz[0] for xyz in all_xyz),
+                max(xyz[1] for xyz in all_xyz),
+                max(xyz[2] for xyz in all_xyz))
+            dimensions = (
+                max(0.01, max_x - min_x),
+                max(0.01, max_y - min_y),
+                max(0.01, max_z - min_z))
+            body_obj.setProperty('Dimensions', dimensions)
             transform = transformUtils.transformFromPose(body.xyz, body.quat)
-            body_frame = vis.updateFrame(transform, body_name,
-                                         scale=0.1, parent=self.rigid_bodies)
+            body_obj.getChildFrame().copyFrame(transform)
+
+            folder = om.getOrCreateContainer('Models', parentObj=body_obj)
             self._updateMarkerCollection(
-                body_name + '.', body_frame, body.marker_ids,
+                body_name + '.', folder, body.marker_ids,
                 body.marker_xyz, base_transform=transform)
+
+        if len(remaining_body_names):
+            bodies_removed = True
 
         for remaining_body in remaining_body_names:
             obj = om.findObjectByName(remaining_body, self.rigid_bodies)
             om.removeFromObjectModel(obj)
+
+        if bodies_added or bodies_removed:
+            self.callbacks.process(
+                'RIGID_BODY_LIST_CHANGED',
+                sorted([x.getProperty('Name')
+                        for x in self.rigid_bodies.children()]))
 
     def _handleLabeledMarkers(self, labeled_markers):
         marker_ids = [x.id for x in labeled_markers]

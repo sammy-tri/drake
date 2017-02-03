@@ -163,11 +163,13 @@ def setGraspTarget(position, rpy, dimensions):
 
 
 
-def addGraspFrames():
+def addGraspFrames(grasp_target='box'):
 
-    obj = om.findObjectByName('box')
-    om.removeFromObjectModel(obj.findChild('grasp to world'))
-    om.removeFromObjectModel(obj.findChild('pregrasp to world'))
+    obj = om.findObjectByName(grasp_target)
+    #om.removeFromObjectModel(obj.findChild('grasp to world'))
+    #om.removeFromObjectModel(obj.findChild('pregrasp to world'))
+    om.removeFromObjectModel(om.findObjectByName('grasp to world'))
+    om.removeFromObjectModel(om.findObjectByName('pregrasp to world'))
 
     dims = obj.getProperty('Dimensions')
 
