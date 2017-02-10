@@ -73,7 +73,7 @@ def planReachGoal(goalFrameName='reach goal', interactive=False, release=False):
     # effector at the last grasp (if appilcable) force it to be the
     # same at the goal?  That way we could set something down flat no
     # matter how we picked it up.
-    #constraints.append(q)
+    constraints.append(q)
     #constraints.append(new_q)
 
     constraintSet = ikplanner.ConstraintSet(ikPlanner, constraints, endPoseName, startPoseName)
@@ -175,8 +175,8 @@ def addGraspFrames(grasp_target='box'):
 
     objectToWorld = obj.getChildFrame().transform
 
-    graspToObject = transformUtils.frameFromPositionAndRPY([0.0,0.0,dims[2]/2.0 - 0.025], [0,50,0])
-    preGraspToGrasp = transformUtils.frameFromPositionAndRPY([-0.08, 0.0, 0.0], [0,0,0])
+    graspToObject = transformUtils.frameFromPositionAndRPY([0.0,0.0,dims[2]/2.0 - 0.025], [0,0,0])
+    preGraspToGrasp = transformUtils.frameFromPositionAndRPY([0.00, 0.0, 0.08], [0,0,0])
 
     graspToWorld = transformUtils.concatenateTransforms([graspToObject, objectToWorld])
     preGraspToWorld = transformUtils.concatenateTransforms([preGraspToGrasp, graspToWorld])
