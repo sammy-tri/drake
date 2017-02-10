@@ -3,6 +3,7 @@ Usage: This program should be launched using the command line specified in the
        kuka_sim.pmd file.
 '''
 
+import functools
 import time
 
 from director import mainwindowapp
@@ -137,6 +138,13 @@ class KukaWsgTaskPanel(TaskUserPanel):
             attributes=propertyset.PropertyAttributes(enumNames=[""]))
         optitrack_vis.connectRigidBodyListChanged(self.rigidBodyListChanged)
 
+        self.params.addProperty(
+            'Frame 1', [0.8, 0.36, 0.30],
+            attributes=propertyset.PropertyAttributes(singleStep=0.01))
+        self.params.addProperty(
+            'Frame 2', [0.8, -0.36, 0.30],
+            attributes=propertyset.PropertyAttributes(singleStep=0.01))
+
         self.addTasks()
 
     def rigidBodyListChanged(self, body_list):
@@ -152,6 +160,14 @@ class KukaWsgTaskPanel(TaskUserPanel):
         target_name = self.params.getPropertyEnumValue(self.rigid_body_target_name)
         if len(target_name):
             iiwaplanning.addGraspFrames(grasp_target=target_name)
+
+    def addGraspFrameFromProperty(self, name):
+        position = self.params.getProperty(name)
+        iiwaplanning.setGraspTarget(position,
+                                    [0., 0., 0.],
+                                    self._default_target_dimensions)
+        iiwaplanning.addGraspFrames()
+
 
     def onPropertyChanged(self, propertySet, propertyName):
         print "property changed", propertyName, propertySet.getProperty(propertyName)
@@ -185,33 +201,29 @@ class KukaWsgTaskPanel(TaskUserPanel):
 
 
         addFolder('pick and place 1->2')
-        addTask(UpdateGraspTargetTask(name="Update target 1",
-                                      position=[0.8, 0.36, 0.30],
-                                      dimensions=self._default_target_dimensions))
+        addFunc('Target Frame 1',
+                functools.partial(self.addGraspFrameFromProperty, 'Frame 1'))
         addPlanAndExecute('plan pregrasp', planPreGrasp)
         addPlanAndExecute('plan grasp', planGrasp)
         addFunc('close gripper', gripperClose)
         addTask(basictasks.DelayTask(name='wait', delayTime=1.0))
         addPlanAndExecute('plan prerelease', planPreRelease)
-        addTask(UpdateGraspTargetTask(name="Update target 2",
-                                      position=[0.9, -0.36, 0.30],
-                                      dimensions=self._default_target_dimensions))
+        addFunc('Target Frame 2',
+                functools.partial(self.addGraspFrameFromProperty, 'Frame 2'))
         addPlanAndExecute('plan prerelease', planPreRelease)
         addPlanAndExecute('plan release', planRelease)
         addFunc('open gripper', gripperOpen)
 
         addFolder('pick and place 2->1')
-        addTask(UpdateGraspTargetTask(name="Update target 2",
-                                      position=[0.9, -0.36, 0.30],
-                                      dimensions=self._default_target_dimensions))
+        addFunc('Target Frame 2',
+                functools.partial(self.addGraspFrameFromProperty, 'Frame 2'))
         addPlanAndExecute('plan pregrasp', planPreGrasp)
         addPlanAndExecute('plan grasp', planGrasp)
         addFunc('close gripper', gripperClose)
         addTask(basictasks.DelayTask(name='wait', delayTime=1.0))
         addPlanAndExecute('plan prerelease', planPreRelease)
-        addTask(UpdateGraspTargetTask(name="Update target 1",
-                                      position=[0.8, 0.36, 0.30],
-                                      dimensions=self._default_target_dimensions))
+        addFunc('Target Frame 1',
+                functools.partial(self.addGraspFrameFromProperty, 'Frame 1'))
         addPlanAndExecute('plan prerelease', planPreRelease)
         addPlanAndExecute('plan release', planRelease)
         addFunc('open gripper', gripperOpen)
