@@ -106,7 +106,7 @@ class WaitForExecuteTask(basictasks.DelayTask):
     def run(self):
         plan = self.robotSystem.ikPlanner.lastManipPlan
         lastPlanTime = self.robotSystem.planPlayback.getPlanElapsedTime(plan)
-        self.properties.setProperty('Delay time', 1.5 * lastPlanTime + 0.1)
+        self.properties.setProperty('Delay time', 1.1 * lastPlanTime + 0.1)
         yield basictasks.DelayTask.run(self)
 
 

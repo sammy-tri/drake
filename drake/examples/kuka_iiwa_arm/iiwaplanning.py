@@ -47,7 +47,7 @@ def planReachGoal(goalFrameName='reach goal', interactive=False, release=False):
     constraints.append(ikPlanner.createPostureConstraint(startPoseName, robotstate.matchJoints('base_')))
     p, q = ikPlanner.createPositionOrientationConstraint(endEffectorLinkName, goalFrame, graspOffsetFrame, positionTolerance=0.0, angleToleranceInDegrees=0.0)
     p.tspan = [1.0, 1.0]
-    q.tspan = [1.0, 1.0]
+    q.tspan = [0.0, 1.0]
 
     #print "target orientation", transformUtils.rollPitchYawToQuaternion(q.quaternion)
     pose = transformUtils.poseFromTransform(q.quaternion)
@@ -77,7 +77,7 @@ def planReachGoal(goalFrameName='reach goal', interactive=False, release=False):
     #constraints.append(new_q)
 
     constraintSet = ikplanner.ConstraintSet(ikPlanner, constraints, endPoseName, startPoseName)
-
+ 
     global _callbackId
     #if _callbackId:
     #    om.findObjectByName(goalFrameName).disconnectFrameModified(_callbackId)
