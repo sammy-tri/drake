@@ -260,7 +260,7 @@ setupToolbar()
 
 optitrack_vis = optitrack_visualizer.OptitrackVisualizer('OPTITRACK_FRAMES')
 taskPanel = KukaWsgTaskPanel(robotSystem, optitrack_vis)
-optitrack_vis.onMessage(optitrack_visualizer.test_message)
+#optitrack_vis.onMessage(optitrack_visualizer.test_message)
 
 # show sim time in the status bar
 infoLabel = KukaSimInfoLabel(app.mainWindow.statusBar())

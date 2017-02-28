@@ -18,16 +18,16 @@ from optitrack import optitrack_marker_set_t
 from optitrack import optitrack_marker_t
 from optitrack import optitrack_rigid_body_t
 
-test_message = optitrack_frame_t.optitrack_frame_t()
+test_message = optitrack_frame_t()
 
-marker_set = optitrack_marker_set_t.optitrack_marker_set_t()
+marker_set = optitrack_marker_set_t()
 marker_set.name = "set foo"
 marker_set.xyz = [[-0.5, 0.5, 0.5], [-0.4, 0.5, 0.5], [-0.5, 0.4, 0.5]]
 marker_set.num_markers = len(marker_set.xyz)
 test_message.marker_sets.append(marker_set)
 test_message.num_marker_sets = len(test_message.marker_sets)
 
-body = optitrack_rigid_body_t.optitrack_rigid_body_t()
+body = optitrack_rigid_body_t()
 body.id = 100
 body.xyz = [0.6, -0.1, 0.3]
 body.quat = [1., 0., 0., 0.]
@@ -36,7 +36,7 @@ body.marker_ids = [101, 102, 103]
 body.num_markers = len(body.marker_ids)
 test_message.rigid_bodies.append(body)
 
-body = optitrack_rigid_body_t.optitrack_rigid_body_t()
+body = optitrack_rigid_body_t()
 body.id = 110
 body.xyz = [0.6, 0.1, 0.3]
 body.quat = [1., 0., 0., 0.]
@@ -46,15 +46,15 @@ body.num_markers = len(body.marker_ids)
 test_message.rigid_bodies.append(body)
 test_message.num_rigid_bodies = len(test_message.rigid_bodies)
 
-labeled = optitrack_marker_t.optitrack_marker_t()
+labeled = optitrack_marker_t()
 labeled.id = 200
 labeled.xyz = [0.5, 0.5, 0.5]
 test_message.labeled_markers.append(labeled)
-labeled = optitrack_marker_t.optitrack_marker_t()
+labeled = optitrack_marker_t()
 labeled.id = 201
 labeled.xyz = [0.4, 0.5, 0.5]
 test_message.labeled_markers.append(labeled)
-labeled = optitrack_marker_t.optitrack_marker_t()
+labeled = optitrack_marker_t()
 labeled.id = 202
 labeled.xyz = [0.5, 0.4, 0.5]
 test_message.labeled_markers.append(labeled)
