@@ -8,6 +8,7 @@ from director import vtkAll as vtk
 from director import transformUtils
 from director.debugVis import DebugData
 from director.shallowCopy import shallowCopy
+from director.thirdparty import transformations
 
 from optitrack import optitrack_frame_t
 
@@ -113,7 +114,7 @@ class OptitrackVisualizer(object):
     def initSubscriber(self):
         self.subscriber = lcmUtils.addSubscriber(
             self.channel, optitrack_frame_t, self.onMessage)
-        self.subscriber.setSpeedLimit(10)
+        #self.subscriber.setSpeedLimit(10)
 
     def removeSubscriber(self):
         if not self.subscriber:
@@ -139,10 +140,12 @@ class OptitrackVisualizer(object):
     def createMarkerObjects(self, marker_ids, modelFolder, modelName, modelColor):
 
         geom = self.getMarkerGeometry()
+        visible = modelFolder.getProperty('Visible')
 
         def makeMarker(i):
             obj = vis.showPolyData(
                 shallowCopy(geom), modelName + ' marker %d' % i, color=modelColor, parent=modelFolder)
+            obj.setProperty('Visible', visible)
             vis.addChildFrame(obj)
             return obj
 
@@ -150,6 +153,7 @@ class OptitrackVisualizer(object):
 
     def _updateMarkerCollection(self, prefix, folder, marker_ids,
                                 positions, base_transform=None):
+        return
         markers = folder.children()
         if len(markers) != len(positions):
             for obj in markers:
@@ -162,7 +166,8 @@ class OptitrackVisualizer(object):
 
         for i, pos in enumerate(positions):
             marker_frame = vtk.vtkTransform()
-            marker_frame.Translate(np.array(pos))
+            marker_frame.Translate(np.array([pos[2], pos[0], pos[1]]))
+            #marker_frame.Translate(np.array(pos))
             if base_transform is not None:
                 marker_frame = transformUtils.concatenateTransforms(
                     [marker_frame, base_transform])
@@ -215,7 +220,8 @@ class OptitrackVisualizer(object):
 
             # Dimension our box based on a bounding across all of our
             # markers.
-            all_xyz = body.marker_xyz + [[0., 0., 0.]]
+            all_xyz = body.marker_xyz + [body.xyz]
+            print "marker xyz", body.marker_xyz
             (min_x, min_y, min_z) = (
                 min(xyz[0] for xyz in all_xyz),
                 min(xyz[1] for xyz in all_xyz),
@@ -228,14 +234,32 @@ class OptitrackVisualizer(object):
                 max(0.01, max_x - min_x),
                 max(0.01, max_y - min_y),
                 max(0.01, max_z - min_z))
+            #print "max, min", (max_x, max_y, max_z), (min_x, min_y, min_z)
+            dimensions = (0.04, 0.05, 0.01)
             body_obj.setProperty('Dimensions', dimensions)
             transform = transformUtils.transformFromPose(body.xyz, body.quat)
+            # rot_transform = transformUtils.transformFromPose(
+            #     (0, 0, 0), transformUtils.rollPitchYawToQuaternion((0, 0, 0)))
+            # rot_transform2 = transformUtils.transformFromPose(
+            #     (0, 0, 0), transformUtils.rollPitchYawToQuaternion((0, 0, 0)))
+            # rot_transform = transformUtils.concatenateTransforms([rot_transform, rot_transform2])
+            rot_transform = transformUtils.getTransformFromNumpy(
+                np.array([[0, 0, 1, 0],
+                          [1, 0, 0, 0],
+                          [0, 1, 0, 0],
+                          [0, 0, 0, 1]]))
+            #rot_transform.RotateX(90)
+            #rot_transform.RotateZ(90)
+            #transform_xyz = transformUtils.transformFromPose(
+            #np.array([body.xyz[2], body.xyz[0], body.xyz[1]]), (1, 0, 0, 0))
+            #transform = transformUtils.transformFromPose(body.xyz, (1, 0, 0, 0))
+            #transform = transformUtils.concatenateTransforms([transform, rot_transform])
             body_obj.getChildFrame().copyFrame(transform)
 
             folder = om.getOrCreateContainer('Models', parentObj=body_obj)
             self._updateMarkerCollection(
                 body_name + '.', folder, body.marker_ids,
-                body.marker_xyz, base_transform=transform)
+                body.marker_xyz)#, base_transform=transform)
 
         if len(remaining_body_names):
             bodies_removed = True
@@ -268,7 +292,21 @@ class OptitrackVisualizer(object):
 
     def onMessage(self, msg):
         self.lastMessage = msg
-        self._handleMarkerSets(msg.marker_sets)
-        self._handleRigidBodies(msg.rigid_bodies)
-        self._handleLabeledMarkers(msg.labeled_markers)
-        self._handleUnlabeledMarkers(msg.other_markers)
+        #self._handleMarkerSets(msg.marker_sets)
+        #self._handleRigidBodies(msg.rigid_bodies)
+        #self._handleLabeledMarkers(msg.labeled_markers)
+        #self._handleUnlabeledMarkers(msg.other_markers)
+
+        for body in msg.rigid_bodies:
+            name = body.id
+            pos = body.xyz
+            w,x,y,z = body.quat
+            quat = (x,y,z,w)
+            
+            objToOptitrack = transformUtils.transformFromPose(pos, quat)
+
+            optitrackToWorld = transformUtils.frameFromPositionAndRPY([0,0,0],[90,0,90])
+            
+            objToWorld = transformUtils.concatenateTransforms([objToOptitrack, optitrackToWorld])
+            
+            vis.updateFrame(objToWorld, name, parent='optitrack bodies')

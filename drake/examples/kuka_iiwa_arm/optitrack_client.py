@@ -25,6 +25,12 @@ DoubleValue = struct.Struct( '<d' )
 Int32Value = struct.Struct( '<i' )
 Int16Value = struct.Struct( '<h' )
 
+def read_position(data):
+    # Convert positions into the axes director expects.  Motive is 
+    pos = Vector3.unpack(data)
+    return pos
+    return (pos[2], pos[0], pos[1])
+
 class NatNetClient:
     def __init__( self ):
         # Change this value to the IP address of the NatNet server.
@@ -90,7 +96,7 @@ class NatNetClient:
         trace( "ID:", msg.id )
 
         # Position and orientation
-        pos = Vector3.unpack( data[offset:offset+12] )
+        pos = read_position( data[offset:offset+12] )
         offset += 12
         trace( "\tPosition:", pos[0],",", pos[1],",", pos[2] )
         msg.xyz = pos
@@ -109,7 +115,7 @@ class NatNetClient:
 
         # Marker positions
         for i in markerCountRange:
-            pos = Vector3.unpack( data[offset:offset+12] )
+            pos = read_position( data[offset:offset+12] )
             offset += 12
             trace( "\tMarker", i, ":", pos[0],",", pos[1],",", pos[2] )
             msg.marker_xyz.append(pos)
@@ -203,7 +209,7 @@ class NatNetClient:
             marker_set.num_markers = markerCount
 
             for j in range( 0, markerCount ):
-                marker_set.xyz.append(Vector3.unpack( data[offset:offset+12] ))
+                marker_set.xyz.append(read_position( data[offset:offset+12] ))
                 offset += 12
                 #trace( "\tMarker", j, ":", pos[0],",", pos[1],",", pos[2] )
             msg.marker_sets.append(marker_set)
@@ -215,7 +221,7 @@ class NatNetClient:
         msg.num_other_markers = unlabeledMarkersCount
 
         for i in range( 0, unlabeledMarkersCount ):
-            pos = Vector3.unpack( data[offset:offset+12] )
+            pos = read_position( data[offset:offset+12] )
             offset += 12
             trace( "\tMarker", i, ":", pos[0],",", pos[1],",", pos[2] )
             msg.other_markers.append(pos)
@@ -252,7 +258,7 @@ class NatNetClient:
                 marker = optitrack_marker_t()
                 marker.id, = Int32Value.unpack(data[offset:offset + 4])
                 offset += 4
-                marker.xyz = Vector3.unpack( data[offset:offset+12] )
+                marker.xyz = read_position( data[offset:offset+12] )
                 offset += 12
                 marker.size, = FloatValue.unpack( data[offset:offset+4] )
                 offset += 4
