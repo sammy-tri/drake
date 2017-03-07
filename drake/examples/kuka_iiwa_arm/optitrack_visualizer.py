@@ -103,6 +103,7 @@ class OptitrackVisualizer(object):
             "Unlabeled Markers", parentObj=self.getRootFolder())
         self.drawEdges = False
         self.markerGeometry = None
+        self.optitrackToWorld = transformUtils.frameFromPositionAndRPY([0,0,0],[90,0,90])
         self.initSubscriber()
         self.callbacks = callbacks.CallbackRegistry([
             'RIGID_BODY_LIST_CHANGED',
@@ -153,7 +154,6 @@ class OptitrackVisualizer(object):
 
     def _updateMarkerCollection(self, prefix, folder, marker_ids,
                                 positions, base_transform=None):
-        return
         markers = folder.children()
         if len(markers) != len(positions):
             for obj in markers:
@@ -218,9 +218,21 @@ class OptitrackVisualizer(object):
                 body_obj.setProperty('Color', [1,0,0])
             remaining_body_names.discard(body_name)
 
+            x,y,z,w = body.quat
+            quat = (w,x,y,z)        
+            objToOptitrack = transformUtils.transformFromPose(body.xyz, quat)
+
             # Dimension our box based on a bounding across all of our
             # markers.
             all_xyz = body.marker_xyz + [body.xyz]
+            all_xyz = [(xyz[0] - body.xyz[0], xyz[1] - body.xyz[1], xyz[2] - body.xyz[2])
+                       for xyz in all_xyz]
+            marker_transforms = [transformUtils.transformFromPose(xyz, (1, 0, 0, 0))
+                                 for xyz in all_xyz]
+            inv_transform = transformUtils.transformFromPose((0, 0, 0), (w, -x, -y, -z))
+            marker_transforms = [transformUtils.concatenateTransforms([t, inv_transform])
+                                 for t in marker_transforms]
+            all_xyz = [t.GetPosition() for t in marker_transforms]
             print "marker xyz", body.marker_xyz
             (min_x, min_y, min_z) = (
                 min(xyz[0] for xyz in all_xyz),
@@ -235,26 +247,9 @@ class OptitrackVisualizer(object):
                 max(0.01, max_y - min_y),
                 max(0.01, max_z - min_z))
             #print "max, min", (max_x, max_y, max_z), (min_x, min_y, min_z)
-            dimensions = (0.04, 0.05, 0.01)
             body_obj.setProperty('Dimensions', dimensions)
-            transform = transformUtils.transformFromPose(body.xyz, body.quat)
-            # rot_transform = transformUtils.transformFromPose(
-            #     (0, 0, 0), transformUtils.rollPitchYawToQuaternion((0, 0, 0)))
-            # rot_transform2 = transformUtils.transformFromPose(
-            #     (0, 0, 0), transformUtils.rollPitchYawToQuaternion((0, 0, 0)))
-            # rot_transform = transformUtils.concatenateTransforms([rot_transform, rot_transform2])
-            rot_transform = transformUtils.getTransformFromNumpy(
-                np.array([[0, 0, 1, 0],
-                          [1, 0, 0, 0],
-                          [0, 1, 0, 0],
-                          [0, 0, 0, 1]]))
-            #rot_transform.RotateX(90)
-            #rot_transform.RotateZ(90)
-            #transform_xyz = transformUtils.transformFromPose(
-            #np.array([body.xyz[2], body.xyz[0], body.xyz[1]]), (1, 0, 0, 0))
-            #transform = transformUtils.transformFromPose(body.xyz, (1, 0, 0, 0))
-            #transform = transformUtils.concatenateTransforms([transform, rot_transform])
-            body_obj.getChildFrame().copyFrame(transform)
+            objToWorld = transformUtils.concatenateTransforms([objToOptitrack, self.optitrackToWorld])
+            body_obj.getChildFrame().copyFrame(objToWorld)
 
             folder = om.getOrCreateContainer('Models', parentObj=body_obj)
             self._updateMarkerCollection(
@@ -293,20 +288,6 @@ class OptitrackVisualizer(object):
     def onMessage(self, msg):
         self.lastMessage = msg
         #self._handleMarkerSets(msg.marker_sets)
-        #self._handleRigidBodies(msg.rigid_bodies)
+        self._handleRigidBodies(msg.rigid_bodies)
         #self._handleLabeledMarkers(msg.labeled_markers)
         #self._handleUnlabeledMarkers(msg.other_markers)
-
-        for body in msg.rigid_bodies:
-            name = body.id
-            pos = body.xyz
-            w,x,y,z = body.quat
-            quat = (x,y,z,w)
-            
-            objToOptitrack = transformUtils.transformFromPose(pos, quat)
-
-            optitrackToWorld = transformUtils.frameFromPositionAndRPY([0,0,0],[90,0,90])
-            
-            objToWorld = transformUtils.concatenateTransforms([objToOptitrack, optitrackToWorld])
-            
-            vis.updateFrame(objToWorld, name, parent='optitrack bodies')
