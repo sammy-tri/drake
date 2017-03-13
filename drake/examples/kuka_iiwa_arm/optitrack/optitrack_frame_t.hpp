@@ -10,9 +10,9 @@
 #define __optitrack_optitrack_frame_t_hpp__
 
 #include <vector>
-#include "optitrack/marker_set_t.hpp"
-#include "optitrack/rigid_body_t.hpp"
-#include "optitrack/marker_t.hpp"
+#include "optitrack/optitrack_marker_set_t.hpp"
+#include "optitrack/optitrack_rigid_body_t.hpp"
+#include "optitrack/optitrack_marker_t.hpp"
 
 namespace optitrack
 {
@@ -26,7 +26,7 @@ class optitrack_frame_t
 
         int32_t    num_marker_sets;
 
-        optitrack::marker_set_t marker_sets;
+        std::vector< optitrack::optitrack_marker_set_t > marker_sets;
 
         int32_t    num_other_markers;
 
@@ -34,13 +34,13 @@ class optitrack_frame_t
 
         int32_t    num_rigid_bodies;
 
-        std::vector< optitrack::rigid_body_t > rigid_bodies;
+        std::vector< optitrack::optitrack_rigid_body_t > rigid_bodies;
 
         int32_t    num_labeled_markers;
 
-        std::vector< optitrack::marker_t > labeled_markers;
+        std::vector< optitrack::optitrack_marker_t > labeled_markers;
 
-        double     latency;
+        float      latency;
 
         int64_t    timecode;
 
@@ -155,8 +155,10 @@ int optitrack_frame_t::_encodeNoHash(void *buf, int offset, int maxlen) const
     tlen = __int32_t_encode_array(buf, offset + pos, maxlen - pos, &this->num_marker_sets, 1);
     if(tlen < 0) return tlen; else pos += tlen;
 
-    tlen = this->marker_sets._encodeNoHash(buf, offset + pos, maxlen - pos);
-    if(tlen < 0) return tlen; else pos += tlen;
+    for (int a0 = 0; a0 < this->num_marker_sets; a0++) {
+        tlen = this->marker_sets[a0]._encodeNoHash(buf, offset + pos, maxlen - pos);
+        if(tlen < 0) return tlen; else pos += tlen;
+    }
 
     tlen = __int32_t_encode_array(buf, offset + pos, maxlen - pos, &this->num_other_markers, 1);
     if(tlen < 0) return tlen; else pos += tlen;
@@ -182,7 +184,7 @@ int optitrack_frame_t::_encodeNoHash(void *buf, int offset, int maxlen) const
         if(tlen < 0) return tlen; else pos += tlen;
     }
 
-    tlen = __double_encode_array(buf, offset + pos, maxlen - pos, &this->latency, 1);
+    tlen = __float_encode_array(buf, offset + pos, maxlen - pos, &this->latency, 1);
     if(tlen < 0) return tlen; else pos += tlen;
 
     tlen = __int64_t_encode_array(buf, offset + pos, maxlen - pos, &this->timecode, 1);
@@ -213,8 +215,11 @@ int optitrack_frame_t::_decodeNoHash(const void *buf, int offset, int maxlen)
     tlen = __int32_t_decode_array(buf, offset + pos, maxlen - pos, &this->num_marker_sets, 1);
     if(tlen < 0) return tlen; else pos += tlen;
 
-    tlen = this->marker_sets._decodeNoHash(buf, offset + pos, maxlen - pos);
-    if(tlen < 0) return tlen; else pos += tlen;
+    this->marker_sets.resize(this->num_marker_sets);
+    for (int a0 = 0; a0 < this->num_marker_sets; a0++) {
+        tlen = this->marker_sets[a0]._decodeNoHash(buf, offset + pos, maxlen - pos);
+        if(tlen < 0) return tlen; else pos += tlen;
+    }
 
     tlen = __int32_t_decode_array(buf, offset + pos, maxlen - pos, &this->num_other_markers, 1);
     if(tlen < 0) return tlen; else pos += tlen;
@@ -246,7 +251,7 @@ int optitrack_frame_t::_decodeNoHash(const void *buf, int offset, int maxlen)
         if(tlen < 0) return tlen; else pos += tlen;
     }
 
-    tlen = __double_decode_array(buf, offset + pos, maxlen - pos, &this->latency, 1);
+    tlen = __float_decode_array(buf, offset + pos, maxlen - pos, &this->latency, 1);
     if(tlen < 0) return tlen; else pos += tlen;
 
     tlen = __int64_t_decode_array(buf, offset + pos, maxlen - pos, &this->timecode, 1);
@@ -270,7 +275,9 @@ int optitrack_frame_t::_getEncodedSizeNoHash() const
     enc_size += __int64_t_encoded_array_size(NULL, 1);
     enc_size += __int32_t_encoded_array_size(NULL, 1);
     enc_size += __int32_t_encoded_array_size(NULL, 1);
-    enc_size += this->marker_sets._getEncodedSizeNoHash();
+    for (int a0 = 0; a0 < this->num_marker_sets; a0++) {
+        enc_size += this->marker_sets[a0]._getEncodedSizeNoHash();
+    }
     enc_size += __int32_t_encoded_array_size(NULL, 1);
     enc_size += this->num_other_markers * __float_encoded_array_size(NULL, 3);
     enc_size += __int32_t_encoded_array_size(NULL, 1);
@@ -281,7 +288,7 @@ int optitrack_frame_t::_getEncodedSizeNoHash() const
     for (int a0 = 0; a0 < this->num_labeled_markers; a0++) {
         enc_size += this->labeled_markers[a0]._getEncodedSizeNoHash();
     }
-    enc_size += __double_encoded_array_size(NULL, 1);
+    enc_size += __float_encoded_array_size(NULL, 1);
     enc_size += __int64_t_encoded_array_size(NULL, 1);
     enc_size += __int64_t_encoded_array_size(NULL, 1);
     enc_size += __double_encoded_array_size(NULL, 1);
@@ -297,10 +304,10 @@ uint64_t optitrack_frame_t::_computeHash(const __lcm_hash_ptr *p)
             return 0;
     const __lcm_hash_ptr cp = { p, (void*)optitrack_frame_t::getHash };
 
-    uint64_t hash = 0xa2b7fa040e562675LL +
-         optitrack::marker_set_t::_computeHash(&cp) +
-         optitrack::rigid_body_t::_computeHash(&cp) +
-         optitrack::marker_t::_computeHash(&cp);
+    uint64_t hash = 0x192c6340cc1c6329LL +
+         optitrack::optitrack_marker_set_t::_computeHash(&cp) +
+         optitrack::optitrack_rigid_body_t::_computeHash(&cp) +
+         optitrack::optitrack_marker_t::_computeHash(&cp);
 
     return (hash<<1) + ((hash>>63)&1);
 }

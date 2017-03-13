@@ -178,8 +178,8 @@ def addGraspFrames(grasp_target='box'):
     graspToObject = transformUtils.frameFromPositionAndRPY([0.0,0.0,dims[2]/2.0 - 0.025], [0,0,0])
     preGraspToGrasp = transformUtils.frameFromPositionAndRPY([0.00, 0.0, 0.08], [0,0,0])
 
-    graspToObject = transformUtils.frameFromPositionAndRPY([0.0,dims[1]/2.0 - 0.025, 0.0], [-90,-90,0])
-    preGraspToGrasp = transformUtils.frameFromPositionAndRPY([0.00, 0.08, 0.0], [0,0,0])
+    graspToObject = transformUtils.frameFromPositionAndRPY([dims[0]/4.0,dims[1]/8.0, 0.0], [-90,180,0])
+    preGraspToGrasp = transformUtils.frameFromPositionAndRPY([0.00, 0.0, 0.08], [0,0,0])
 
     graspToWorld = transformUtils.concatenateTransforms([graspToObject, objectToWorld])
     preGraspToWorld = transformUtils.concatenateTransforms([preGraspToGrasp, graspToWorld])

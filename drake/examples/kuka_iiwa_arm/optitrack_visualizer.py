@@ -10,6 +10,7 @@ from director.debugVis import DebugData
 from director.shallowCopy import shallowCopy
 from director.thirdparty import transformations
 
+from optitrack import optitrack_data_descriptions_t
 from optitrack import optitrack_frame_t
 
 import numpy as np
@@ -89,10 +90,14 @@ class OptitrackVisualizer(object):
 
     '''
 
-    def __init__(self, channel):
+    def __init__(self, channel="OPTITRACK_FRAMES",
+                 desc_channel="OPTITRACK_DATA_DESCRIPTIONS"):
         self.channel = channel
+        self.desc_channel = desc_channel
         self.subscriber = None
+        self.desc_subscriber = None
         self.unitConversion = 0.001
+        self.data_descriptions = None
         self.marker_sets = om.getOrCreateContainer(
             "Marker Sets", parentObj=self.getRootFolder())
         self.rigid_bodies = om.getOrCreateContainer(
@@ -115,13 +120,19 @@ class OptitrackVisualizer(object):
     def initSubscriber(self):
         self.subscriber = lcmUtils.addSubscriber(
             self.channel, optitrack_frame_t, self.onMessage)
-        #self.subscriber.setSpeedLimit(10)
+        self.subscriber.setSpeedLimit(10)
+        self.desc_subscriber = lcmUtils.addSubscriber(
+            self.desc_channel, optitrack_data_descriptions_t,
+            self.onDescMessage)
 
     def removeSubscriber(self):
-        if not self.subscriber:
-            return
-        lcmUtils.removeSubscriber(self.subscriber)
-        self.subscriber = None
+        if self.subscriber is not None:
+            lcmUtils.removeSubscriber(self.subscriber)
+            self.subscriber = None
+
+        if self.desc_subscriber is not None:
+            lcmUtils.removeSubscriber(self.desc_subscriber)
+            self.desc_subscriber = None
 
     def getRootFolder(self):
         folder = om.getOrCreateContainer(self.channel)
@@ -204,6 +215,9 @@ class OptitrackVisualizer(object):
 
         for body in rigid_bodies:
             body_name = 'Body ' + str(body.id)
+            for desc in self.data_descriptions.rigid_bodies:
+                if desc.id == body.id:
+                    body_name = desc.name
             if body_name in remaining_body_names:
                 body_obj = om.findObjectByName(
                     body_name, parent=self.rigid_bodies)
@@ -233,7 +247,6 @@ class OptitrackVisualizer(object):
             marker_transforms = [transformUtils.concatenateTransforms([t, inv_transform])
                                  for t in marker_transforms]
             all_xyz = [t.GetPosition() for t in marker_transforms]
-            print "marker xyz", body.marker_xyz
             (min_x, min_y, min_z) = (
                 min(xyz[0] for xyz in all_xyz),
                 min(xyz[1] for xyz in all_xyz),
@@ -287,7 +300,13 @@ class OptitrackVisualizer(object):
 
     def onMessage(self, msg):
         self.lastMessage = msg
-        #self._handleMarkerSets(msg.marker_sets)
+        if self.data_descriptions is None:
+            return
+        self._handleMarkerSets(msg.marker_sets)
         self._handleRigidBodies(msg.rigid_bodies)
         #self._handleLabeledMarkers(msg.labeled_markers)
         #self._handleUnlabeledMarkers(msg.other_markers)
+
+    def onDescMessage(self, msg):
+        self.data_descriptions = msg
+        
