@@ -176,9 +176,9 @@ class OptitrackVisualizer(object):
             modelColor = markers[0].getProperty('Color')
 
         for i, pos in enumerate(positions):
-            marker_frame = vtk.vtkTransform()
-            marker_frame.Translate(np.array([pos[2], pos[0], pos[1]]))
-            #marker_frame.Translate(np.array(pos))
+            marker_frame = transformUtils.transformFromPose(pos, (1, 0, 0, 0))
+            marker_frame = transformUtils.concatenateTransforms(
+                [marker_frame, self.optitrackToWorld])
             if base_transform is not None:
                 marker_frame = transformUtils.concatenateTransforms(
                     [marker_frame, base_transform])
@@ -233,7 +233,7 @@ class OptitrackVisualizer(object):
             remaining_body_names.discard(body_name)
 
             x,y,z,w = body.quat
-            quat = (w,x,y,z)        
+            quat = (w,x,y,z)
             objToOptitrack = transformUtils.transformFromPose(body.xyz, quat)
 
             # Dimension our box based on a bounding across all of our
@@ -309,4 +309,3 @@ class OptitrackVisualizer(object):
 
     def onDescMessage(self, msg):
         self.data_descriptions = msg
-        
