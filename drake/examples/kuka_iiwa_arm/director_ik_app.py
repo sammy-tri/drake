@@ -43,12 +43,6 @@ class KukaSimInfoLabel(object):
         simFreq = self.sub.getMessageRate()
         self.label.text = 'Sim freq: %d hz  |  Sim time: %.2f' % (simFreq,
                                                                   simTime)
-class KukaWsgTaskPanel(TaskUserPanel):
-
-    def __init__(self):
-        TaskUserPanel.__init__(self, windowTitle='Task Panel')
-
-
 def sendGripperCommand(targetPositionMM, force):
     msg = lcmdrake.lcmt_schunk_wsg_command()
     msg.utime = int(time.time() * 1e6)
