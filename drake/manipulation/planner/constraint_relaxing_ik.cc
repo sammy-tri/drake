@@ -57,8 +57,8 @@ bool ConstraintRelaxingIk::PlanSequentialTrajectory(
   // These numbers are arbitrarily picked by siyuan.
   const int kMaxNumInitialGuess = 50;
   const int kMaxNumConstraintRelax = 10;
-  const Vector3<double> kInitialPosTolerance(0.01, 0.01, 0.01);
-  const double kInitialRotTolerance = 0.01;
+  const Vector3<double> kInitialPosTolerance(0.005, 0.005, 0.005);
+  const double kInitialRotTolerance = 0.004;
   const double kConstraintShrinkFactor = 0.5;
   const double kConstraintGrowFactor = 1.5;
 
@@ -88,6 +88,10 @@ bool ConstraintRelaxingIk::PlanSequentialTrajectory(
             (pos_tol.array() <= waypoint.pos_tol.array()).all()) {
           break;
         }
+
+        drake::log()->info("Solution exceeded tol, rot {} {}, pos {} {}",
+                           rot_tol, waypoint.rot_tol,
+                           pos_tol.transpose(), waypoint.pos_tol.transpose());
 
         // Alternates between kRelaxPosTol and kRelaxRotTol
         if (mode == RelaxMode::kRelaxPosTol && waypoint.constrain_orientation) {
@@ -119,16 +123,17 @@ bool ConstraintRelaxingIk::PlanSequentialTrajectory(
         rot_tol = kInitialRotTolerance;
         if (!waypoint.constrain_orientation) rot_tol = 0;
         mode = RelaxMode::kRelaxPosTol;
-        drake::log()->warn("IK FAILED at max constraint relaxing iter: " +
-                           std::to_string(relaxed_ctr));
+        drake::log()->warn(
+            "IK FAILED at step {} max constraint relaxing iter: {}",
+            step_ctr, relaxed_ctr);
         relaxed_ctr = 0;
         random_ctr++;
       }
 
       // Admits failure and returns false.
       if (random_ctr > kMaxNumInitialGuess) {
-        drake::log()->error("IK FAILED at max random starts: " +
-                            std::to_string(random_ctr));
+        drake::log()->error("IK FAILED at step {} max random starts: {}",
+                            step_ctr, random_ctr);
         // Returns information about failure.
         ik_res->info[step_ctr + 1] = info[0];
         ik_res->q_sol[step_ctr + 1] = q_sol;
@@ -144,6 +149,11 @@ bool ConstraintRelaxingIk::PlanSequentialTrajectory(
     ik_res->info[step_ctr + 1] = 1;
     ik_res->q_sol[step_ctr + 1] = q_sol;
     step_ctr++;
+  }
+
+  for (size_t i = 0; i < ik_res->q_sol.size(); i++) {
+    drake::log()->info("IK step {} info {} q {}",
+                       i, ik_res->info[i], ik_res->q_sol[i].transpose());
   }
 
   return true;
@@ -178,7 +188,7 @@ bool ConstraintRelaxingIk::SolveIk(
   // Adds a rotation constraint.
   WorldQuatConstraint quat_con(robot_.get(), end_effector_body_idx_,
                                math::rotmat2quat(waypoint.pose.linear()),
-                               rot_tol, Vector2<double>::Zero());
+                               rot_tol);//, Vector2<double>::Zero());
   if (waypoint.constrain_orientation) {
     constraint_array.push_back(&quat_con);
   }
@@ -186,6 +196,7 @@ bool ConstraintRelaxingIk::SolveIk(
   inverseKin(robot_.get(), q0, q_nom, constraint_array.size(),
              constraint_array.data(), ikoptions, q_res, info->data(),
              infeasible_constraints);
+  drake::log()->info("info: {}", (*info)[0]);
 
   return (*info)[0] == 1;
 }
