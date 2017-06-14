@@ -23,6 +23,8 @@
 #include "drake/multibody/rigid_body_plant/contact_results_to_lcm.h"
 #include "drake/multibody/rigid_body_plant/drake_visualizer.h"
 #include "drake/multibody/rigid_body_plant/rigid_body_plant.h"
+#include "drake/systems/analysis/implicit_euler_integrator.h"
+#include "drake/systems/analysis/runge_kutta3_integrator.h"
 #include "drake/systems/analysis/simulator.h"
 #include "drake/systems/framework/diagram.h"
 #include "drake/systems/framework/diagram_builder.h"
@@ -38,6 +40,8 @@ DEFINE_double(realtime_rate, 0.0,
               "Rate at which to run the simulation, relative to realtime");
 DEFINE_bool(quick, false, "Run only a brief simulation and return success "
             "without executing the entire task");
+DEFINE_double(accuracy, 1e-3,
+              "Requested simulation accuracy (ignored for time stepping)");
 
 using robotlocomotion::robot_plan_t;
 
@@ -45,6 +49,8 @@ namespace drake {
 using manipulation::schunk_wsg::SchunkWsgController;
 using manipulation::schunk_wsg::SchunkWsgStatusSender;
 using systems::RigidBodyPlant;
+using systems::ImplicitEulerIntegrator;
+using systems::RungeKutta3Integrator;
 using systems::Simulator;
 
 namespace examples {
@@ -303,9 +309,25 @@ int DoMain(void) {
 
   auto sys = builder.Build();
   Simulator<double> simulator(*sys);
-  simulator.Initialize();
   simulator.set_target_realtime_rate(FLAGS_realtime_rate);
   simulator.get_mutable_integrator()->set_maximum_step_size(FLAGS_dt);
+
+#if 0
+  auto mut_context = simulator.get_mutable_context();
+  simulator.reset_integrator<RungeKutta3Integrator<double>>(*sys,
+                                                            mut_context);
+  simulator.reset_integrator<ImplicitEulerIntegrator<double>>(*sys,
+                                                              mut_context);
+  simulator.get_mutable_integrator()->set_target_accuracy(FLAGS_accuracy);
+  simulator.get_mutable_integrator()->request_initial_step_size_target(1e-2);
+  simulator.get_mutable_integrator()->set_requested_minimum_step_size(1e-4);
+  simulator.get_mutable_integrator()->set_throw_on_minimum_step_size_violation(false);
+
+#else
+  simulator.get_mutable_integrator()->set_maximum_step_size(FLAGS_dt);
+#endif
+
+  simulator.Initialize();
 
   auto& plan_source_context = sys->GetMutableSubsystemContext(
       *iiwa_trajectory_generator, simulator.get_mutable_context());

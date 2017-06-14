@@ -47,6 +47,8 @@ drake_cc_binary(
         "//drake/lcmtypes:iiwa",
         "//drake/manipulation/schunk_wsg:schunk_wsg_controller",
         "//drake/multibody/rigid_body_plant:contact_results_to_lcm",
+        "//drake/systems/analysis:implicit_euler_integrator",
+        "//drake/systems/analysis:runge_kutta3_integrator",
         "//drake/systems/analysis:simulator",
         "@com_github_gflags_gflags//:gflags",
         "@lcmtypes_bot2_core",
