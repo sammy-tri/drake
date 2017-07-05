@@ -34,11 +34,13 @@ ConstraintRelaxingIk::ConstraintRelaxingIk(
 
 bool ConstraintRelaxingIk::PlanSequentialTrajectory(
     const std::vector<IkCartesianWaypoint>& waypoints,
-    const VectorX<double>& q_current, IKResults* ik_res) {
+    const VectorX<double>& q_current,
+    const VectorX<double>& q_nom_in,
+   IKResults* ik_res) {
   DRAKE_DEMAND(ik_res);
   int num_steps = static_cast<int>(waypoints.size());
 
-#if 0
+#if 1
   Eigen::VectorXd t = Eigen::VectorXd::Zero(num_steps + 1);
   Eigen::MatrixXd q_seed = Eigen::MatrixXd::Zero(q_current.size(), num_steps + 1);
   Eigen::MatrixXd q_nom = Eigen::MatrixXd::Zero(q_current.size(), num_steps + 1);
@@ -50,14 +52,8 @@ bool ConstraintRelaxingIk::PlanSequentialTrajectory(
   IKoptions ikoptions(robot_.get());;
   ikoptions.setDebug(true);
   for (size_t i = 0; i < waypoints.size(); i++) {
-    if (num_steps == 1) {
-      drake::log()->debug("Zeroing q_seed and q_nom");
-      q_seed.col(i + 1) = Eigen::VectorXd::Zero(q_current.size());
-      q_nom.col(i + 1) = Eigen::VectorXd::Zero(q_current.size());
-    } else {
-      q_seed.col(i + 1) = q_current;
-      q_nom.col(i + 1) = q_current;
-    }
+    q_seed.col(i + 1) = q_nom_in;
+    q_nom.col(i + 1) = q_nom_in;
     const IkCartesianWaypoint& waypoint = waypoints[i];
     double time = i + 1;
     t(i + 1) = time;
