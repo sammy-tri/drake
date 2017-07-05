@@ -89,7 +89,9 @@ class ConstraintRelaxingIk {
    */
   bool PlanSequentialTrajectory(
       const std::vector<IkCartesianWaypoint>& waypoints,
-      const VectorX<double>& q_current, IKResults* ik_res);
+      const VectorX<double>& q_current,
+      const VectorX<double>& q_nom,
+      IKResults* ik_res);
 
  private:
   bool SolveIk(const IkCartesianWaypoint& waypoint, const VectorX<double>& q0,

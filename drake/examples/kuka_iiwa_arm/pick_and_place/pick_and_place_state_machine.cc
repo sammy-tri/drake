@@ -37,6 +37,7 @@ Isometry3<double> ComputeGraspPose(const Isometry3<double>& X_WObj) {
 // @p X_WEndEffector1. Orientation is interpolated with slerp. Intermediate
 // waypoints' tolerance can be adjusted separately.
 bool PlanStraightLineMotion(const VectorX<double>& q_current,
+                            bool use_current_as_nom,
                             const int num_via_points, double duration,
                             const Isometry3<double>& X_WEndEffector0,
                             const Isometry3<double>& X_WEndEffector1,
@@ -84,8 +85,14 @@ bool PlanStraightLineMotion(const VectorX<double>& q_current,
     waypoints[i].constrain_orientation = true;
   }
   DRAKE_DEMAND(times->size() == waypoints.size() + 1);
+
+  VectorX<double> q_nom = q_current;
+  if (!use_current_as_nom) {
+    q_nom.fill(0);
+  }
+
   const bool planner_result =
-      planner->PlanSequentialTrajectory(waypoints, q_current, ik_res);
+      planner->PlanSequentialTrajectory(waypoints, q_current, q_nom, ik_res);
   drake::log()->debug("q initial: {}", q_current.transpose());
   if (!ik_res->q_sol.empty()) {
     drake::log()->debug("q final: {}", ik_res->q_sol.back().transpose());
@@ -108,7 +115,7 @@ PickAndPlaceStateMachine::PickAndPlaceStateMachine(
       // results.
       tight_pos_tol_(0.005, 0.005, 0.005),
       tight_rot_tol_(0.05),
-      loose_pos_tol_(0.05, 0.05, 0.05),
+      loose_pos_tol_(0.25, 0.25, 0.25),
       loose_rot_tol_(0.5) {
   DRAKE_DEMAND(!place_locations.empty());
 }
@@ -157,7 +164,7 @@ void PickAndPlaceStateMachine::Update(
 
         // 2 seconds, no via points.
         bool res = PlanStraightLineMotion(
-            env_state.get_iiwa_q(), 0, 2,
+            env_state.get_iiwa_q(), false, 0, 2,
             X_Wend_effector_0_, X_Wend_effector_1_,
             loose_pos_tol_, loose_rot_tol_, planner, &ik_res, &times);
         DRAKE_DEMAND(res);
@@ -186,7 +193,7 @@ void PickAndPlaceStateMachine::Update(
         // 2 seconds, 3 via points. More via points to ensure the end
         // effector moves in more or less a straight line.
         bool res = PlanStraightLineMotion(
-            env_state.get_iiwa_q(), 3, 2,
+            env_state.get_iiwa_q(), true, 3, 2,
             X_Wend_effector_0_, X_Wend_effector_1_,
             tight_pos_tol_, tight_rot_tol_, planner, &ik_res, &times);
         DRAKE_DEMAND(res);
@@ -232,7 +239,7 @@ void PickAndPlaceStateMachine::Update(
 
         // 2 seconds, 3 via points.
         bool res = PlanStraightLineMotion(
-            env_state.get_iiwa_q(), 3, 2,
+            env_state.get_iiwa_q(), true, 3, 2,
             X_Wend_effector_0_, X_Wend_effector_1_,
             tight_pos_tol_, tight_rot_tol_, planner, &ik_res, &times);
         DRAKE_DEMAND(res);
@@ -264,7 +271,7 @@ void PickAndPlaceStateMachine::Update(
 
         // 2 seconds, no via points.
         bool res = PlanStraightLineMotion(
-            env_state.get_iiwa_q(), 0, 2,
+            env_state.get_iiwa_q(), false, 0, 2,
             X_Wend_effector_0_, X_Wend_effector_1_,
             loose_pos_tol_, loose_rot_tol_, planner, &ik_res, &times);
         DRAKE_DEMAND(res);
@@ -293,7 +300,7 @@ void PickAndPlaceStateMachine::Update(
 
         // 2 seconds, 3 via points.
         bool res = PlanStraightLineMotion(
-            env_state.get_iiwa_q(), 3, 2,
+            env_state.get_iiwa_q(), true, 3, 2,
             X_Wend_effector_0_, X_Wend_effector_1_,
             tight_pos_tol_, tight_rot_tol_, planner, &ik_res, &times);
         DRAKE_DEMAND(res);
@@ -338,7 +345,7 @@ void PickAndPlaceStateMachine::Update(
 
         // 2 seconds, 5 via points.
         bool res = PlanStraightLineMotion(
-            env_state.get_iiwa_q(), 5, 2,
+            env_state.get_iiwa_q(), true, 5, 2,
             X_Wend_effector_0_, X_Wend_effector_1_,
             tight_pos_tol_, tight_rot_tol_, planner, &ik_res, &times);
         DRAKE_DEMAND(res);

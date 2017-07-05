@@ -34,11 +34,13 @@ ConstraintRelaxingIk::ConstraintRelaxingIk(
 
 bool ConstraintRelaxingIk::PlanSequentialTrajectory(
     const std::vector<IkCartesianWaypoint>& waypoints,
-    const VectorX<double>& q_current, IKResults* ik_res) {
+    const VectorX<double>& q_current,
+    const VectorX<double>& q_nom_in,
+   IKResults* ik_res) {
   DRAKE_DEMAND(ik_res);
   int num_steps = static_cast<int>(waypoints.size());
 
-  VectorX<double> q_prev = q_current;
+  VectorX<double> q_nom = q_nom_in;
   VectorX<double> q0 = q_current;
   VectorX<double> q_sol = q_current;
 
@@ -79,7 +81,7 @@ bool ConstraintRelaxingIk::PlanSequentialTrajectory(
 
       std::vector<int> info;
       std::vector<std::string> infeasible_constraints;
-      bool res = SolveIk(waypoint, q0, q_prev, pos_tol, rot_tol, &q_sol, &info,
+      bool res = SolveIk(waypoint, q0, q_nom, pos_tol, rot_tol, &q_sol, &info,
                          &infeasible_constraints);
 
       if (res) {
@@ -138,7 +140,7 @@ bool ConstraintRelaxingIk::PlanSequentialTrajectory(
     }
 
     // Sets next IK's initial and bias to current solution.
-    q_prev = q_sol;
+    q_nom = q_sol;
     q0 = q_sol;
 
     ik_res->info[step_ctr + 1] = 1;
