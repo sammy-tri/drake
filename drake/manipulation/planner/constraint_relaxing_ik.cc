@@ -38,6 +38,66 @@ bool ConstraintRelaxingIk::PlanSequentialTrajectory(
   DRAKE_DEMAND(ik_res);
   int num_steps = static_cast<int>(waypoints.size());
 
+#if 0
+  Eigen::VectorXd t = Eigen::VectorXd::Zero(num_steps + 1);
+  Eigen::MatrixXd q_seed = Eigen::MatrixXd::Zero(q_current.size(), num_steps + 1);
+  Eigen::MatrixXd q_nom = Eigen::MatrixXd::Zero(q_current.size(), num_steps + 1);
+  std::vector<RigidBodyConstraint*> constraint_array;
+
+  q_seed.col(0) = q_current;
+  q_nom.col(0) = q_current;
+
+  IKoptions ikoptions(robot_.get());;
+  ikoptions.setDebug(true);
+  for (size_t i = 0; i < waypoints.size(); i++) {
+    if (num_steps == 1) {
+      drake::log()->debug("Zeroing q_seed and q_nom");
+      q_seed.col(i + 1) = Eigen::VectorXd::Zero(q_current.size());
+      q_nom.col(i + 1) = Eigen::VectorXd::Zero(q_current.size());
+    } else {
+      q_seed.col(i + 1) = q_current;
+      q_nom.col(i + 1) = q_current;
+    }
+    const IkCartesianWaypoint& waypoint = waypoints[i];
+    double time = i + 1;
+    t(i + 1) = time;
+    Eigen::Vector2d tspan(time - 0.1, time + 0.1);
+
+    // Adds a position constraint.
+    Vector3<double> pos_lb = waypoint.pose.translation() - waypoint.pos_tol;
+    Vector3<double> pos_ub = waypoint.pose.translation() + waypoint.pos_tol;
+
+    WorldPositionConstraint* pos_con =
+        new WorldPositionConstraint(robot_.get(), end_effector_body_idx_,
+                                    Vector3<double>::Zero(), pos_lb, pos_ub,
+                                    tspan);
+
+    constraint_array.push_back(pos_con);
+
+    // Adds a rotation constraint.
+    WorldQuatConstraint* quat_con =
+        new WorldQuatConstraint(robot_.get(), end_effector_body_idx_,
+                                math::rotmat2quat(waypoint.pose.linear()),
+                                waypoint.rot_tol, tspan);
+    if (waypoint.constrain_orientation) {
+      constraint_array.push_back(quat_con);
+    }
+  }
+
+  *ik_res = inverseKinTrajSimple(robot_.get(), t, q_seed, q_nom, constraint_array,
+                                 ikoptions);
+
+  if (ik_res->info[0] != 1) {
+    return false;
+  }
+
+  for (size_t i = 0; i < ik_res->q_sol.size(); i++) {
+    drake::log()->info("step {} sol {}", i, ik_res->q_sol[i].transpose());
+  }
+  return true;
+
+#else
+
   VectorX<double> q_prev = q_current;
   VectorX<double> q0 = q_current;
   VectorX<double> q_sol = q_current;
@@ -57,8 +117,8 @@ bool ConstraintRelaxingIk::PlanSequentialTrajectory(
   // These numbers are arbitrarily picked by siyuan.
   const int kMaxNumInitialGuess = 50;
   const int kMaxNumConstraintRelax = 10;
-  const Vector3<double> kInitialPosTolerance(0.005, 0.005, 0.005);
-  const double kInitialRotTolerance = 0.004;
+  const Vector3<double> kInitialPosTolerance(0.01, 0.01, 0.01);
+  const double kInitialRotTolerance = 0.01;
   const double kConstraintShrinkFactor = 0.5;
   const double kConstraintGrowFactor = 1.5;
 
@@ -79,6 +139,11 @@ bool ConstraintRelaxingIk::PlanSequentialTrajectory(
 
       std::vector<int> info;
       std::vector<std::string> infeasible_constraints;
+      if (waypoints.size() == 1) {
+        drake::log()->debug("Zeroing q_seed and q_nom");
+        q0.fill(0);
+        q_prev.fill(0);
+      }
       bool res = SolveIk(waypoint, q0, q_prev, pos_tol, rot_tol, &q_sol, &info,
                          &infeasible_constraints);
 
@@ -157,6 +222,7 @@ bool ConstraintRelaxingIk::PlanSequentialTrajectory(
   }
 
   return true;
+#endif
 }
 
 bool ConstraintRelaxingIk::SolveIk(
