@@ -236,6 +236,7 @@ bool ConstraintRelaxingIk::SolveIk(
   std::vector<RigidBodyConstraint*> constraint_array;
   IKoptions ikoptions(robot_.get());
   ikoptions.setDebug(true);
+  ikoptions.setMajorOptimalityTolerance(2e-4);
 
   // Adds a position constraint.
   Vector3<double> pos_lb = waypoint.pose.translation() - pos_tol;

@@ -40,7 +40,9 @@ drake_cc_googletest(
     tags = ["snopt"],
     deps = [
         ":constraint_relaxing_ik",
+        "//drake/common:eigen_matrix_compare",
         "//drake/common:find_resource",
+        "//drake/math:geometric_transform",
     ],
 )
 
