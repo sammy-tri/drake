@@ -31,6 +31,7 @@ sh_binary(
     }),
     data = [
         "//drake/bindings:pydrake",
+        "//drake/lcmtypes:lcmtypes_py",
         "@director",
     ],
 )
