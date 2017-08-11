@@ -48,7 +48,7 @@ void IiwaMove::MoveJoints(const WorldState& est_state,
   ApplyJointVelocityLimits(kMaxIiwaJointVelocity, q_mat, &time);
   *plan = EncodeKeyFrames(iiwa, time, info, q_mat);
   StartAction(est_state.get_iiwa_time());
-  duration_ = time.back();
+  duration_ = time.back() + 0.5;
 }
 
 void IiwaMove::Reset() {
@@ -59,7 +59,7 @@ void IiwaMove::Reset() {
 bool IiwaMove::ActionFinished(const WorldState& est_state) const {
   if (!ActionStarted()) return false;
 
-  const double max_finished_velocity = 1e-1;
+  const double max_finished_velocity = 1e-2;
   if (get_time_since_action_start(est_state.get_iiwa_time()) > duration_ &&
       est_state.get_iiwa_v().norm() < max_finished_velocity) {
     return true;
