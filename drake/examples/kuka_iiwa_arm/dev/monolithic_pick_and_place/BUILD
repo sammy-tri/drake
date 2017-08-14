@@ -27,6 +27,30 @@ drake_cc_library(
 )
 
 drake_cc_binary(
+    name = "lcm_pick_and_place_demo",
+    srcs = ["lcm_pick_and_place_demo.cc"],
+    data = [
+        "//drake/examples/kuka_iiwa_arm:models",
+        "//drake/manipulation/models/iiwa_description:models",
+    ],
+    deps = [
+        ":kuka_pick_and_place_monolithic",
+        "//drake/common:find_resource",
+        "//drake/common:text_logging_gflags",
+        "//drake/examples/kuka_iiwa_arm:iiwa_common",
+        "//drake/examples/kuka_iiwa_arm:iiwa_lcm",
+        "//drake/lcm",
+        "//drake/lcmtypes:iiwa",
+        "//drake/lcmtypes:schunk",
+        "//drake/systems/lcm",
+        "//drake/systems/lcm:lcm_driven_loop",
+        "@com_github_gflags_gflags//:gflags",
+        "@lcmtypes_bot2_core",
+        "@lcmtypes_robotlocomotion",
+    ],
+)
+
+drake_cc_binary(
     name = "monolithic_pick_and_place_demo",
     srcs = ["monolithic_pick_and_place_demo.cc"],
     data = [
