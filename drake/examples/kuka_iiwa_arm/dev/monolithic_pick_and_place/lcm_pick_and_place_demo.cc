@@ -17,8 +17,8 @@
 #include "drake/systems/framework/diagram.h"
 #include "drake/systems/framework/diagram_builder.h"
 #include "drake/systems/lcm/lcm_driven_loop.h"
-#include "drake/systems/lcm/lcm_subscriber_system.h"
 #include "drake/systems/lcm/lcm_publisher_system.h"
+#include "drake/systems/lcm/lcm_subscriber_system.h"
 
 DEFINE_int32(target, 0, "ID of the target to pick.");
 DEFINE_int32(end_position, 2, "Position index to end at");
@@ -62,11 +62,11 @@ int DoMain(void) {
   // the iiwa+WSG.
   std::vector<Eigen::Vector3d> post_locations;
   // TODO(sam.creasey) this should be 1.10 in the Y direction.
-  post_locations.push_back(Eigen::Vector3d(0.00, 1.00, 0));  // position A
-  post_locations.push_back(Eigen::Vector3d(0.80, 0.36, 0));  // position B
-  post_locations.push_back(Eigen::Vector3d(0.30, -0.9, 0));  // position D
-  post_locations.push_back(Eigen::Vector3d(-0.1, -1.0, 0));  // position E
-  post_locations.push_back(Eigen::Vector3d(-0.47, -0.8, 0));  // position F
+  post_locations.push_back(Eigen::Vector3d(0.00, 0.9, -0.0));  // position A
+  post_locations.push_back(Eigen::Vector3d(0.80, 0.36, 0.04));  // position B
+  post_locations.push_back(Eigen::Vector3d(0.30, -0.9, 0.02));  // position D
+  post_locations.push_back(Eigen::Vector3d(-0.1, -1.0, 0.02));  // position E
+  post_locations.push_back(Eigen::Vector3d(-0.47, -0.8, -0.0));  // position F
 
   // Position of the pick and place location on the table, relative to
   // the base of the arm.  In the original test, the position was
@@ -75,11 +75,12 @@ int DoMain(void) {
   // fingers in the middle while this test places the fingertip
   // further forward.  The position is right at the edge of what we
   // can plan to, so this 4cm change does matter.
-  const Eigen::Vector3d table_position(0.86, -0.36, -0.07);  // position C
+  // const Eigen::Vector3d table_position(0.86, -0.36, -0.07);  // position C
+  const Eigen::Vector3d table_position(0.80, -0.36, 0.32);  // position C
 
   // The offset from the top of the table to the top of the post, used for
   // calculating the place locations in iiwa relative coordinates.
-  const Eigen::Vector3d post_height_offset(0, 0, 0.26);
+  const Eigen::Vector3d post_height_offset(0, 0, 0.32);
 
   // TODO(sam.creasey) select only one of these
   std::vector<Isometry3<double>> place_locations;
@@ -110,7 +111,7 @@ int DoMain(void) {
   place_location.translation() = post_locations[4] + post_height_offset;
   place_location.linear() = Matrix3<double>(
       AngleAxis<double>(-M_PI / 2., Vector3<double>::UnitZ()));
-  place_locations.push_back(place_location);
+  //  place_locations.push_back(place_location);
 
   Target target = GetTarget();
   Eigen::Vector3d half_target_height(0, 0, target.dimensions(2) * 0.5);
@@ -178,7 +179,7 @@ int DoMain(void) {
   // Wait for the first object state message before doing anything else.
   object_state_sub->WaitForMessage(0);
   //  sys->GetSubsystemContext(*object_status_sub,
-  //loop.get_mutable_context());
+  // loop.get_mutable_context());
 
 
   // Waits for the first message.
