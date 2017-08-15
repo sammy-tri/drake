@@ -183,6 +183,20 @@ bool ConstraintRelaxingIk::SolveIk(
     constraint_array.push_back(&quat_con);
   }
 
+  PostureConstraint posture_con(robot_.get());
+  if (waypoint.joint_angle_tol != 0) {
+    std::vector<int> joint_idx(q0.size());
+    VectorX<double> lb = q0;
+    VectorX<double> ub = q0;
+    for (int i = 0; i < q0.size(); i++) {
+      joint_idx[i] = i;
+      lb[i] -= waypoint.joint_angle_tol;
+      ub[i] += waypoint.joint_angle_tol;
+    }
+    posture_con.setJointLimits(joint_idx.size(), joint_idx.data(), lb, ub);
+    constraint_array.push_back(&posture_con);
+  }
+
   inverseKin(robot_.get(), q0, q_nom, constraint_array.size(),
              constraint_array.data(), ikoptions, q_res, info->data(),
              infeasible_constraints);

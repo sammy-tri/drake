@@ -79,6 +79,7 @@ bool PlanStraightLineMotion(const VectorX<double>& q_current,
     if (i != num_via_points) {
       waypoints[i].pos_tol = via_points_pos_tolerance;
       waypoints[i].rot_tol = via_points_rot_tolerance;
+      waypoints[i].joint_angle_tol = 0.6;
     }
     waypoints[i].constrain_orientation = true;
   }

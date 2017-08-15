@@ -35,6 +35,9 @@ class ConstraintRelaxingIk {
     double rot_tol{0.05};
     /// Signals if orientation constraint is enabled.
     bool constrain_orientation{false};
+    /// If non-zero, specifies the max change (+/-) in joint angle from the
+    /// previous step.
+    double joint_angle_tol{0.};
 
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   };
