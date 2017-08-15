@@ -95,6 +95,7 @@ class ConstraintRelaxingIk {
 
  private:
   bool SolveIk(const IkCartesianWaypoint& waypoint, const VectorX<double>& q0,
+               const VectorX<double>& q_seed,
                const VectorX<double>& q_nom,
                const Vector3<double>& pos_tol, double rot_tol,
                VectorX<double>* q_res, std::vector<int>* info,
