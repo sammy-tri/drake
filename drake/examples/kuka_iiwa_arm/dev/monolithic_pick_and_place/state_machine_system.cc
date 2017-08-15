@@ -41,7 +41,7 @@ struct PickAndPlaceStateMachineSystem::InternalState {
                 const std::string& end_effector_name,
                 const std::vector<Isometry3<double>>& place_locations)
       : world_state(iiwa_model_path, end_effector_name),
-        state_machine(place_locations, false),
+        state_machine(place_locations, (place_locations.size() > 1)),
         last_iiwa_plan(MakeDefaultIiwaPlan()),
         last_wsg_command(MakeDefaultWsgCommand()) {}
 
