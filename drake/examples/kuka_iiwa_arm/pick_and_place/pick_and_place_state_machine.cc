@@ -89,6 +89,12 @@ bool PlanStraightLineMotion(const VectorX<double>& q_current,
   VectorX<double> q_nom = q_current;
   if (!use_current_as_nom) {
     q_nom.fill(0);
+    //q_nom(0) = 1.19837;
+    //q_nom(1) = 1.63131;
+    q_nom(2) = -1.45953;
+    //q_nom(3) = -1.28453;
+    //q_nom(4) = -1.28459;
+    //q_nom(5) = 0.820643;
   }
 
   const bool planner_result =
