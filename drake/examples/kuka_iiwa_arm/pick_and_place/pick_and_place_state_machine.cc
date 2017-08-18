@@ -25,8 +25,10 @@ Isometry3<double> ComputeGraspPose(const Isometry3<double>& X_WObj) {
   const double kEndEffectorToMidFingerDepth = 0.12;
   Isometry3<double> X_ObjEndEffector_desired;
   X_ObjEndEffector_desired.translation() =
-      Vector3<double>(-kEndEffectorToMidFingerDepth, 0, 0);
+      Vector3<double>(-kEndEffectorToMidFingerDepth, 0, 0.0243);
   X_ObjEndEffector_desired.linear().setIdentity();
+  X_ObjEndEffector_desired.rotate(Eigen::AngleAxisd(
+      0.2, Eigen::Vector3d::UnitY()));
   X_ObjEndEffector_desired.rotate(Eigen::AngleAxisd(
       0.39269908, Eigen::Vector3d::UnitX()));
   return X_WObj * X_ObjEndEffector_desired;
