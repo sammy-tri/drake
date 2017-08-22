@@ -357,9 +357,9 @@ void PickAndPlaceStateMachine::Update(
         X_Wend_effector_0_ = X_Wend_effector_1_;
         X_Wend_effector_1_.translation()[2] += kPreGraspHeightOffset;
 
-        // 2 seconds, 5 via points.
+        // 5.25 seconds, 5 via points.
         bool res = PlanStraightLineMotion(
-            env_state.get_iiwa_q(), true, 5, 2,
+            env_state.get_iiwa_q(), true, 5, 5.25,
             X_Wend_effector_0_, X_Wend_effector_1_,
             tight_pos_tol_, tight_rot_tol_, planner, &ik_res, &times);
         DRAKE_DEMAND(res);
