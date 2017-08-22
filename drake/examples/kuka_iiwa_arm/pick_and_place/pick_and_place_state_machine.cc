@@ -19,10 +19,10 @@ const double kPreGraspHeightOffset = 0.3;
 // Computes the desired end effector pose in the world frame given the object
 // pose in the world frame.
 Isometry3<double> ComputeGraspPose(const Isometry3<double>& X_WObj) {
-  // Sets desired end effector location to be 12cm behind the object,
+  // Sets desired end effector location to be 19cm behind the object,
   // with the same orientation relative to the object frame. This number
   // dependents on the length of the finger and how the gripper is attached.
-  const double kEndEffectorToMidFingerDepth = 0.12;
+  const double kEndEffectorToMidFingerDepth = 0.19;
   Isometry3<double> X_ObjEndEffector_desired;
   X_ObjEndEffector_desired.translation() =
       Vector3<double>(-kEndEffectorToMidFingerDepth, 0, 0.0243);
@@ -201,7 +201,8 @@ void PickAndPlaceStateMachine::Update(
       // Moves gripper straight down.
       if (!iiwa_move_.ActionStarted()) {
         X_Wend_effector_0_ = X_Wend_effector_1_;
-        X_Wend_effector_1_ = ComputeGraspPose(env_state.get_object_pose());
+        //X_Wend_effector_1_ = ComputeGraspPose(env_state.get_object_pose());
+        X_Wend_effector_1_.translation()[2] -= kPreGraspHeightOffset;
 
         // 2 seconds, 3 via points. More via points to ensure the end
         // effector moves in more or less a straight line.
