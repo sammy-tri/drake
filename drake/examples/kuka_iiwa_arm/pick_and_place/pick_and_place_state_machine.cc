@@ -152,6 +152,11 @@ void PickAndPlaceStateMachine::Update(
 
           drake::log()->info("kOpenGripper at {}",
                              env_state.get_iiwa_time());
+          const Isometry3<double>& pose = env_state.get_object_pose();
+          drake::log()->info(
+              "Object at: {} {}", pose.translation().transpose(),
+              math::rotmat2rpy(pose.rotation()).transpose());
+
         }
 
         if (wsg_act_.ActionFinished(env_state)) {
