@@ -73,10 +73,12 @@ Target GetTarget() {
     {"block_for_pick_and_place.urdf", Eigen::Vector3d(0.06, 0.06, 0.2)},
     {"black_box.urdf", Eigen::Vector3d(0.055, 0.165, 0.18)},
     {"simple_cuboid.urdf", Eigen::Vector3d(0.06, 0.06, 0.06)},
-    {"simple_cylinder.urdf", Eigen::Vector3d(0.065, 0.065, 0.13)}
+    {"simple_cylinder.urdf", Eigen::Vector3d(0.065, 0.065, 0.13)},
+    // These are hacky dimensions for the big robot toy.
+    {"simple_cuboid.urdf", Eigen::Vector3d(0.06, 0.06, 0.18)}
   };
 
-  const int num_targets = 4;
+  const int num_targets = 5;
   if ((FLAGS_target >= num_targets) || (FLAGS_target < 0)) {
     throw std::runtime_error("Invalid target ID");
   }
@@ -103,11 +105,11 @@ int DoMain(void) {
   // further forward.  The position is right at the edge of what we
   // can plan to, so this 4cm change does matter.
   // const Eigen::Vector3d table_position(0.86, -0.36, -0.07);  // position C
-  const Eigen::Vector3d table_position(0.80, -0.36, 0.32);  // position C
+  const Eigen::Vector3d table_position(0.80, -0.36, 0.26);  // position C
 
   // The offset from the top of the table to the top of the post, used for
   // calculating the place locations in iiwa relative coordinates.
-  const Eigen::Vector3d post_height_offset(0, 0, 0.32);
+  const Eigen::Vector3d post_height_offset(0, 0, 0.27);
 
   // TODO(sam.creasey) select only one of these
   std::vector<Isometry3<double>> place_locations;
