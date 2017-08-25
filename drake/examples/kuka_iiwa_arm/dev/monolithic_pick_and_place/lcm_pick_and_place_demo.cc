@@ -91,10 +91,10 @@ int DoMain(void) {
   // the iiwa+WSG.
   std::vector<Eigen::Vector3d> post_locations;
   // TODO(sam.creasey) this should be 1.10 in the Y direction.
-  post_locations.push_back(Eigen::Vector3d(0.00, 0.9, -0.0));  // position A
-  post_locations.push_back(Eigen::Vector3d(0.80, 0.36, 0.04));  // position B
-  post_locations.push_back(Eigen::Vector3d(0.30, -0.9, 0.02));  // position D
-  post_locations.push_back(Eigen::Vector3d(-0.1, -1.0, 0.02));  // position E
+  post_locations.push_back(Eigen::Vector3d(0.00, 0.9, 0.05));  // position A
+  post_locations.push_back(Eigen::Vector3d(0.80, 0.36, 0.05));  // position B
+  post_locations.push_back(Eigen::Vector3d(0.30, -0.9, 0.012));  // position D
+  post_locations.push_back(Eigen::Vector3d(-0.1, -1.0, 0.012));  // position E
   post_locations.push_back(Eigen::Vector3d(-0.47, -0.8, -0.0));  // position F
 
   // Position of the pick and place location on the table, relative to
@@ -105,7 +105,7 @@ int DoMain(void) {
   // further forward.  The position is right at the edge of what we
   // can plan to, so this 4cm change does matter.
   // const Eigen::Vector3d table_position(0.86, -0.36, -0.07);  // position C
-  const Eigen::Vector3d table_position(0.80, -0.36, 0.26);  // position C
+  const Eigen::Vector3d table_position(0.80, -0.36, 0.25);  // position C
 
   // The offset from the top of the table to the top of the post, used for
   // calculating the place locations in iiwa relative coordinates.
@@ -204,7 +204,7 @@ int DoMain(void) {
     Eigen::Vector3d translator;
     translator = Eigen::Vector3d::Zero();
     // translator<< 0.0, 0.0, 0;
-    translator << -0.342, -0.017, 0.154;
+    translator << -0.389, -0.017, 0.149;
     X_WO.translate(translator);
 
     auto optitrack_pose_extractor =
