@@ -1,0 +1,52 @@
+{
+  "General": [
+    {
+      "allow_mirror": true,
+      "description": "",
+      "joints": {
+        "j2s7s300_joint_1": 0.0,
+        "j2s7s300_joint_2": -0.68,
+        "j2s7s300_joint_3": 0.0,
+        "j2s7s300_joint_4": -1.688,
+        "j2s7s300_joint_5": 0.0,
+        "j2s7s300_joint_6": 0.5635,
+        "j2s7s300_joint_7": 0.0
+      },
+      "name": "q_nom",
+      "nominal_handedness": "left"
+    },
+    {
+      "allow_mirror": true,
+      "description": "",
+      "joints": {
+        "j2s7s300_joint_1": 0.0,
+        "j2s7s300_joint_2": 0.0,
+        "j2s7s300_joint_3": 0.0,
+        "j2s7s300_joint_4": 0.0,
+        "j2s7s300_joint_5": 0.0,
+        "j2s7s300_joint_6": 0.0,
+        "j2s7s300_joint_7": 0.0
+      },
+      "name": "q_zero",
+      "nominal_handedness": "left"
+    },
+    {
+      "allow_mirror": true,
+      "description": "",
+      "joints": {
+        "j2s7s300_joint_1": 1.8010400533676147,
+        "j2s7s300_joint_2": 3.4414994716644287,
+        "j2s7s300_joint_3": 3.140462636947632,
+        "j2s7s300_joint_4": 0.7551804780960083,
+        "j2s7s300_joint_5": -1.6494947671890259,
+        "j2s7s300_joint_6": 4.492122650146484,
+        "j2s7s300_joint_7": -1.2546859979629517,
+        "j2s7s300_joint_finger_1": 31.520647048950195,
+        "j2s7s300_joint_finger_2": 32.253684997558594,
+        "j2s7s300_joint_finger_3": 31.939525604248047
+      },
+      "name": "home 1",
+      "nominal_handedness": "left"
+    }
+  ]
+}
