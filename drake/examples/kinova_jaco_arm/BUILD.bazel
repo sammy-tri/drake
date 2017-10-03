@@ -132,6 +132,16 @@ drake_cc_binary(
     ],
 )
 
+drake_cc_binary(
+    name = "kinova_driver",
+    srcs = ["kinova_driver.cc"],
+    deps = [
+        "//drake/lcmtypes:jaco",
+        "@kinova_libs//:usb_command_layer",
+        "@lcm",
+    ],
+)
+
 # === test/ ===
 
 drake_cc_googletest(

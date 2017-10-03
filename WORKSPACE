@@ -456,3 +456,15 @@ load(
 drake_visualizer_repository(
     name = "drake_visualizer",
 )
+
+new_local_repository(
+    name = "kinova_libs",
+    path = "/usr",
+    build_file_content = """
+cc_library(
+    name = "usb_command_layer",
+    srcs = ["lib/Kinova.API.USBCommandLayerUbuntu.so"],
+    visibility = ["//visibility:public"],
+)
+"""
+)
