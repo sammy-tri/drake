@@ -168,8 +168,25 @@ drake_cc_binary(
     ],
     deps = [
         ":iiwa_common",
-        ":iiwa_lcm",
+        "//drake/lcmtypes:iiwa",
+        "@lcmtypes_bot2_core",
+        "@lcmtypes_robotlocomotion",
+    ],
+)
+
+drake_cc_binary(
+    name = "kuka_iiwa_state_translator",
+    srcs = ["kuka_iiwa_state_translator.cc"],
+    data = [
+        "//drake/manipulation/models/iiwa_description:models",
+    ],
+    deps = [
         "//drake/common:find_resource",
+        "//drake/common:text_logging_gflags",
+        "//drake/lcmtypes:iiwa",
+        "//drake/manipulation/util:robot_state_msg_translator",
+        "//drake/multibody:rigid_body_tree",
+        "//drake/multibody/parsers",
         "@lcmtypes_bot2_core",
         "@lcmtypes_robotlocomotion",
     ],
