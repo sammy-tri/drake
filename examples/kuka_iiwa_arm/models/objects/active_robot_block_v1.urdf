@@ -12,6 +12,9 @@
       <geometry>
         <mesh filename="./meshes/visual/active_robot_block_v1.obj"/>
       </geometry>
+      <material name="bright green">
+        <color rgba="0.0 0.9 0.0 1" />
+      </material>
     </visual>
 
     <!--
