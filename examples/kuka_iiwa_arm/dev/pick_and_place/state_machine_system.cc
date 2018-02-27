@@ -36,9 +36,12 @@ lcmt_schunk_wsg_command MakeDefaultWsgCommand() {
 }  // namespace
 
 using manipulation::pick_and_place_example::PickAndPlaceState;
-using manipulation::pick_and_place_example::PickAndPlaceStateMachine;
 using manipulation::pick_and_place_example::PlannerConfiguration;
 using manipulation::pick_and_place_example::WorldState;
+using manipulation::pick_and_place_example::WsgAction;
+
+typedef manipulation::pick_and_place_example::PickAndPlaceStateMachine<
+  WsgAction> PickAndPlaceStateMachine;
 
 namespace pick_and_place {
 
@@ -165,7 +168,7 @@ void PickAndPlaceStateMachineSystem::DoCalcUnrestrictedUpdate(
         internal_state.last_iiwa_plan = *plan;
       });
 
-  PickAndPlaceStateMachine::WsgPublishCallback wsg_callback =
+  PickAndPlaceStateMachine::GripperPublishCallback wsg_callback =
       ([&](const lcmt_schunk_wsg_command* msg) {
         internal_state.last_wsg_command = *msg;
       });

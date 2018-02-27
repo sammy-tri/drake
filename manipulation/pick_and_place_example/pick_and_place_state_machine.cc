@@ -258,18 +258,22 @@ PostureInterpolationResult PlanInterpolatingMotion(
   return result;
 }
 
+template <class GripperAction>
 void OpenGripper(const WorldState& env_state,
+                 const std::vector<std::string>& joint_names,
                  double grip_force,
-                 WsgAction* wsg_act,
-                 lcmt_schunk_wsg_command* msg) {
-  wsg_act->OpenGripper(env_state, grip_force, msg);
+                 GripperAction* gripper_act,
+                 typename GripperAction::OutputType* msg) {
+  gripper_act->OpenGripper(env_state, joint_names, grip_force, msg);
 }
 
+template <class GripperAction>
 void CloseGripper(const WorldState& env_state,
+                  const std::vector<std::string>& joint_names,
                   double grip_force,
-                  WsgAction* wsg_act,
-                  lcmt_schunk_wsg_command* msg) {
-  wsg_act->CloseGripper(env_state, grip_force, msg);
+                  GripperAction* gripper_act,
+                  typename GripperAction::OutputType* msg) {
+  gripper_act->CloseGripper(env_state, joint_names, grip_force, msg);
 }
 
 std::unique_ptr<RigidBodyTree<double>> BuildTree(
@@ -640,7 +644,8 @@ std::ostream& operator<<(std::ostream& os, const PickAndPlaceState value) {
   }
 }
 
-PickAndPlaceStateMachine::PickAndPlaceStateMachine(
+template <class GripperAction>
+PickAndPlaceStateMachine<GripperAction>::PickAndPlaceStateMachine(
     const PlannerConfiguration& configuration, bool single_move)
     : single_move_(single_move),
       state_(PickAndPlaceState::kOpenGripper),
@@ -660,10 +665,12 @@ PickAndPlaceStateMachine::PickAndPlaceStateMachine(
   }
 }
 
-PickAndPlaceStateMachine::~PickAndPlaceStateMachine() {}
+template <class GripperAction>
+PickAndPlaceStateMachine<GripperAction>::~PickAndPlaceStateMachine() {}
 
+template <class GripperAction>
 optional<std::map<PickAndPlaceState, PiecewisePolynomial<double>>>
-PickAndPlaceStateMachine::ComputeTrajectories(
+PickAndPlaceStateMachine<GripperAction>::ComputeTrajectories(
     const WorldState& env_state, const PiecewisePolynomial<double>& q_traj_seed,
     RigidBodyTree<double>* robot) const {
   if (auto nominal_q_map = ComputeNominalConfigurations(
@@ -761,15 +768,18 @@ PickAndPlaceStateMachine::ComputeTrajectories(
   }
 }
 
-void PickAndPlaceStateMachine::Update(const WorldState& env_state,
-                                      const IiwaPublishCallback& iiwa_callback,
-                                      const WsgPublishCallback& wsg_callback) {
+template <class GripperAction>
+void PickAndPlaceStateMachine<GripperAction>::Update(
+    const WorldState& env_state,
+    const IiwaPublishCallback& iiwa_callback,
+    const GripperPublishCallback& gripper_callback) {
+
   IKResults ik_res;
   robotlocomotion::robot_plan_t stopped_plan{};
   stopped_plan.num_states = 0;
 
   PickAndPlaceState next_state{state_};
-  auto schunk_action = OpenGripper;
+  auto gripper_action = OpenGripper<GripperAction>;
   switch (state_) {
     case PickAndPlaceState::kOpenGripper: {
       next_state = PickAndPlaceState::kPlan;
@@ -784,7 +794,7 @@ void PickAndPlaceStateMachine::Update(const WorldState& env_state,
       break;
     }
     case PickAndPlaceState::kGrasp: {
-      schunk_action = CloseGripper;
+      gripper_action = CloseGripper<GripperAction>;
       next_state = PickAndPlaceState::kLiftFromPick;
       break;
     }
@@ -858,9 +868,9 @@ void PickAndPlaceStateMachine::Update(const WorldState& env_state,
       }
       break;
     }
-    // Schunk gripper actions
+    // gripper actions
     case PickAndPlaceState::kOpenGripper: {
-      if (!wsg_act_.ActionStarted()) {
+      if (!gripper_act_.ActionStarted()) {
         const Isometry3<double>& obj_pose = env_state.get_object_pose();
         drake::log()->info("Object at: {} {}",
                            obj_pose.translation().transpose(),
@@ -873,17 +883,18 @@ void PickAndPlaceStateMachine::Update(const WorldState& env_state,
     }  // Intentionally fall through.
     case PickAndPlaceState::kGrasp:
     case PickAndPlaceState::kPlace: {
-      if (!wsg_act_.ActionStarted()) {
-        lcmt_schunk_wsg_command msg;
-        schunk_action(env_state, configuration_.grip_force,
-                      &wsg_act_, &msg);
-        wsg_callback(&msg);
+      if (!gripper_act_.ActionStarted()) {
+        typename GripperAction::OutputType msg;
+        gripper_action(env_state, joint_names_,
+                      configuration_.grip_force,
+                      &gripper_act_, &msg);
+        gripper_callback(&msg);
 
         drake::log()->info("{} at {}", state_, env_state.get_arm_time());
       }
-      if (wsg_act_.ActionFinished(env_state)) {
+      if (gripper_act_.ActionFinished(env_state)) {
         state_ = next_state;
-        wsg_act_.Reset();
+        gripper_act_.Reset();
       }
       break;
     }
@@ -929,6 +940,9 @@ void PickAndPlaceStateMachine::Update(const WorldState& env_state,
     }
   }
 }
+
+template class PickAndPlaceStateMachine<WsgAction>;
+template class PickAndPlaceStateMachine<JacoFingerAction>;
 
 }  // namespace pick_and_place_example
 }  // namespace manipulation

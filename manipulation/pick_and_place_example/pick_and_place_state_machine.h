@@ -40,14 +40,15 @@ enum class PickAndPlaceState {
 
 /// A class which controls the pick and place actions for moving a
 /// single target in the environment.
+template <class GripperAction>
 class PickAndPlaceStateMachine {
  public:
   DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(PickAndPlaceStateMachine)
 
-  typedef std::function<void(const robotlocomotion::robot_plan_t*)>
-      IiwaPublishCallback;
-  typedef std::function<void(const lcmt_schunk_wsg_command*)>
-      WsgPublishCallback;
+  typedef std::function<void(
+      const robotlocomotion::robot_plan_t*)> IiwaPublishCallback;
+  typedef std::function<void(
+      const typename GripperAction::OutputType*)> GripperPublishCallback;
 
   /// Construct a pick and place state machine.  The state machine will move the
   /// item counter-clockwise around the tables specified in @p configuration.
@@ -66,7 +67,7 @@ class PickAndPlaceStateMachine {
   /// changes, @p wsg_callback is invoked.
   void Update(const WorldState& env_state,
               const IiwaPublishCallback& iiwa_callback,
-              const WsgPublishCallback& wsg_callback);
+              const GripperPublishCallback& wsg_callback);
 
   PickAndPlaceState state() const { return state_; }
 
@@ -80,7 +81,7 @@ class PickAndPlaceStateMachine {
 
   bool single_move_;
 
-  WsgAction wsg_act_;
+  GripperAction gripper_act_;
   IiwaMove iiwa_move_;
 
   PickAndPlaceState state_;

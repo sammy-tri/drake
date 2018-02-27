@@ -95,8 +95,8 @@ class WorldState {
 
   // Gripper status.
   double gripper_time_{};
-  double gripper_q_{};  // units [m]
-  double gripper_v_{};  // units [m/s]
+  double gripper_q_{};  // arbitrary units
+  double gripper_v_{};  // arbitrary units
 
   // Object status.
   double obj_time_{};

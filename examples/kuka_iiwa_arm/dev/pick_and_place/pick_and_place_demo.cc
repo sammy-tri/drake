@@ -27,9 +27,12 @@ namespace kuka_iiwa_arm {
 namespace pick_and_place {
 namespace {
 
-using manipulation::pick_and_place_example::PickAndPlaceStateMachine;
 using manipulation::pick_and_place_example::PlannerConfiguration;
 using manipulation::pick_and_place_example::WorldState;
+using manipulation::pick_and_place_example::WsgAction;
+
+typedef manipulation::pick_and_place_example::PickAndPlaceStateMachine<
+  WsgAction> PickAndPlaceStateMachine;
 
 class WorldStateSubscriber {
  public:
@@ -119,7 +122,7 @@ void RunPickAndPlaceDemo() {
         lcm.publish("COMMITTED_ROBOT_PLAN", plan);
       });
 
-  PickAndPlaceStateMachine::WsgPublishCallback wsg_callback =
+  PickAndPlaceStateMachine::GripperPublishCallback wsg_callback =
       ([&](const lcmt_schunk_wsg_command* msg) {
         lcm.publish("SCHUNK_WSG_COMMAND", msg);
       });

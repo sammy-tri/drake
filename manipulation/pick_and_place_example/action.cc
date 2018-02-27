@@ -1,6 +1,5 @@
 #include "drake/manipulation/pick_and_place_example/action.h"
 
-#include <iostream>
 #include <limits>
 
 #include "drake/examples/kuka_iiwa_arm/iiwa_common.h"
@@ -37,11 +36,12 @@ void IiwaMove::MoveJoints(const WorldState& est_state,
   DRAKE_DEMAND(time.size() == q.size());
   DRAKE_DEMAND(plan != nullptr);
 
-  std::cerr << "time start in " << time_in[0] << "\n";
-  std::cerr << "q front size " << q.front().size() << "\n";
   std::vector<int> info(time.size(), 1);
   MatrixX<double> q_mat(q.front().size(), q.size());
-  for (size_t i = 0; i < q.size(); ++i) q_mat.col(i) = q[i];
+  for (size_t i = 0; i < q.size(); ++i) {
+    q_mat.col(i) = q[i];
+    q_mat.col(i).tail(3) = est_state.get_arm_q().tail(3);
+  }
   VectorX<double> iiwa_max_velocities =
       examples::kuka_iiwa_arm::get_iiwa_max_joint_velocities();
   iiwa_max_velocities /= 3;
@@ -56,7 +56,6 @@ void IiwaMove::MoveJoints(const WorldState& est_state,
   // executing the plan.
   const double additional_duaration{0.5};
   duration_ = time.back() + additional_duaration;
-  std::cerr << "time start out " << time[0] << "\n";
 }
 
 void IiwaMove::Reset() {
@@ -68,8 +67,10 @@ bool IiwaMove::ActionFinished(const WorldState& est_state) const {
   if (!ActionStarted()) return false;
 
   const double max_finished_velocity = 1e-1;
+  VectorX<double> arm_v = est_state.get_arm_v();
+  arm_v.tail(3).fill(0);
   if (get_time_since_action_start(est_state.get_arm_time()) > duration_ &&
-      est_state.get_arm_v().norm() < max_finished_velocity) {
+      arm_v.norm() < max_finished_velocity) {
     return true;
   } else {
     return false;
@@ -79,6 +80,7 @@ bool IiwaMove::ActionFinished(const WorldState& est_state) const {
 WsgAction::WsgAction() {}
 
 void WsgAction::OpenGripper(const WorldState& est_state,
+                            const std::vector<std::string>& ignored,
                             double grip_force,
                             lcmt_schunk_wsg_command* msg) {
   StartAction(est_state.get_gripper_time());
@@ -90,6 +92,7 @@ void WsgAction::OpenGripper(const WorldState& est_state,
 }
 
 void WsgAction::CloseGripper(const WorldState& est_state,
+                             const std::vector<std::string>& ignored,
                              double grip_force,
                              lcmt_schunk_wsg_command* msg) {
   StartAction(est_state.get_gripper_time());
@@ -111,6 +114,56 @@ bool WsgAction::ActionFinished(const WorldState& est_state) const {
       return true;
     } else if (last_command_ == kClose &&
                est_state.get_gripper_q() < kOpenPositionThreshold) {
+      return true;
+    }
+  }
+  return false;
+}
+
+JacoFingerAction::JacoFingerAction() {}
+
+void JacoFingerAction::OpenGripper(const WorldState& est_state,
+                                   const std::vector<std::string>& joint_names,
+                                   double grip_force_ignored,
+                                   robotlocomotion::robot_plan_t* plan) {
+  StartAction(est_state.get_gripper_time());
+
+  std::vector<double> time{0., 1.};
+  std::vector<int> info(time.size(), 1);
+
+  MatrixX<double> q_mat(joint_names.size(), time.size());
+  q_mat.col(0) = est_state.get_arm_q();
+  q_mat.col(1) = est_state.get_arm_q();
+  q_mat.col(1).tail(3) = VectorX<double>::Zero(3);
+  *plan = EncodeKeyFrames(joint_names, time, info, q_mat);
+  last_command_ = kOpen;
+}
+
+void JacoFingerAction::CloseGripper(const WorldState& est_state,
+                                    const std::vector<std::string>& joint_names,
+                                    double grip_force,
+                                    robotlocomotion::robot_plan_t* plan) {
+  StartAction(est_state.get_gripper_time());
+
+  std::vector<double> time{0., 1.};
+  std::vector<int> info(time.size(), 1);
+
+  MatrixX<double> q_mat(joint_names.size(), time.size());
+  q_mat.col(0) = est_state.get_arm_q();
+  q_mat.col(1) = est_state.get_arm_q();
+  q_mat.col(1).tail(3) = VectorX<double>::Ones(3) * 1.68;
+  *plan = EncodeKeyFrames(joint_names, time, info, q_mat);
+  last_command_ = kClose;
+}
+
+bool JacoFingerAction::ActionFinished(const WorldState& est_state) const {
+  if (!ActionStarted()) return false;
+  if (get_time_since_action_start(est_state.get_gripper_time()) > 0.5) {
+    if (last_command_ == kOpen &&
+        est_state.get_gripper_q() < kOpenPositionThreshold) {
+      return true;
+    } else if (last_command_ == kClose &&
+               est_state.get_gripper_q() > kClosedPositionThreshold) {
       return true;
     }
   }

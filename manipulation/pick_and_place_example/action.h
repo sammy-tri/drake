@@ -113,11 +113,13 @@ class IiwaMove : public Action {
 };
 
 /**
- * An Action that closes / opens the gripper.
+ * An Action that closes / opens the WSG.
  */
 class WsgAction : public Action {
  public:
   DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(WsgAction)
+
+  typedef lcmt_schunk_wsg_command OutputType;
 
   WsgAction();
 
@@ -126,9 +128,10 @@ class WsgAction : public Action {
    * driver to fully open.  @p grip_force is passed to the gripper,
    * but since the gripper is opening and (hopefully) not pushing
    * against anything in this direction, it mostly affects the
-   * velocity of the fingers.
+   * velocity of the fingers.  @p joint_names is ignored.
    */
   void OpenGripper(const WorldState& est_state,
+                   const std::vector<std::string>& joint_names,
                    double grip_force,
                    lcmt_schunk_wsg_command* msg);
 
@@ -139,9 +142,10 @@ class WsgAction : public Action {
    * will internally attempt to maintain this amount of clamping force
    * by driving the motor appropriately, though the result will not be
    * precise (and the actual outcome may depend on the gripper
-   * configuration).
+   * configuration).  @p joint_names is ignored
    */
   void CloseGripper(const WorldState& est_state,
+                    const std::vector<std::string>& joint_names,
                     double grip_force,
                     lcmt_schunk_wsg_command* msg);
 
@@ -164,6 +168,56 @@ class WsgAction : public Action {
   enum { kOpen, kClose } last_command_{kOpen};
   static constexpr double kFinalSpeedThreshold = 1e-2;  // m/s
   static constexpr double kOpenPositionThreshold = .095;   // m
+};
+
+/**
+ * An Action that closes / opens the jaco fingers.
+ */
+class JacoFingerAction : public Action {
+ public:
+  DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(JacoFingerAction)
+
+  typedef robotlocomotion::robot_plan_t OutputType;
+
+  JacoFingerAction();
+
+  /**
+   * Populates @p msg with an LCM message that tells the fingers
+   * to fully open.  @p grip_force is ignored.
+   */
+  void OpenGripper(const WorldState& est_state,
+                   const std::vector<std::string>& joint_names,
+                   double grip_force,
+                   robotlocomotion::robot_plan_t* plan);
+
+  /**
+   * Populates @p msg with an LCM message that tells the fingers
+   * to fully close.  @p grip_force is ignored.
+   */
+  void CloseGripper(const WorldState& est_state,
+                    const std::vector<std::string>& joint_names,
+                    double grip_force,
+                    robotlocomotion::robot_plan_t* plan);
+
+  // TODO(siyuanfeng): Implement something meaningful here like a check for a
+  // force threshold being crossed.
+  bool ActionFailed(const WorldState&) const override {
+    return false;
+  }
+
+  /**
+   * Returns true if the following criteria are satisfied:
+   *  - The gripper speed is less than the final speed threshold.
+   *  - 0.5 s have elapsed since the last Open/Close command was issued.
+   *  - The gripper position is greater than (for an Open command) or less than
+   *    (for a Close command) the open position threshold.
+   */
+  bool ActionFinished(const WorldState& est_state) const override;
+
+ private:
+  enum { kOpen, kClose } last_command_{kOpen};
+  static constexpr double kOpenPositionThreshold = 0.1;   // rad
+  static constexpr double kClosedPositionThreshold = 0.5;   // rad
 };
 
 }  // namespace pick_and_place_example

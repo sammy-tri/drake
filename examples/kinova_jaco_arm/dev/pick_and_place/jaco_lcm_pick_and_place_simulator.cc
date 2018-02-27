@@ -75,6 +75,8 @@ void AddJacoInstancesToDiagram(
     VectorX<double> jaco_kp, jaco_kd, jaco_ki;
     SetPositionControlledJacoGains(&jaco_kp, &jaco_ki, &jaco_kd,
                                    single_arm->get_num_positions());
+    jaco_ki.head(7) = VectorX<double>::Ones(7);
+
     auto jaco_controller = builder->template AddController<
         systems::controllers::InverseDynamicsController<double>>(
         jaco_instances[i].instance_id, std::move(single_arm), jaco_kp, jaco_ki,

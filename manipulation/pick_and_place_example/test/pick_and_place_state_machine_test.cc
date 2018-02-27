@@ -15,6 +15,9 @@ namespace manipulation {
 namespace pick_and_place_example {
 namespace {
 
+typedef manipulation::pick_and_place_example::PickAndPlaceStateMachine<
+  WsgAction> PickAndPlaceStateMachine;
+
 using examples::kuka_iiwa_arm::kIiwaArmNumJoints;
 
 const char* const kIiwaUrdf =
@@ -86,7 +89,7 @@ GTEST_TEST(PickAndPlaceStateMachineTest, StateMachineTest) {
 
   int wsg_command_count = 0;
   lcmt_schunk_wsg_command wsg_command{};
-  PickAndPlaceStateMachine::WsgPublishCallback wsg_callback =
+  PickAndPlaceStateMachine::GripperPublishCallback wsg_callback =
       [&wsg_command_count, &wsg_command](
           const lcmt_schunk_wsg_command* command) {
     wsg_command_count++;

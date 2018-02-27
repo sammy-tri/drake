@@ -27,11 +27,14 @@ robotlocomotion::robot_plan_t MakeDefaultPlan() {
 
 }  // namespace
 
+using manipulation::pick_and_place_example::JacoFingerAction;
 using manipulation::pick_and_place_example::PickAndPlaceState;
-using manipulation::pick_and_place_example::PickAndPlaceStateMachine;
 using manipulation::pick_and_place_example::OptitrackConfiguration;
 using manipulation::pick_and_place_example::PlannerConfiguration;
 using manipulation::pick_and_place_example::WorldState;
+
+typedef manipulation::pick_and_place_example::PickAndPlaceStateMachine<
+  JacoFingerAction> PickAndPlaceStateMachine;
 
 namespace pick_and_place {
 
@@ -159,7 +162,7 @@ void JacoLcmPlanner::DoCalcUnrestrictedUpdate(
 
   // TODO(sam.creasey) make this something sensible
   internal_state.world_state.SetGripperStatus(
-      jaco_status.utime / 1e6, 0.1, //jaco_status.finger_position[0],
+      jaco_status.utime / 1e6, jaco_status.finger_position[0],
       jaco_status.finger_velocity[0]);
 
   PickAndPlaceStateMachine::IiwaPublishCallback iiwa_callback =
@@ -167,12 +170,13 @@ void JacoLcmPlanner::DoCalcUnrestrictedUpdate(
         internal_state.last_plan = *plan;
       });
 
-  PickAndPlaceStateMachine::WsgPublishCallback wsg_callback =
-      ([&](const lcmt_schunk_wsg_command* msg) {
-
+  PickAndPlaceStateMachine::GripperPublishCallback gripper_callback =
+      ([&](const robotlocomotion::robot_plan_t* plan) {
+        internal_state.last_plan = *plan;
       });
+
   internal_state.state_machine.Update(internal_state.world_state, iiwa_callback,
-                                      wsg_callback);
+                                      gripper_callback);
 }
 
 PickAndPlaceState JacoLcmPlanner::state(
