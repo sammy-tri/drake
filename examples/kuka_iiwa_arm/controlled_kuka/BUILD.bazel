@@ -13,8 +13,8 @@ drake_cc_binary(
     srcs = ["controlled_kuka_demo.cc"],
     add_test_rule = 1,
     data = [
-        "//examples/kuka_iiwa_arm:models",
         "//manipulation/models/iiwa_description:models",
+        "//manipulation/pick_and_place_example/models",
     ],
     deps = [
         "//common:find_resource",

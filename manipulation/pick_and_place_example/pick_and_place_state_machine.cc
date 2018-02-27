@@ -1,4 +1,4 @@
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_state_machine.h"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_state_machine.h"
 
 #include <algorithm>
 #include <limits>
@@ -17,9 +17,8 @@
 #include "drake/multibody/rigid_body_ik.h"
 
 namespace drake {
-namespace examples {
-namespace kuka_iiwa_arm {
-namespace pick_and_place {
+namespace manipulation {
+namespace pick_and_place_example {
 namespace {
 
 using manipulation::util::WorldSimTreeBuilder;
@@ -274,7 +273,7 @@ void CloseGripper(const WorldState& env_state,
 }
 
 std::unique_ptr<RigidBodyTree<double>> BuildTree(
-    const pick_and_place::PlannerConfiguration& configuration,
+    const PlannerConfiguration& configuration,
     bool add_grasp_frame = false, int num_arms = 1) {
   WorldSimTreeBuilder<double> tree_builder;
   tree_builder.StoreModel("iiwa", configuration.absolute_model_path());
@@ -641,7 +640,7 @@ std::ostream& operator<<(std::ostream& os, const PickAndPlaceState value) {
 }
 
 PickAndPlaceStateMachine::PickAndPlaceStateMachine(
-    const pick_and_place::PlannerConfiguration& configuration, bool single_move)
+    const PlannerConfiguration& configuration, bool single_move)
     : single_move_(single_move),
       state_(PickAndPlaceState::kOpenGripper),
       // Position and rotation tolerances.  These were hand-tuned by
@@ -930,7 +929,6 @@ void PickAndPlaceStateMachine::Update(const WorldState& env_state,
   }
 }
 
-}  // namespace pick_and_place
-}  // namespace kuka_iiwa_arm
-}  // namespace examples
+}  // namespace pick_and_place_example
+}  // namespace manipulation
 }  // namespace drake

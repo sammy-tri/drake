@@ -8,14 +8,14 @@
 #include "drake/common/text_logging_gflags.h"
 #include "drake/examples/kuka_iiwa_arm/dev/pick_and_place/lcm_plant.h"
 #include "drake/examples/kuka_iiwa_arm/iiwa_lcm.h"
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_configuration.h"
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_configuration_parsing.h"
 #include "drake/lcm/drake_lcm.h"
 #include "drake/lcmt_contact_results_for_viz.hpp"
 #include "drake/lcmt_iiwa_command.hpp"
 #include "drake/lcmt_iiwa_status.hpp"
 #include "drake/lcmt_schunk_wsg_command.hpp"
 #include "drake/lcmt_schunk_wsg_status.hpp"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_configuration.h"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_configuration_parsing.h"
 #include "drake/multibody/rigid_body_plant/contact_results_to_lcm.h"
 #include "drake/multibody/rigid_body_plant/drake_visualizer.h"
 #include "drake/systems/analysis/runge_kutta2_integrator.h"
@@ -35,7 +35,7 @@ DEFINE_bool(quick, false,
             "Run only a brief simulation and return success "
             "without executing the entire task");
 DEFINE_string(configuration_file,
-              "drake/examples/kuka_iiwa_arm/pick_and_place/configuration/"
+              "drake/manipulation/pick_and_place_example/configuration/"
               "yellow_posts.pick_and_place_configuration",
               "Path to the configuration file.");
 
@@ -45,13 +45,19 @@ namespace kuka_iiwa_arm {
 namespace pick_and_place {
 namespace {
 
+using manipulation::pick_and_place_example::OptitrackConfiguration;
+using manipulation::pick_and_place_example::PlannerConfiguration;
+using manipulation::pick_and_place_example::SimulatedPlantConfiguration;
+
 int DoMain(void) {
   // Parse the configuration file.
-  const pick_and_place::SimulatedPlantConfiguration plant_configuration =
-      pick_and_place::ParseSimulatedPlantConfigurationOrThrow(
+  const SimulatedPlantConfiguration plant_configuration =
+      // NOLINTNEXTLINE(whitespace/line_length)
+      manipulation::pick_and_place_example::ParseSimulatedPlantConfigurationOrThrow(
           FLAGS_configuration_file);
-  const pick_and_place::OptitrackConfiguration optitrack_configuration =
-      pick_and_place::ParseOptitrackConfigurationOrThrow(
+  const OptitrackConfiguration optitrack_configuration =
+      // NOLINTNEXTLINE(whitespace/line_length)
+      manipulation::pick_and_place_example::ParseOptitrackConfigurationOrThrow(
           FLAGS_configuration_file);
 
   // Instantiate an LCM instance for use with publishers and subscribers.
@@ -61,7 +67,7 @@ int DoMain(void) {
   systems::DiagramBuilder<double> builder;
 
   // Add the plant.
-  auto plant = builder.AddSystem<pick_and_place::LcmPlant>(
+  auto plant = builder.AddSystem<LcmPlant>(
       plant_configuration, optitrack_configuration);
 
   // Add the visualizer.

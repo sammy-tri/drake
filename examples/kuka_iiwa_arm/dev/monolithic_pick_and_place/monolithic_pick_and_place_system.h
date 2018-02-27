@@ -5,7 +5,7 @@
 #include "drake/examples/kuka_iiwa_arm/dev/pick_and_place/lcm_planner.h"
 #include "drake/examples/kuka_iiwa_arm/dev/pick_and_place/lcm_plant.h"
 #include "drake/examples/kuka_iiwa_arm/lcm_plan_interpolator.h"
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_configuration.h"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_configuration.h"
 #include "drake/systems/framework/diagram.h"
 
 namespace drake {
@@ -14,7 +14,7 @@ namespace kuka_iiwa_arm {
 namespace monolithic_pick_and_place {
 
 /** A custom systems::Diagram representing the entire pick-and-place demo. It
-consists of a pick_and_place::LcmPlant a pick_and_place::LcmPlanner, an
+consists of a manipulation::pick_and_place_example::LcmPlant a manipulation::pick_and_place_example::LcmPlanner, an
 LcmPlanInterpolator, and a systems::DrakeVisualizer. A systems::ZeroOrderHold is
 used to prevent an algebraic loop between the plant and the plan interpolator.
 
@@ -45,9 +45,12 @@ used to prevent an algebraic loop between the plant and the plan interpolator.
 class MonolithicPickAndPlaceSystem : public systems::Diagram<double> {
  public:
   MonolithicPickAndPlaceSystem(
-      const pick_and_place::SimulatedPlantConfiguration& plant_configuration,
-      const pick_and_place::OptitrackConfiguration& optitrack_configuration,
-      const std::vector<pick_and_place::PlannerConfiguration>&
+      // NOLINTNEXTLINE(whitespace/line_length)
+      const manipulation::pick_and_place_example::SimulatedPlantConfiguration& plant_configuration,
+      // NOLINTNEXTLINE(whitespace/line_length)
+      const manipulation::pick_and_place_example::OptitrackConfiguration& optitrack_configuration,
+      // NOLINTNEXTLINE(whitespace/line_length)
+      const std::vector<manipulation::pick_and_place_example::PlannerConfiguration>&
           planner_configurations,
       bool single_move);
 
@@ -67,7 +70,7 @@ class MonolithicPickAndPlaceSystem : public systems::Diagram<double> {
 
   void Initialize(systems::Context<double>* context);
 
-  const pick_and_place::WorldState& world_state(
+  const manipulation::pick_and_place_example::WorldState& world_state(
       const systems::Context<double>& context, int index) const;
 
  private:

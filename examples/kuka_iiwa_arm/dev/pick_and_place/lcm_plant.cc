@@ -5,8 +5,8 @@
 #include <string>
 #include <utility>
 
-#include "drake/examples/kuka_iiwa_arm/dev/pick_and_place/pick_and_place_simulation_helpers.h"
 #include "drake/examples/kuka_iiwa_arm/iiwa_lcm.h"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_simulation_helpers.h"
 #include "drake/manipulation/schunk_wsg/schunk_wsg_constants.h"
 #include "drake/manipulation/schunk_wsg/schunk_wsg_controller.h"
 #include "drake/manipulation/schunk_wsg/schunk_wsg_lcm.h"
@@ -19,6 +19,10 @@ namespace examples {
 namespace kuka_iiwa_arm {
 namespace pick_and_place {
 
+using manipulation::pick_and_place_example::AddOptitrackComponents;
+using manipulation::pick_and_place_example::BuildPickAndPlacePlant;
+using manipulation::pick_and_place_example::OptitrackConfiguration;
+using manipulation::pick_and_place_example::SimulatedPlantConfiguration;
 using manipulation::schunk_wsg::SchunkWsgController;
 using manipulation::schunk_wsg::SchunkWsgStatusSender;
 using manipulation::util::ModelInstanceInfo;

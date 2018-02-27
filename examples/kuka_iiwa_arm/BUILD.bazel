@@ -92,8 +92,8 @@ drake_example_cc_binary(
     name = "iiwa_controller",
     srcs = ["iiwa_controller.cc"],
     data = [
-        ":models",
         "//manipulation/models/iiwa_description:models",
+        "//manipulation/pick_and_place_example/models",
     ],
     deps = [
         ":iiwa_common",
@@ -107,9 +107,9 @@ drake_example_cc_binary(
     srcs = ["iiwa_wsg_simulation.cc"],
     add_test_rule = 1,
     data = [
-        ":models",
         "//manipulation/models/iiwa_description:models",
         "//manipulation/models/wsg_50_description:models",
+        "//manipulation/pick_and_place_example/models",
     ],
     # TODO(kyle.edwards@kitware.com): Re-enable this test when it no longer
     # causes timeouts in kcov.
@@ -131,8 +131,8 @@ drake_example_cc_binary(
     srcs = ["kuka_simulation.cc"],
     add_test_rule = 1,
     data = [
-        ":models",
         "//manipulation/models/iiwa_description:models",
+        "//manipulation/pick_and_place_example/models",
     ],
     # TODO(kyle.edwards@kitware.com): Re-enable this test when it no longer
     # causes timeouts in kcov.
@@ -151,7 +151,6 @@ drake_example_cc_binary(
     name = "kuka_plan_runner",
     srcs = ["kuka_plan_runner.cc"],
     data = [
-        ":models",
         "//manipulation/models/iiwa_description:models",
     ],
     deps = [
@@ -166,7 +165,6 @@ drake_cc_binary(
     name = "move_iiwa_ee",
     srcs = ["move_iiwa_ee.cc"],
     data = [
-        ":models",
         "//manipulation/models/iiwa_description:models",
     ],
     deps = [
@@ -180,18 +178,6 @@ drake_cc_binary(
         "@lcmtypes_bot2_core",
         "@lcmtypes_robotlocomotion",
     ],
-)
-
-alias(
-    name = "models",
-    actual = "//examples/kuka_iiwa_arm/models:models",
-    visibility = ["//visibility:public"],
-)
-
-alias(
-    name = "prod_models",
-    actual = "//examples/kuka_iiwa_arm/models:prod_models",
-    visibility = ["//visibility:public"],
 )
 
 # === test/ ===
@@ -276,7 +262,7 @@ install(
     data_dest = "share/drake/" + package_name(),
     visibility = ["//visibility:public"],
     deps = [
-        "//examples/kuka_iiwa_arm/models:install_data",
+        "//manipulation/pick_and_place_example/models:install_data",
     ],
 )
 

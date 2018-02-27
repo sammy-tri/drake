@@ -80,7 +80,7 @@ process. If you look at the "0.simulators" and "1.planners" groups, you will
 find that the `lcm_pick_and_place_simulator` and `lcm_pick_and_place_planner`
 commands both take a `--configuration_file` flag. For example, the
 configuration file for the single-iiwa scenario is
-`drake/examples/kuka_iiwa_arm/pick_and_place/configuration/single_iiwa.pick_and_place_configuration`.
+`drake/manipulation/pick_and_place_example/configuration/single_iiwa.pick_and_place_configuration`.
 Because this file-path begins with `drake/`, the executables will look for it
 under the Drake root directory. You can also supply your own configuration file
 from outside the Drake file hierarchy; in that case, you will need to provide
@@ -88,4 +88,4 @@ the absolute path to the file. To create your custom scenario, simply copy one
 of the existing configuration files and make modifications as desired. The
 configuration files are text-format protobuf files that use the message types
 defined in `<drake
-root>/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_configuration.proto`.
+root>/manipulation/pick_and_place_example/pick_and_place_configuration.proto`.

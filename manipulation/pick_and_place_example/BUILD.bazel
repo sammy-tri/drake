@@ -13,7 +13,7 @@ load(
 
 package(
     default_visibility = [
-        "//examples/kuka_iiwa_arm:__subpackages__",
+        "//visibility:public",
     ],
 )
 
@@ -56,14 +56,16 @@ drake_cc_library(
 )
 
 drake_cc_library(
-    name = "pick_and_place",
+    name = "pick_and_place_example",
     srcs = [
         "action.cc",
+        "pick_and_place_simulation_helpers.cc",
         "pick_and_place_state_machine.cc",
         "world_state.cc",
     ],
     hdrs = [
         "action.h",
+        "pick_and_place_simulation_helpers.h",
         "pick_and_place_state_machine.h",
         "world_state.h",
     ],
@@ -77,10 +79,14 @@ drake_cc_library(
         "//lcmtypes:schunk",
         "//lcmtypes:viewer",
         "//manipulation/util:bot_core_lcm_encode_decode",
+        "//manipulation/util:frame_pose_tracker",
         "//manipulation/util:world_sim_tree_builder",
         "//multibody:inverse_kinematics",
         "//multibody:rigid_body_tree",
         "//multibody/parsers",
+        "//multibody/rigid_body_plant",
+        "//systems/sensors:optitrack_encoder",
+        "//systems/sensors:optitrack_sender",
         "@lcmtypes_bot2_core",
         "@lcmtypes_robotlocomotion",
     ],
@@ -92,12 +98,12 @@ drake_cc_googletest(
     name = "pick_and_place_configuration_parsing_test",
     data = [
         ":configuration",
-        "//examples/kuka_iiwa_arm:models",
         "//manipulation/models/iiwa_description:models",
+        "//manipulation/pick_and_place_example/models",
     ],
     deps = [
         "//common/test_utilities:eigen_matrix_compare",
-        "//examples/kuka_iiwa_arm/pick_and_place:pick_and_place_configuration_parsing",  # noqa
+        "//manipulation/pick_and_place_example:pick_and_place_configuration_parsing",  # noqa
     ],
 )
 
@@ -113,7 +119,7 @@ drake_cc_googletest(
         "snopt",
     ],
     deps = [
-        ":pick_and_place",
+        ":pick_and_place_example",
         "//common:find_resource",
     ],
 )
@@ -124,7 +130,7 @@ drake_cc_googletest(
         "//manipulation/models/iiwa_description:models",
     ],
     deps = [
-        ":pick_and_place",
+        ":pick_and_place_example",
         "//common:find_resource",
         "//common/test_utilities:eigen_matrix_compare",
     ],

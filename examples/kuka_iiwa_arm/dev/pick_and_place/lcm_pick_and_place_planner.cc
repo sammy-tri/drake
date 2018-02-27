@@ -6,12 +6,12 @@
 
 #include "drake/common/text_logging_gflags.h"
 #include "drake/examples/kuka_iiwa_arm/dev/pick_and_place/lcm_planner.h"
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_configuration.h"
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_configuration_parsing.h"
 #include "drake/lcm/drake_lcm.h"
 #include "drake/lcmt_iiwa_status.hpp"
 #include "drake/lcmt_schunk_wsg_command.hpp"
 #include "drake/lcmt_schunk_wsg_status.hpp"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_configuration.h"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_configuration_parsing.h"
 #include "drake/systems/framework/diagram.h"
 #include "drake/systems/framework/diagram_builder.h"
 #include "drake/systems/lcm/lcm_driven_loop.h"
@@ -23,7 +23,7 @@ DEFINE_int32(task_index, 0,
 DEFINE_bool(use_channel_suffix, false,
             "If true, append a suffix to channel names");
 DEFINE_string(configuration_file,
-              "drake/examples/kuka_iiwa_arm/pick_and_place/configuration/"
+              "drake/manipulation/pick_and_place_example/configuration/"
               "yellow_posts.pick_and_place_configuration",
               "Path to the configuration file.");
 
@@ -33,15 +33,18 @@ namespace kuka_iiwa_arm {
 namespace pick_and_place {
 namespace {
 
+using manipulation::pick_and_place_example::PlannerConfiguration;
+using manipulation::pick_and_place_example::OptitrackConfiguration;
+
 int DoMain(void) {
   // Parse the configuration file.
-  const pick_and_place::PlannerConfiguration planner_configuration =
-      pick_and_place::ParsePlannerConfigurationOrThrow(
+  const PlannerConfiguration planner_configuration =
+      manipulation::pick_and_place_example::ParsePlannerConfigurationOrThrow(
           FLAGS_configuration_file,
-          pick_and_place::TaskIndex(FLAGS_task_index));
+          manipulation::pick_and_place_example::TaskIndex(FLAGS_task_index));
 
-  const pick_and_place::OptitrackConfiguration optitrack_configuration =
-      pick_and_place::ParseOptitrackConfigurationOrThrow(
+  const OptitrackConfiguration optitrack_configuration =
+      manipulation::pick_and_place_example::ParseOptitrackConfigurationOrThrow(
           FLAGS_configuration_file);
 
   // Instantiate an LCM instance for use with publishers and subscribers.
@@ -51,7 +54,7 @@ int DoMain(void) {
   systems::DiagramBuilder<double> builder;
 
   // Add the LcmPlanner block, which contains all of the demo logic.
-  auto planner = builder.AddSystem<pick_and_place::LcmPlanner>(
+  auto planner = builder.AddSystem<LcmPlanner>(
       planner_configuration, optitrack_configuration, false);
 
   // All LCM traffic for this planner will occur on channels that end with the

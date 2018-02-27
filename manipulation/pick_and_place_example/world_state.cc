@@ -1,13 +1,14 @@
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/world_state.h"
+#include "drake/manipulation/pick_and_place_example/world_state.h"
 
 #include "drake/examples/kuka_iiwa_arm/iiwa_common.h"
 #include "drake/manipulation/util/bot_core_lcm_encode_decode.h"
 #include "drake/multibody/parsers/urdf_parser.h"
 
 namespace drake {
-namespace examples {
-namespace kuka_iiwa_arm {
-namespace pick_and_place {
+namespace manipulation {
+namespace pick_and_place_example {
+
+using examples::kuka_iiwa_arm::kIiwaArmNumJoints;
 
 WorldState::WorldState(int num_tables,
                        const Vector3<double>& object_dimensions)
@@ -82,7 +83,6 @@ void WorldState::HandleTableStatus(int index, const Isometry3<double>& pose) {
   table_poses_[index] = pose;
 }
 
-}  // namespace pick_and_place
-}  // namespace kuka_iiwa_arm
-}  // namespace examples
+}  // namespace pick_and_place_example
+}  // namespace manipulation
 }  // namespace drake

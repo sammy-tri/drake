@@ -6,10 +6,10 @@
 
 #include "bot_core/robot_state_t.hpp"
 
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_configuration.h"
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_state_machine.h"
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/world_state.h"
 #include "drake/lcmt_iiwa_status.hpp"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_configuration.h"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_state_machine.h"
+#include "drake/manipulation/pick_and_place_example/world_state.h"
 #include "drake/multibody/rigid_body_tree.h"
 #include "drake/systems/framework/leaf_system.h"
 #include "drake/systems/framework/system_symbolic_inspector.h"
@@ -35,7 +35,8 @@ class PickAndPlaceStateMachineSystem : public systems::LeafSystem<double> {
    * this system. This should be bigger than that of the PlanSource components.
    */
   PickAndPlaceStateMachineSystem(
-      const pick_and_place::PlannerConfiguration& configuration,
+      // NOLINTNEXTLINE(whitespace/line_length)
+      const manipulation::pick_and_place_example::PlannerConfiguration& configuration,
       bool single_move);
 
   std::unique_ptr<systems::AbstractValues> AllocateAbstractState()
@@ -112,12 +113,12 @@ class PickAndPlaceStateMachineSystem : public systems::LeafSystem<double> {
   }
 
   /// Return the state of the pick and place state machine.
-  pick_and_place::PickAndPlaceState state(
+  manipulation::pick_and_place_example::PickAndPlaceState state(
       const systems::Context<double>&) const;
 
   /// Return the state of the pick and place world.  Note that this
   /// reference is into data contained inside the passed in context.
-  const pick_and_place::WorldState& world_state(
+  const manipulation::pick_and_place_example::WorldState& world_state(
       const systems::Context<double>&) const;
 
  private:
@@ -150,7 +151,8 @@ class PickAndPlaceStateMachineSystem : public systems::LeafSystem<double> {
   int output_port_iiwa_plan_{-1};
   int output_port_wsg_command_{-1};
 
-  const pick_and_place::PlannerConfiguration configuration_;
+  // NOLINTNEXTLINE(whitespace/line_length)
+  const manipulation::pick_and_place_example::PlannerConfiguration configuration_;
 
   bool single_move_;
 };

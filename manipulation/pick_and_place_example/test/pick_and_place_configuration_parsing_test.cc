@@ -1,4 +1,4 @@
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_configuration_parsing.h"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_configuration_parsing.h"
 
 #include <string>
 #include <vector>
@@ -8,35 +8,29 @@
 #include <gtest/gtest.h>
 
 #include "drake/common/test_utilities/eigen_matrix_compare.h"
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_configuration.h"
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_configuration.pb.h"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_configuration.h"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_configuration.pb.h"
 #include "drake/math/roll_pitch_yaw.h"
 
 namespace drake {
-namespace examples {
-namespace kuka_iiwa_arm {
-namespace pick_and_place {
+namespace manipulation {
+namespace pick_and_place_example {
 namespace {
 
 using math::rpy2rotmat;
-using pick_and_place::PlannerConfiguration;
-using pick_and_place::SimulatedPlantConfiguration;
-using pick_and_place::OptitrackConfiguration;
-using pick_and_place::OptitrackInfo;
-using pick_and_place::RobotBaseIndex;
-using pick_and_place::TargetIndex;
 
 const char kIiwaPath[] =
     "drake/manipulation/models/iiwa_description/urdf/"
     "iiwa14_polytope_collision.urdf";
 const char kEndEffectorName[] = "iiwa_link_ee";
 const char kYellowPostPath[] =
-    "drake/examples/kuka_iiwa_arm/models/objects/yellow_post.urdf";
+    "drake/manipulation/pick_and_place_example/models/objects/yellow_post.urdf";
 const char kExtraHeavyDutyTablePath[] =
-    "drake/examples/kuka_iiwa_arm/models/table/"
+    "drake/manipulation/pick_and_place_example/models/table/"
     "extra_heavy_duty_table_surface_only_collision.sdf";
 const char kCubePath[] =
-    "drake/examples/kuka_iiwa_arm/models/objects/simple_cuboid.urdf";
+    "drake/manipulation/pick_and_place_example/models/objects/"
+    "simple_cuboid.urdf";
 const Vector3<double> kTargetDimensions{0.06, 0.06, 0.06};
 
 const std::vector<int> kTableOptitrackIds{2, 3, 4, 5, 6, 7};
@@ -77,7 +71,7 @@ const std::vector<Vector3<double>> kObjectPositions{{0.80, 0.36, 1.05}};
 const std::vector<Vector3<double>> kObjectRpy{{0.0, 0.0, 0.0}};
 
 const char kConfigurationFile[] =
-    "drake/examples/kuka_iiwa_arm/pick_and_place/configuration/"
+    "drake/manipulation/pick_and_place_example/configuration/"
     "yellow_posts.pick_and_place_configuration";
 
 ::testing::AssertionResult CompareIsometry3Vectors(
@@ -248,8 +242,8 @@ class ConfigurationParsingTests : public ::testing::Test {
   }
 
   SimulatedPlantConfiguration plant_configuration_;
-  pick_and_place::OptitrackConfiguration optitrack_configuration_;
-  pick_and_place::PlannerConfiguration planner_configuration_;
+  OptitrackConfiguration optitrack_configuration_;
+  PlannerConfiguration planner_configuration_;
 };
 
 TEST_F(ConfigurationParsingTests, ParsePlannerConfigurationTaskIndex) {
@@ -359,7 +353,6 @@ default_compliant_material {
 }
 
 }  // namespace
-}  // namespace pick_and_place
-}  // namespace kuka_iiwa_arm
-}  // namespace examples
+}  // namespace pick_and_place_example
+}  // namespace manipulation
 }  // namespace drake

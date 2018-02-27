@@ -1,4 +1,4 @@
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/world_state.h"
+#include "drake/manipulation/pick_and_place_example/world_state.h"
 
 #include <gtest/gtest.h>
 
@@ -7,9 +7,8 @@
 #include "drake/examples/kuka_iiwa_arm/iiwa_common.h"
 
 namespace drake {
-namespace examples {
-namespace kuka_iiwa_arm {
-namespace pick_and_place {
+namespace manipulation {
+namespace pick_and_place_example {
 namespace {
 
 GTEST_TEST(PickAndPlaceWorldStateTest, EndEffectorTest) {
@@ -19,7 +18,7 @@ GTEST_TEST(PickAndPlaceWorldStateTest, EndEffectorTest) {
 
   lcmt_iiwa_status iiwa_msg{};
   iiwa_msg.utime = 1000;
-  iiwa_msg.num_joints = kIiwaArmNumJoints;
+  iiwa_msg.num_joints = examples::kuka_iiwa_arm::kIiwaArmNumJoints;
 
   // Arbitrary position/velocity taken from an LCM message emitted by
   // a running test.
@@ -45,7 +44,6 @@ GTEST_TEST(PickAndPlaceWorldStateTest, EndEffectorTest) {
 }
 
 }  // namespace
-}  // namespace pick_and_place
-}  // namespace kuka_iiwa_arm
-}  // namespace examples
+}  // namespace pick_and_place_example
+}  // namespace manipulation
 }  // namespace drake

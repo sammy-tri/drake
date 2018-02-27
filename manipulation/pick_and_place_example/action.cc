@@ -1,13 +1,12 @@
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/action.h"
+#include "drake/manipulation/pick_and_place_example/action.h"
 
 #include <limits>
 
 #include "drake/examples/kuka_iiwa_arm/iiwa_common.h"
 
 namespace drake {
-namespace examples {
-namespace kuka_iiwa_arm {
-namespace pick_and_place {
+namespace manipulation {
+namespace pick_and_place_example {
 
 Action::~Action() {}
 
@@ -39,8 +38,9 @@ void IiwaMove::MoveJoints(const WorldState& est_state,
   std::vector<int> info(time.size(), 1);
   MatrixX<double> q_mat(q.front().size(), q.size());
   for (size_t i = 0; i < q.size(); ++i) q_mat.col(i) = q[i];
-  ApplyJointVelocityLimits(q_mat, &time);
-  *plan = EncodeKeyFrames(joint_names, time, info, q_mat);
+  examples::kuka_iiwa_arm::ApplyJointVelocityLimits(q_mat, &time);
+  *plan = examples::kuka_iiwa_arm::EncodeKeyFrames(
+      joint_names, time, info, q_mat);
   StartAction(est_state.get_iiwa_time());
   // Set the duration for this action to be longer than that of the plan to
   // ensure that we do not advance to the next action befor the robot finishes
@@ -107,7 +107,6 @@ bool WsgAction::ActionFinished(const WorldState& est_state) const {
   return false;
 }
 
-}  // namespace pick_and_place
-}  // namespace kuka_iiwa_arm
-}  // namespace examples
+}  // namespace pick_and_place_example
+}  // namespace manipulation
 }  // namespace drake

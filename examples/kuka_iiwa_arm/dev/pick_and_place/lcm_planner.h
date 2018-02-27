@@ -1,7 +1,7 @@
 #pragma once
 
 #include "drake/examples/kuka_iiwa_arm/dev/pick_and_place/state_machine_system.h"
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_configuration.h"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_configuration.h"
 #include "drake/systems/framework/diagram.h"
 
 namespace drake {
@@ -14,8 +14,10 @@ namespace pick_and_place {
 class LcmPlanner : public systems::Diagram<double> {
  public:
   LcmPlanner(
-      const pick_and_place::PlannerConfiguration& configuration,
-      const pick_and_place::OptitrackConfiguration optitrack_configuration,
+      // NOLINTNEXTLINE(whitespace/line_length)
+      const manipulation::pick_and_place_example::PlannerConfiguration& configuration,
+      // NOLINTNEXTLINE(whitespace/line_length)
+      const manipulation::pick_and_place_example::OptitrackConfiguration optitrack_configuration,
       bool single_move);
 
   /**
@@ -56,13 +58,13 @@ class LcmPlanner : public systems::Diagram<double> {
     return this->get_output_port(output_port_wsg_command_);
   }
 
-  pick_and_place::PickAndPlaceState state(
+  manipulation::pick_and_place_example::PickAndPlaceState state(
       const systems::Context<double>& context) const {
     return state_machine_->state(
         this->GetSubsystemContext(*state_machine_, context));
   }
 
-  const pick_and_place::WorldState& world_state(
+  const manipulation::pick_and_place_example::WorldState& world_state(
       const systems::Context<double>& context) const {
     return state_machine_->world_state(
         this->GetSubsystemContext(*state_machine_, context));

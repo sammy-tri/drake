@@ -7,13 +7,12 @@
 #include "robotlocomotion/robot_plan_t.hpp"
 
 #include "drake/common/drake_copyable.h"
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/world_state.h"
 #include "drake/lcmt_schunk_wsg_command.hpp"
+#include "drake/manipulation/pick_and_place_example/world_state.h"
 
 namespace drake {
-namespace examples {
-namespace kuka_iiwa_arm {
-namespace pick_and_place {
+namespace manipulation {
+namespace pick_and_place_example {
 
 /**
  * Base class for actions used by the pick and place demo. E.g.,
@@ -167,7 +166,6 @@ class WsgAction : public Action {
   static constexpr double kOpenPositionThreshold = .095;   // m
 };
 
-}  // namespace pick_and_place
-}  // namespace kuka_iiwa_arm
-}  // namespace examples
+}  // namespace pick_and_place_example
+}  // namespace manipulation
 }  // namespace drake

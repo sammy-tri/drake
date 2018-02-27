@@ -33,12 +33,15 @@ lcmt_schunk_wsg_command MakeDefaultWsgCommand() {
 }
 }  // namespace
 
-using pick_and_place::PickAndPlaceStateMachine;
+using manipulation::pick_and_place_example::PickAndPlaceState;
+using manipulation::pick_and_place_example::PickAndPlaceStateMachine;
+using manipulation::pick_and_place_example::PlannerConfiguration;
+using manipulation::pick_and_place_example::WorldState;
 
 namespace pick_and_place {
 
 struct PickAndPlaceStateMachineSystem::InternalState {
-  InternalState(const pick_and_place::PlannerConfiguration& configuration,
+  InternalState(const PlannerConfiguration& configuration,
                 bool single_move)
       : world_state(
             configuration.num_tables,
@@ -47,14 +50,14 @@ struct PickAndPlaceStateMachineSystem::InternalState {
         last_iiwa_plan(MakeDefaultIiwaPlan()),
         last_wsg_command(MakeDefaultWsgCommand()) {}
 
-  pick_and_place::WorldState world_state;
+  WorldState world_state;
   PickAndPlaceStateMachine state_machine;
   robotlocomotion::robot_plan_t last_iiwa_plan;
   lcmt_schunk_wsg_command last_wsg_command;
 };
 
 PickAndPlaceStateMachineSystem::PickAndPlaceStateMachineSystem(
-    const pick_and_place::PlannerConfiguration& configuration, bool single_move)
+    const PlannerConfiguration& configuration, bool single_move)
     : configuration_(configuration), single_move_(single_move) {
   input_port_iiwa_state_ = this->DeclareAbstractInputPort().get_index();
   input_port_iiwa_base_pose_ = this->DeclareAbstractInputPort().get_index();
@@ -164,14 +167,14 @@ void PickAndPlaceStateMachineSystem::DoCalcUnrestrictedUpdate(
                                       wsg_callback);
 }
 
-pick_and_place::PickAndPlaceState PickAndPlaceStateMachineSystem::state(
+PickAndPlaceState PickAndPlaceStateMachineSystem::state(
     const systems::Context<double>& context) const {
   const InternalState& internal_state =
       context.get_abstract_state<InternalState>(0);
   return internal_state.state_machine.state();
 }
 
-const pick_and_place::WorldState& PickAndPlaceStateMachineSystem::world_state(
+const WorldState& PickAndPlaceStateMachineSystem::world_state(
     const systems::Context<double>& context) const {
   const InternalState& internal_state =
       context.get_abstract_state<InternalState>(0);

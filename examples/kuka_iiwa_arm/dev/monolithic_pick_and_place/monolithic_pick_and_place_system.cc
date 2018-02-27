@@ -16,6 +16,10 @@ namespace examples {
 namespace kuka_iiwa_arm {
 namespace monolithic_pick_and_place {
 
+using manipulation::pick_and_place_example::PlannerConfiguration;
+using manipulation::pick_and_place_example::OptitrackConfiguration;
+using manipulation::pick_and_place_example::SimulatedPlantConfiguration;
+using manipulation::pick_and_place_example::WorldState;
 using manipulation::planner::InterpolatorType;
 using robotlocomotion::robot_plan_t;
 using systems::AbstractValue;
@@ -23,9 +27,9 @@ using systems::ConstantValueSource;
 using systems::ZeroOrderHold;
 
 MonolithicPickAndPlaceSystem::MonolithicPickAndPlaceSystem(
-    const pick_and_place::SimulatedPlantConfiguration& plant_configuration,
-    const pick_and_place::OptitrackConfiguration& optitrack_configuration,
-    const std::vector<pick_and_place::PlannerConfiguration>&
+    const SimulatedPlantConfiguration& plant_configuration,
+    const OptitrackConfiguration& optitrack_configuration,
+    const std::vector<PlannerConfiguration>&
         planner_configurations,
     bool single_move) {
   systems::DiagramBuilder<double> builder;
@@ -120,7 +124,7 @@ bool MonolithicPickAndPlaceSystem::is_done(
     const systems::Context<double>& context) const {
   for (const auto& planner : planners_) {
     if (planner->state(this->GetSubsystemContext(*planner, context)) !=
-        pick_and_place::PickAndPlaceState::kDone) {
+        manipulation::pick_and_place_example::PickAndPlaceState::kDone) {
       return false;
     }
   }
@@ -139,7 +143,7 @@ void MonolithicPickAndPlaceSystem::Initialize(
   }
 }
 
-const pick_and_place::WorldState& MonolithicPickAndPlaceSystem::world_state(
+const WorldState& MonolithicPickAndPlaceSystem::world_state(
     const systems::Context<double>& context, int index) const {
   DRAKE_DEMAND(0 <= index && index < static_cast<int>(planners_.size()));
   return this->planners_[index]->world_state(

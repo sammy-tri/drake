@@ -8,8 +8,8 @@
 #include "drake/common/eigen_types.h"
 #include "drake/common/test_utilities/eigen_matrix_compare.h"
 #include "drake/examples/kuka_iiwa_arm/iiwa_lcm.h"
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_configuration.h"
 #include "drake/lcm/drake_lcm.h"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_configuration.h"
 #include "drake/multibody/rigid_body_plant/drake_visualizer.h"
 #include "drake/systems/analysis/runge_kutta2_integrator.h"
 #include "drake/systems/analysis/simulator.h"
@@ -23,6 +23,10 @@ namespace kuka_iiwa_arm {
 namespace monolithic_pick_and_place {
 namespace {
 
+using manipulation::pick_and_place_example::PlannerConfiguration;
+using manipulation::pick_and_place_example::OptitrackConfiguration;
+using manipulation::pick_and_place_example::SimulatedPlantConfiguration;
+using manipulation::pick_and_place_example::WorldState;
 using systems::RungeKutta2Integrator;
 using systems::Simulator;
 
@@ -31,12 +35,13 @@ const char kIiwaPath[] =
     "iiwa14_polytope_collision.urdf";
 const char kEndEffectorName[] = "iiwa_link_ee";
 const char kYellowPostPath[] =
-    "drake/examples/kuka_iiwa_arm/models/objects/yellow_post.urdf";
+    "drake/manipulation/pick_and_place_example/models/objects/yellow_post.urdf";
 const char kExtraHeavyDutyTablePath[] =
-    "drake/examples/kuka_iiwa_arm/models/table/"
+    "drake/manipulation/pick_and_place_example/models/table/"
     "extra_heavy_duty_table_surface_only_collision.sdf";
 const char kTargetPath[] =
-    "drake/examples/kuka_iiwa_arm/models/objects/simple_cuboid.urdf";
+    "drake/manipulation/pick_and_place_example/models/objects/"
+    "simple_cuboid.urdf";
 const Vector3<double> kTargetDimensions{0.06, 0.06, 0.06};
 
 const std::vector<std::string> kTableModelPaths{
@@ -128,7 +133,7 @@ class SingleMoveTests : public ::testing::TestWithParam<std::tuple<int, int>> {
   void ValidateObjectStateAfterSingleMove() {
     systems::DiagramBuilder<double> builder;
 
-    std::vector<pick_and_place::PlannerConfiguration> planner_configurations{
+    std::vector<PlannerConfiguration> planner_configurations{
         planner_configuration_};
     auto plant = builder.AddSystem<MonolithicPickAndPlaceSystem>(
         plant_configuration_, optitrack_configuration_, planner_configurations,
@@ -173,7 +178,7 @@ class SingleMoveTests : public ::testing::TestWithParam<std::tuple<int, int>> {
     //   - S: Sensor (Optitrack) frame
     //   - O: Object frame
     //   - T: Table frame of "place" table (center of the table top)
-    const pick_and_place::WorldState& world_state = plant->world_state(
+    const WorldState& world_state = plant->world_state(
         sys->GetSubsystemContext(*plant, simulator.get_context()), 0);
     const Isometry3<double>& X_SO = world_state.get_object_pose();
     const Isometry3<double>& X_TS =
@@ -217,9 +222,9 @@ class SingleMoveTests : public ::testing::TestWithParam<std::tuple<int, int>> {
                                 linear_velocity_tolerance));
   }
 
-  pick_and_place::SimulatedPlantConfiguration plant_configuration_;
-  pick_and_place::OptitrackConfiguration optitrack_configuration_;
-  pick_and_place::PlannerConfiguration planner_configuration_;
+  SimulatedPlantConfiguration plant_configuration_;
+  OptitrackConfiguration optitrack_configuration_;
+  PlannerConfiguration planner_configuration_;
   int initial_table_index_;
   int final_table_index_;
   double dt_{1e-3};

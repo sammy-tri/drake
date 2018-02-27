@@ -79,11 +79,11 @@ std::unique_ptr<RigidBodyPlant<T>> BuildCombinedPlant(
   tree_builder->StoreDrakeModel("iiwa", kIiwaUrdf);
   tree_builder->StoreDrakeModel(
       "table",
-      "drake/examples/kuka_iiwa_arm/models/table/"
+      "drake/manipulation/pick_and_place_example/models/table/"
       "extra_heavy_duty_table_surface_only_collision.sdf");
   tree_builder->StoreDrakeModel(
       "box",
-      "drake/examples/kuka_iiwa_arm/models/objects/"
+      "drake/manipulation/pick_and_place_example/models/objects/"
       "block_for_pick_and_place.urdf");
   tree_builder->StoreDrakeModel(
       "wsg",

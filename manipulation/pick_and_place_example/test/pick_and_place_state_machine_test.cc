@@ -1,4 +1,4 @@
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_state_machine.h"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_state_machine.h"
 
 #include <gtest/gtest.h>
 #include "bot_core/robot_state_t.hpp"
@@ -6,15 +6,16 @@
 
 #include "drake/common/find_resource.h"
 #include "drake/examples/kuka_iiwa_arm/iiwa_common.h"
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_configuration.h"
 #include "drake/lcmt_schunk_wsg_command.hpp"
 #include "drake/lcmt_schunk_wsg_status.hpp"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_configuration.h"
 
 namespace drake {
-namespace examples {
-namespace kuka_iiwa_arm {
-namespace pick_and_place {
+namespace manipulation {
+namespace pick_and_place_example {
 namespace {
+
+using examples::kuka_iiwa_arm::kIiwaArmNumJoints;
 
 const char* const kIiwaUrdf =
     "drake/manipulation/models/iiwa_description/urdf/"
@@ -183,7 +184,6 @@ GTEST_TEST(PickAndPlaceStateMachineTest, StateMachineTest) {
 }
 
 }  // namespace
-}  // namespace pick_and_place
-}  // namespace kuka_iiwa_arm
-}  // namespace examples
+}  // namespace pick_and_place_example
+}  // namespace manipulation
 }  // namespace drake

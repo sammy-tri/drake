@@ -15,29 +15,6 @@ package(
 )
 
 drake_cc_library(
-    name = "pick_and_place_simulation_helpers",
-    srcs = [
-        "pick_and_place_simulation_helpers.cc",
-    ],
-    hdrs = [
-        "pick_and_place_simulation_helpers.h",
-    ],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//examples/kuka_iiwa_arm/iiwa_world:iiwa_wsg_diagram_factory",
-        "//examples/kuka_iiwa_arm/pick_and_place:pick_and_place_configuration",  # noqa
-        "//manipulation/schunk_wsg:schunk_wsg_controller",
-        "//manipulation/util:frame_pose_tracker",
-        "//manipulation/util:world_sim_tree_builder",
-        "//multibody/rigid_body_plant",
-        "//systems/framework:diagram_builder",
-        "//systems/sensors:optitrack_encoder",
-        "//systems/sensors:optitrack_sender",
-        "@optitrack_driver//lcmtypes:optitrack_lcmtypes",
-    ],
-)
-
-drake_cc_library(
     name = "lcm_plant",
     srcs = [
         "lcm_plant.cc",
@@ -46,16 +23,15 @@ drake_cc_library(
         "lcm_plant.h",
     ],
     data = [
-        "//examples/kuka_iiwa_arm:models",
         "//manipulation/models/iiwa_description:models",
         "//manipulation/models/wsg_50_description:models",
+        "//manipulation/pick_and_place_example/models",
     ],
     deps = [
-        ":pick_and_place_simulation_helpers",
         "//examples/kuka_iiwa_arm:iiwa_lcm",
-        "//examples/kuka_iiwa_arm/pick_and_place:pick_and_place_configuration",  # noqa
-        "//multibody/rigid_body_plant",
-        "//systems/framework:diagram_builder",
+        "//examples/kuka_iiwa_arm/iiwa_world:iiwa_wsg_diagram_factory",
+        "//manipulation/pick_and_place_example",
+        "//manipulation/schunk_wsg:schunk_wsg_controller",
     ],
 )
 
@@ -70,19 +46,19 @@ drake_cc_library(
         "state_machine_system.h",
     ],
     data = [
-        "//examples/kuka_iiwa_arm:models",
         "//manipulation/models/iiwa_description:models",
+        "//manipulation/pick_and_place_example/models",
     ],
     deps = [
         "//common:find_resource",
         "//common:text_logging_gflags",
         "//examples/kuka_iiwa_arm:iiwa_common",
         "//examples/kuka_iiwa_arm:iiwa_lcm",
-        "//examples/kuka_iiwa_arm/pick_and_place",
         "//lcm",
         "//lcmtypes:iiwa",
         "//lcmtypes:schunk",
         "//manipulation/perception:optitrack_pose_extractor",
+        "//manipulation/pick_and_place_example",
         "//systems/framework:leaf_system",
         "//systems/lcm",
         "//systems/primitives:pass_through",
@@ -101,7 +77,7 @@ drake_cc_binary(
         "//common:find_resource",
         "//examples/kuka_iiwa_arm:iiwa_common",
         "//examples/kuka_iiwa_arm:iiwa_lcm",
-        "//examples/kuka_iiwa_arm/pick_and_place",
+        "//manipulation/pick_and_place_example",
         "//manipulation/util:bot_core_lcm_encode_decode",
     ],
 )
@@ -110,9 +86,9 @@ drake_cc_binary(
     name = "lcm_pick_and_place_planner",
     srcs = ["lcm_pick_and_place_planner.cc"],
     data = [
-        "//examples/kuka_iiwa_arm:models",
-        "//examples/kuka_iiwa_arm/pick_and_place:configuration",
         "//manipulation/models/iiwa_description:models",
+        "//manipulation/pick_and_place_example:configuration",
+        "//manipulation/pick_and_place_example/models",
     ],
     deps = [
         "//common:find_resource",
@@ -121,11 +97,11 @@ drake_cc_binary(
         "//examples/kuka_iiwa_arm:iiwa_common",
         "//examples/kuka_iiwa_arm:iiwa_lcm",
         "//examples/kuka_iiwa_arm/dev/pick_and_place:lcm_planner",
-        "//examples/kuka_iiwa_arm/pick_and_place:pick_and_place_configuration_parsing",  # noqa
         "//lcm",
         "//lcmtypes:iiwa",
         "//lcmtypes:schunk",
         "//manipulation/perception:optitrack_pose_extractor",
+        "//manipulation/pick_and_place_example:pick_and_place_configuration_parsing",  # noqa
         "//systems/framework:leaf_system",
         "//systems/lcm",
         "//systems/lcm:lcm_driven_loop",
@@ -139,10 +115,10 @@ drake_cc_binary(
     name = "lcm_pick_and_place_simulator",
     srcs = ["lcm_pick_and_place_simulator.cc"],
     data = [
-        "//examples/kuka_iiwa_arm:models",
-        "//examples/kuka_iiwa_arm/pick_and_place:configuration",
         "//manipulation/models/iiwa_description:models",
         "//manipulation/models/wsg_50_description:models",
+        "//manipulation/pick_and_place_example:configuration",
+        "//manipulation/pick_and_place_example/models",
     ],
     deps = [
         "//common:find_resource",
@@ -151,10 +127,10 @@ drake_cc_binary(
         "//examples/kuka_iiwa_arm:iiwa_lcm",
         "//examples/kuka_iiwa_arm/dev/pick_and_place:lcm_plant",
         "//examples/kuka_iiwa_arm/iiwa_world:iiwa_wsg_diagram_factory",
-        "//examples/kuka_iiwa_arm/pick_and_place:pick_and_place_configuration_parsing",  # noqa
         "//lcm",
         "//lcmtypes:iiwa",
         "//lcmtypes:viewer",
+        "//manipulation/pick_and_place_example:pick_and_place_configuration_parsing",  # noqa
         "//manipulation/planner:robot_plan_interpolator",
         "//manipulation/schunk_wsg:schunk_wsg_controller",
         "//manipulation/util:world_sim_tree_builder",

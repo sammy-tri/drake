@@ -1,6 +1,6 @@
 syntax = "proto2";
 
-package drake.examples.kuka_iiwa_arm.pick_and_place.proto;
+package drake.manipulation.pick_and_place_example.proto;
 
  // Note: The default values listed below assume that the messages are parsed
  // using the functions in pick_and_place_configuration_parsing.h. Fields

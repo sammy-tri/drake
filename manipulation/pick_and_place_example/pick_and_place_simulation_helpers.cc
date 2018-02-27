@@ -1,4 +1,4 @@
-#include "drake/examples/kuka_iiwa_arm/dev/pick_and_place/pick_and_place_simulation_helpers.h"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_simulation_helpers.h"
 
 #include <map>
 #include <string>
@@ -8,13 +8,12 @@
 #include "drake/systems/sensors/optitrack_sender.h"
 
 namespace drake {
-namespace examples {
-namespace kuka_iiwa_arm {
-namespace pick_and_place {
+namespace manipulation {
+namespace pick_and_place_example {
 
-using manipulation::util::FramePoseTracker;
-using manipulation::util::ModelInstanceInfo;
-using manipulation::util::WorldSimTreeBuilder;
+using util::FramePoseTracker;
+using util::ModelInstanceInfo;
+using util::WorldSimTreeBuilder;
 using systems::sensors::OptitrackEncoder;
 using systems::sensors::OptitrackLCMFrameSender;
 
@@ -34,7 +33,7 @@ const double kTableTopZInWorld = 0.736 + 0.057 / 2;
 }  // namespace
 
 std::unique_ptr<systems::RigidBodyPlant<double>> BuildPickAndPlacePlant(
-    const pick_and_place::SimulatedPlantConfiguration& configuration,
+    const SimulatedPlantConfiguration& configuration,
     std::vector<ModelInstanceInfo<double>>* arm_instances,
     std::vector<ModelInstanceInfo<double>>* wsg_instances,
     std::vector<ModelInstanceInfo<double>>* object_instances,
@@ -124,7 +123,7 @@ std::unique_ptr<systems::RigidBodyPlant<double>> BuildPickAndPlacePlant(
 }
 
 const systems::OutputPort<double>& AddOptitrackComponents(
-    const pick_and_place::OptitrackConfiguration& optitrack_configuration,
+    const OptitrackConfiguration& optitrack_configuration,
     const RigidBodyTree<double>& tree,
     const std::vector<ModelInstanceInfo<double>>& arm_instances,
     const std::vector<ModelInstanceInfo<double>>& object_instances,
@@ -207,7 +206,7 @@ const systems::OutputPort<double>& AddOptitrackComponents(
   return optitrack_sender->get_lcm_output_port();
 }
 
-}  // namespace pick_and_place
-}  // namespace kuka_iiwa_arm
-}  // namespace examples
+
+}  // namespace pick_and_place_example
+}  // namespace manipulation
 }  // namespace drake

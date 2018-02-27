@@ -1,4 +1,4 @@
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_configuration_parsing.h"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_configuration_parsing.h"
 
 #include <algorithm>
 #include <limits>
@@ -10,19 +10,16 @@
 #include "drake/common/eigen_types.h"
 #include "drake/common/find_resource.h"
 #include "drake/common/proto/protobuf.h"
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_configuration.pb.h"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_configuration.pb.h"
 #include "drake/manipulation/util/world_sim_tree_builder.h"
 #include "drake/math/roll_pitch_yaw.h"
 
 namespace drake {
-namespace examples {
-namespace kuka_iiwa_arm {
-namespace pick_and_place {
+namespace manipulation {
+namespace pick_and_place_example {
 
 using manipulation::util::WorldSimTreeBuilder;
 using math::rpy2rotmat;
-using pick_and_place::RobotBaseIndex;
-using pick_and_place::TargetIndex;
 
 namespace {
 proto::PickAndPlaceConfiguration ReadProtobufFileOrThrow(
@@ -96,12 +93,12 @@ void ExtractBasePosesForModels(
 
 void ExtractOptitrackInfoForModels(
     const google::protobuf::RepeatedPtrField<proto::ModelInstance>& models,
-    std::vector<pick_and_place::OptitrackInfo>* optitrack_info) {
+    std::vector<OptitrackInfo>* optitrack_info) {
   DRAKE_DEMAND(optitrack_info != nullptr);
   std::transform(
       models.begin(), models.end(), std::back_inserter(*optitrack_info),
-      [](const proto::ModelInstance& model) -> pick_and_place::OptitrackInfo {
-        return pick_and_place::OptitrackInfo(
+      [](const proto::ModelInstance& model) -> OptitrackInfo {
+        return OptitrackInfo(
             {model.optitrack_info().id(),
              ParsePose(model.optitrack_info().x_mf())});
       });
@@ -121,7 +118,7 @@ void ExtractModelPathsForModels(
 
 void ExtractCompliantParameters(
     const proto::PickAndPlaceConfiguration& configuration,
-    pick_and_place::SimulatedPlantConfiguration* plant_configuration) {
+    SimulatedPlantConfiguration* plant_configuration) {
   if (configuration.has_compliant_model_parameters()) {
     const auto& proto_parameters = configuration.compliant_model_parameters();
     if (proto_parameters.characteristic_radius() > 0) {
@@ -162,7 +159,7 @@ void ExtractCompliantParameters(
   }
 }
 
-pick_and_place::PlannerConfiguration DoParsePlannerConfiguration(
+PlannerConfiguration DoParsePlannerConfiguration(
     const proto::PickAndPlaceConfiguration& configuration,
     const proto::PickAndPlaceTask& task) {
 
@@ -174,7 +171,7 @@ pick_and_place::PlannerConfiguration DoParsePlannerConfiguration(
   DRAKE_THROW_UNLESS(robot_index < configuration.robot_size());
   DRAKE_THROW_UNLESS(target_index < configuration.object_size());
 
-  pick_and_place::PlannerConfiguration planner_configuration;
+  PlannerConfiguration planner_configuration;
 
   // Set the robot and target indices
   planner_configuration.robot_index = robot_index;
@@ -230,7 +227,7 @@ pick_and_place::PlannerConfiguration DoParsePlannerConfiguration(
 }
 }  // namespace
 
-pick_and_place::PlannerConfiguration ParsePlannerConfigurationOrThrow(
+PlannerConfiguration ParsePlannerConfigurationOrThrow(
     const std::string& filename, TaskIndex task_index) {
   // Read configuration file
   const proto::PickAndPlaceConfiguration configuration{
@@ -242,28 +239,28 @@ pick_and_place::PlannerConfiguration ParsePlannerConfigurationOrThrow(
       configuration, configuration.task(task_index));
 }
 
-std::vector<pick_and_place::PlannerConfiguration>
+std::vector<PlannerConfiguration>
 ParsePlannerConfigurationsOrThrow(const std::string& filename) {
   // Read configuration file
   const proto::PickAndPlaceConfiguration configuration{
       ReadProtobufFileOrThrow(filename)};
 
   // Build the planner configuration vector.
-  std::vector<pick_and_place::PlannerConfiguration> planner_configurations;
+  std::vector<PlannerConfiguration> planner_configurations;
   std::transform(configuration.task().begin(), configuration.task().end(),
                  std::back_inserter(planner_configurations),
                  [&configuration](const proto::PickAndPlaceTask& task)
-                     -> pick_and_place::PlannerConfiguration {
+                     -> PlannerConfiguration {
                    return DoParsePlannerConfiguration(
                        configuration, task);
                  });
   return planner_configurations;
 }
 
-pick_and_place::SimulatedPlantConfiguration
+SimulatedPlantConfiguration
 ParseSimulatedPlantConfigurationOrThrow(
     const proto::PickAndPlaceConfiguration& configuration) {
-  pick_and_place::SimulatedPlantConfiguration plant_configuration;
+  SimulatedPlantConfiguration plant_configuration;
 
   // Extract robot model paths
   ExtractModelPathsForModels(configuration, configuration.robot(),
@@ -294,7 +291,7 @@ ParseSimulatedPlantConfigurationOrThrow(
   return plant_configuration;
 }
 
-pick_and_place::SimulatedPlantConfiguration
+SimulatedPlantConfiguration
 ParseSimulatedPlantConfigurationOrThrow(const std::string& filename) {
   // Read configuration file
   const proto::PickAndPlaceConfiguration configuration{
@@ -303,7 +300,7 @@ ParseSimulatedPlantConfigurationOrThrow(const std::string& filename) {
   return ParseSimulatedPlantConfigurationOrThrow(configuration);
 }
 
-pick_and_place::SimulatedPlantConfiguration
+SimulatedPlantConfiguration
 ParseSimulatedPlantConfigurationStringOrThrow(
     const std::string& configuration) {
   proto::PickAndPlaceConfiguration proto_config;
@@ -311,9 +308,9 @@ ParseSimulatedPlantConfigurationStringOrThrow(
   return ParseSimulatedPlantConfigurationOrThrow(proto_config);
 }
 
-pick_and_place::OptitrackConfiguration ParseOptitrackConfigurationOrThrow(
+OptitrackConfiguration ParseOptitrackConfigurationOrThrow(
     const std::string& filename) {
-  pick_and_place::OptitrackConfiguration optitrack_configuration;
+  OptitrackConfiguration optitrack_configuration;
 
   // Read configuration file
   const proto::PickAndPlaceConfiguration configuration{
@@ -335,7 +332,6 @@ pick_and_place::OptitrackConfiguration ParseOptitrackConfigurationOrThrow(
   return optitrack_configuration;
 }
 
-}  // namespace pick_and_place
-}  // namespace kuka_iiwa_arm
-}  // namespace examples
+}  // namespace pick_and_place_example
+}  // namespace manipulation
 }  // namespace drake

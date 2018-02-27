@@ -13,11 +13,11 @@
 #include "drake/common/drake_assert.h"
 #include "drake/common/drake_copyable.h"
 #include "drake/common/find_resource.h"
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_state_machine.h"
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/world_state.h"
 #include "drake/lcmt_iiwa_status.hpp"
 #include "drake/lcmt_schunk_wsg_command.hpp"
 #include "drake/lcmt_schunk_wsg_status.hpp"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_state_machine.h"
+#include "drake/manipulation/pick_and_place_example/world_state.h"
 #include "drake/manipulation/util/bot_core_lcm_encode_decode.h"
 
 namespace drake {
@@ -25,6 +25,10 @@ namespace examples {
 namespace kuka_iiwa_arm {
 namespace pick_and_place {
 namespace {
+
+using manipulation::pick_and_place_example::PickAndPlaceStateMachine;
+using manipulation::pick_and_place_example::PlannerConfiguration;
+using manipulation::pick_and_place_example::WorldState;
 
 class WorldStateSubscriber {
  public:

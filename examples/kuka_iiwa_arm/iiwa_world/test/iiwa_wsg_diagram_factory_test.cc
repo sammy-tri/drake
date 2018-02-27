@@ -32,7 +32,8 @@ class IiwaAndWsgPlantWithStateEstimatorTest : public ::testing::Test {
         "/sdf/schunk_wsg_50_ball_contact.sdf");
     tree_builder_.StoreDrakeModel(
         "object",
-        "drake/examples/kuka_iiwa_arm/models/objects/simple_cuboid.urdf");
+        "drake/manipulation/pick_and_place_example/models/objects/"
+        "simple_cuboid.urdf");
   }
   void BuildDefaultPlant() { BuildPlant(1, 1, 1); }
   void BuildPlant(int num_iiwas, int num_wsgs, int num_objects) {

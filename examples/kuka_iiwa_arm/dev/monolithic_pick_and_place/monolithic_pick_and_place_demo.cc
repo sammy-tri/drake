@@ -8,10 +8,10 @@
 #include "drake/common/text_logging_gflags.h"
 #include "drake/examples/kuka_iiwa_arm/dev/monolithic_pick_and_place/monolithic_pick_and_place_system.h"
 #include "drake/examples/kuka_iiwa_arm/iiwa_lcm.h"
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_configuration.h"
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_configuration_parsing.h"
 #include "drake/lcm/drake_lcm.h"
 #include "drake/lcmt_contact_results_for_viz.hpp"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_configuration.h"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_configuration_parsing.h"
 #include "drake/multibody/rigid_body_plant/contact_results_to_lcm.h"
 #include "drake/multibody/rigid_body_plant/drake_visualizer.h"
 #include "drake/systems/analysis/runge_kutta2_integrator.h"
@@ -31,7 +31,7 @@ DEFINE_bool(quick, false,
             "without executing the entire task");
 DEFINE_bool(single_move, false, "Move the object once and then stop.");
 DEFINE_string(configuration_file,
-              "drake/examples/kuka_iiwa_arm/pick_and_place/configuration/"
+              "drake/manipulation/pick_and_place_example/configuration/"
               "yellow_posts.pick_and_place_configuration",
               "Path to the configuration file.");
 
@@ -41,22 +41,27 @@ namespace kuka_iiwa_arm {
 namespace monolithic_pick_and_place {
 namespace {
 
+using manipulation::pick_and_place_example::OptitrackConfiguration;
+using manipulation::pick_and_place_example::PlannerConfiguration;
+using manipulation::pick_and_place_example::SimulatedPlantConfiguration;
 using manipulation::planner::InterpolatorType;
 using systems::RungeKutta2Integrator;
 using systems::Simulator;
 
 int DoMain(void) {
   // Parse configuration file
-  const pick_and_place::SimulatedPlantConfiguration plant_configuration =
-      pick_and_place::ParseSimulatedPlantConfigurationOrThrow(
+  const SimulatedPlantConfiguration plant_configuration =
+      // NOLINTNEXTLINE(whitespace/line_length)
+      manipulation::pick_and_place_example::ParseSimulatedPlantConfigurationOrThrow(
           FLAGS_configuration_file);
-  const pick_and_place::OptitrackConfiguration optitrack_configuration =
-      pick_and_place::ParseOptitrackConfigurationOrThrow(
+  const OptitrackConfiguration optitrack_configuration =
+      // NOLINTNEXTLINE(whitespace/line_length)
+      manipulation::pick_and_place_example::ParseOptitrackConfigurationOrThrow(
           FLAGS_configuration_file);
-  const std::vector<pick_and_place::PlannerConfiguration>
-      planner_configurations =
-          pick_and_place::ParsePlannerConfigurationsOrThrow(
-              FLAGS_configuration_file);
+  const std::vector<PlannerConfiguration> planner_configurations =
+      // NOLINTNEXTLINE(whitespace/line_length)
+      manipulation::pick_and_place_example::ParsePlannerConfigurationsOrThrow(
+          FLAGS_configuration_file);
 
   lcm::DrakeLcm lcm;
   systems::DiagramBuilder<double> builder;

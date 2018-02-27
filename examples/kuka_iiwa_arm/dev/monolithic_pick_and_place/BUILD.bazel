@@ -34,10 +34,10 @@ drake_cc_binary(
     srcs = ["monolithic_pick_and_place_demo.cc"],
     add_test_rule = 1,
     data = [
-        "//examples/kuka_iiwa_arm:models",
-        "//examples/kuka_iiwa_arm/pick_and_place:configuration",
         "//manipulation/models/iiwa_description:models",
         "//manipulation/models/wsg_50_description:models",
+        "//manipulation/pick_and_place_example:configuration",
+        "//manipulation/pick_and_place_example/models",
     ],
     # TODO(m-chaturvedi) TSan fails with a data race in LCM for this test. See
     # #7524.
@@ -53,9 +53,9 @@ drake_cc_binary(
         "//common:text_logging_gflags",
         "//examples/kuka_iiwa_arm:iiwa_common",
         "//examples/kuka_iiwa_arm:iiwa_lcm",
-        "//examples/kuka_iiwa_arm/pick_and_place:pick_and_place_configuration_parsing",  # noqa
         "//lcm",
         "//lcmtypes:iiwa",
+        "//manipulation/pick_and_place_example:pick_and_place_configuration_parsing",  # noqa
         "//systems/analysis:simulator",
         "@gflags",
         "@lcmtypes_bot2_core",
@@ -72,6 +72,11 @@ drake_cc_googletest(
         "//tools/cc_toolchain:debug": ["--gtest_filter=-*"],
         "//conditions:default": [],
     }),
+    data = [
+        "//manipulation/models/iiwa_description:models",
+        "//manipulation/models/wsg_50_description:models",
+        "//manipulation/pick_and_place_example/models",
+    ],
     # Setting shard_count allows the test runner to split up the test-points in
     # this test into shard_count separate pieces which will be exectuted in
     # parallel, subject to the availability of resources. There are 31 test

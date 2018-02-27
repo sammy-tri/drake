@@ -14,14 +14,13 @@
 #include "drake/common/drake_optional.h"
 #include "drake/common/eigen_types.h"
 #include "drake/common/trajectories/piecewise_polynomial.h"
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/action.h"
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_configuration.h"
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/world_state.h"
 #include "drake/lcmt_schunk_wsg_command.hpp"
+#include "drake/manipulation/pick_and_place_example/action.h"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_configuration.h"
+#include "drake/manipulation/pick_and_place_example/world_state.h"
 namespace drake {
-namespace examples {
-namespace kuka_iiwa_arm {
-namespace pick_and_place {
+namespace manipulation {
+namespace pick_and_place_example {
 
 /// Different states for the pick and place task.
 enum class PickAndPlaceState {
@@ -56,7 +55,7 @@ class PickAndPlaceStateMachine {
   /// state after moving the object once, otherwise it will loop through the
   /// pick and place.
   PickAndPlaceStateMachine(
-      const pick_and_place::PlannerConfiguration& configuration,
+      const PlannerConfiguration& configuration,
       bool single_move);
 
   ~PickAndPlaceStateMachine();
@@ -103,7 +102,7 @@ class PickAndPlaceStateMachine {
   Vector3<double> loose_pos_tol_;
   double loose_rot_tol_;
 
-  pick_and_place::PlannerConfiguration configuration_;
+  PlannerConfiguration configuration_;
 
   // Desired interpolation results for various states
   optional<
@@ -124,7 +123,6 @@ class PickAndPlaceStateMachine {
   std::vector<std::string> joint_names_;
 };
 
-}  // namespace pick_and_place
-}  // namespace kuka_iiwa_arm
-}  // namespace examples
+}  // namespace pick_and_place_example
+}  // namespace manipulation
 }  // namespace drake

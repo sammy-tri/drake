@@ -13,9 +13,8 @@
 #include "drake/multibody/rigid_body_tree.h"
 
 namespace drake {
-namespace examples {
-namespace kuka_iiwa_arm {
-namespace pick_and_place {
+namespace manipulation {
+namespace pick_and_place_example {
 
 /**
  * A class that represents the iiwa pick and place world, which contains a
@@ -98,7 +97,6 @@ class WorldState {
   std::vector<Isometry3<double>> table_poses_;
 };
 
-}  // namespace pick_and_place
-}  // namespace kuka_iiwa_arm
-}  // namespace examples
+}  // namespace pick_and_place_example
+}  // namespace manipulation
 }  // namespace drake

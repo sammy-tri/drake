@@ -57,8 +57,8 @@ drake_cc_binary(
     add_test_rule = 1,
     data = [
         ":mydata",
-        "//examples/kuka_iiwa_arm:models",
         "//manipulation/models/iiwa_description:models",
+        "//manipulation/pick_and_place_example/models",
     ],
     test_rule_args = ["--simulation_sec=0.01"],
     # Flaky because LCM self-test can fail (PR #7311)

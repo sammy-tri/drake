@@ -10,9 +10,8 @@
 #include "drake/multibody/rigid_body_plant/compliant_material.h"
 
 namespace drake {
-namespace examples {
-namespace kuka_iiwa_arm {
-namespace pick_and_place {
+namespace manipulation {
+namespace pick_and_place_example {
 
 using RobotBaseIndex = TypeSafeIndex<class RobotBaseTag>;
 using TargetIndex = TypeSafeIndex<class TargetTag>;
@@ -93,7 +92,6 @@ struct OptitrackConfiguration {
   std::vector<OptitrackInfo> table_optitrack_info;
 };
 
-}  // namespace pick_and_place
-}  // namespace kuka_iiwa_arm
-}  // namespace examples
+}  // namespace pick_and_place_example
+}  // namespace manipulation
 }  // namespace drake

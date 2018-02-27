@@ -13,6 +13,8 @@ namespace kuka_iiwa_arm {
 namespace pick_and_place {
 
 using manipulation::perception::OptitrackPoseExtractor;
+using manipulation::pick_and_place_example::PlannerConfiguration;
+using manipulation::pick_and_place_example::OptitrackConfiguration;
 using systems::DiagramBuilder;
 using systems::PassThrough;
 using systems::Value;
@@ -43,8 +45,8 @@ class OptitrackTranslatorSystem : public systems::LeafSystem<double> {
 }  // namespace
 
 LcmPlanner::LcmPlanner(
-    const pick_and_place::PlannerConfiguration& planner_configuration,
-    const pick_and_place::OptitrackConfiguration optitrack_configuration,
+    const PlannerConfiguration& planner_configuration,
+    const OptitrackConfiguration optitrack_configuration,
     bool single_move) {
   DiagramBuilder<double> builder;
 

@@ -38,9 +38,9 @@ drake_cc_binary(
     name = "multi_arm_with_gripper_demo",
     srcs = ["multi_arm_with_gripper_demo.cc"],
     data = [
-        "//examples/kuka_iiwa_arm:models",
         "//manipulation/models/iiwa_description:models",
         "//manipulation/models/wsg_50_description:models",
+        "//manipulation/pick_and_place_example/models",
     ],
     deps = [
         "//examples/kuka_iiwa_arm:iiwa_common",
@@ -62,9 +62,9 @@ drake_cc_binary(
 drake_cc_googletest(
     name = "iiwa_wsg_diagram_factory_test",
     data = [
-        "//examples/kuka_iiwa_arm:models",
         "//manipulation/models/iiwa_description:models",
         "//manipulation/models/wsg_50_description:models",
+        "//manipulation/pick_and_place_example/models",
     ],
     deps = [
         ":iiwa_wsg_diagram_factory",

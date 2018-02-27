@@ -3,8 +3,7 @@
 #include <vector>
 
 #include "drake/examples/kuka_iiwa_arm/iiwa_world/iiwa_wsg_diagram_factory.h"
-#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_configuration.h"
-#include "drake/multibody/rigid_body_plant/rigid_body_plant.h"
+#include "drake/manipulation/pick_and_place_example/pick_and_place_configuration.h"
 #include "drake/systems/framework/diagram.h"
 
 namespace drake {
@@ -51,8 +50,10 @@ The block diagram for a system with a single arm is shown below:
 class LcmPlant : public systems::Diagram<double> {
  public:
   LcmPlant(
-      const pick_and_place::SimulatedPlantConfiguration& plant_configuration,
-      const pick_and_place::OptitrackConfiguration& optitrack_configuration);
+      // NOLINTNEXTLINE(whitespace/line_length)
+      const manipulation::pick_and_place_example::SimulatedPlantConfiguration& plant_configuration,
+      // NOLINTNEXTLINE(whitespace/line_length)
+      const manipulation::pick_and_place_example::OptitrackConfiguration& optitrack_configuration);
 
   const systems::InputPortDescriptor<double>& get_input_port_iiwa_command(
       int index) const {
