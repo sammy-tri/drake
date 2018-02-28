@@ -1,0 +1,40 @@
+# -*- python -*-
+
+load(
+    "//tools:drake.bzl",
+    "drake_cc_binary",
+)
+load("//tools/lint:lint.bzl", "add_lint_tests")
+
+add_lint_tests()
+
+drake_cc_binary(
+    name = "jaco_lcm_pick_and_place_simulator",
+    srcs = ["jaco_lcm_pick_and_place_simulator.cc"],
+    data = [
+        "//manipulation/models/jaco_description:models",
+        "//manipulation/pick_and_place_example:configuration",
+        "//manipulation/pick_and_place_example/models",
+    ],
+    deps = [
+        "//common:find_resource",
+        "//common:text_logging_gflags",
+        "//examples/kinova_jaco_arm:jaco_common",
+        "//examples/kinova_jaco_arm:jaco_lcm",
+        "//lcm",
+        "//lcmtypes:jaco",
+        "//lcmtypes:viewer",
+        "//manipulation/pick_and_place_example",
+        "//manipulation/pick_and_place_example:pick_and_place_configuration_parsing",  # noqa
+        "//manipulation/util:sim_diagram_builder",
+        "//multibody/rigid_body_plant",
+        "//multibody/rigid_body_plant:contact_results_to_lcm",
+        "//multibody/rigid_body_plant:drake_visualizer",
+        "//systems/analysis:simulator",
+        "//systems/controllers:inverse_dynamics_controller",
+        "//systems/primitives:constant_vector_source",
+        "@gflags",
+        "@lcmtypes_bot2_core",
+        "@optitrack_driver//lcmtypes:optitrack_lcmtypes",
+    ],
+)

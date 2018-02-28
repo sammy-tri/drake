@@ -46,7 +46,6 @@ namespace pick_and_place {
 namespace {
 
 using manipulation::pick_and_place_example::OptitrackConfiguration;
-using manipulation::pick_and_place_example::PlannerConfiguration;
 using manipulation::pick_and_place_example::SimulatedPlantConfiguration;
 
 int DoMain(void) {

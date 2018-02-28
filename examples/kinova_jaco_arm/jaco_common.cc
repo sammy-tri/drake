@@ -51,15 +51,15 @@ void CreateTreeFromFixedModelAtPose(const std::string& model_file_name,
 }
 
 void SetPositionControlledJacoGains(VectorXd* Kp, VectorXd* Ki,
-                                    VectorXd* Kd) {
+                                    VectorXd* Kd, int num_dofs) {
   // All gains are for acceleration, not directly responsible for generating
   // torques. These are set to high values to ensure good tracking. These gains
   // are picked arbitrarily.
-  Kp->resize(kNumDofs);
-  *Kp = VectorXd::Constant(kNumDofs, 100.0);
+  Kp->resize(num_dofs);
+  *Kp = VectorXd::Constant(num_dofs, 100.0);
   Kd->resize(Kp->size());
   *Kd = 2.0 * Kp->array().sqrt();
-  *Ki = VectorXd::Zero(kNumDofs);
+  *Ki = VectorXd::Zero(num_dofs);
 }
 
 }  // namespace kinova_jaco_arm

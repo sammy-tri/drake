@@ -41,7 +41,7 @@ void CreateTreeFromFixedModelAtPose(
 
 /// Sets the feedback gains for the simulated position controlled Jaco arm.
 void SetPositionControlledJacoGains(Eigen::VectorXd* Kp, Eigen::VectorXd* Ki,
-                                    Eigen::VectorXd* Kd);
+                                    Eigen::VectorXd* Kd, int num_dofs = kNumDofs);
 
 }  // namespace kinova_jaco_arm
 }  // namespace examples
