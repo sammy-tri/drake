@@ -17,6 +17,7 @@
 #include "drake/examples/kuka_iiwa_arm/iiwa_common.h"
 #include "drake/lcmt_iiwa_status.hpp"
 #include "drake/manipulation/planner/constraint_relaxing_ik.h"
+#include "drake/manipulation/util/plan_utils.h"
 #include "drake/math/roll_pitch_yaw.h"
 #include "drake/math/rotation_matrix.h"
 #include "drake/multibody/parsers/urdf_parser.h"
@@ -133,9 +134,10 @@ class MoveDemoRunner {
         // Ensure that the planned motion would not exceed the joint
         // velocity limits.  This function will scale the supplied
         // times if needed.
-        ApplyJointVelocityLimits(q_mat, &times);
+        VectorX<double> max_velocities = get_iiwa_max_joint_velocities();
+        manipulation::ApplyJointVelocityLimits(max_velocities, q_mat, &times);
         robotlocomotion::robot_plan_t plan =
-            EncodeKeyFrames(tree_, times, ik_res.info, q_mat);
+            manipulation::EncodeKeyFrames(tree_, times, ik_res.info, q_mat);
         lcm_.publish(FLAGS_lcm_plan_channel, &plan);
       }
     }

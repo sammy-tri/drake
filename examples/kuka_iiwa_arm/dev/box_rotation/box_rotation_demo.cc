@@ -13,6 +13,7 @@
 
 #include "drake/common/find_resource.h"
 #include "drake/examples/kuka_iiwa_arm/iiwa_common.h"
+#include "drake/manipulation/util/plan_utils.h"
 #include "drake/multibody/parsers/urdf_parser.h"
 
 DEFINE_string(keyframes, "", "Name of keyframe file to load");
@@ -86,7 +87,7 @@ void RunBoxRotationDemo() {
   std::vector<int> info(times.size(), 1);
   robotlocomotion::robot_plan_t plan{};
 
-  plan = EncodeKeyFrames(iiwa, times, info, keyframes);
+  plan = manipulation::EncodeKeyFrames(iiwa, times, info, keyframes);
   lcm.publish("COMMITTED_ROBOT_PLAN", &plan);
 }
 

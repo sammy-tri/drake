@@ -26,6 +26,7 @@ drake_cc_binary(
     deps = [
         "//common:find_resource",
         "//examples/kuka_iiwa_arm:iiwa_common",
+        "//manipulation/util:plan_utils",
         "@gflags",
     ],
 )

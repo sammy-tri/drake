@@ -3,6 +3,7 @@
 #include <limits>
 
 #include "drake/examples/kuka_iiwa_arm/iiwa_common.h"
+#include "drake/manipulation/util/plan_utils.h"
 
 namespace drake {
 namespace manipulation {
@@ -38,9 +39,10 @@ void IiwaMove::MoveJoints(const WorldState& est_state,
   std::vector<int> info(time.size(), 1);
   MatrixX<double> q_mat(q.front().size(), q.size());
   for (size_t i = 0; i < q.size(); ++i) q_mat.col(i) = q[i];
-  examples::kuka_iiwa_arm::ApplyJointVelocityLimits(q_mat, &time);
-  *plan = examples::kuka_iiwa_arm::EncodeKeyFrames(
-      joint_names, time, info, q_mat);
+  VectorX<double> max_velocities =
+      examples::kuka_iiwa_arm::get_iiwa_max_joint_velocities();
+  ApplyJointVelocityLimits(max_velocities, q_mat, &time);
+  *plan = EncodeKeyFrames(joint_names, time, info, q_mat);
   StartAction(est_state.get_iiwa_time());
   // Set the duration for this action to be longer than that of the plan to
   // ensure that we do not advance to the next action befor the robot finishes

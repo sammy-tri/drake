@@ -88,6 +88,21 @@ drake_cc_library(
     ],
 )
 
+drake_cc_library(
+    name = "plan_utils",
+    srcs = [
+        "plan_utils.cc",
+    ],
+    hdrs = [
+        "plan_utils.h",
+    ],
+    deps = [
+        "//multibody:rigid_body_tree",
+        "@lcmtypes_bot2_core",
+        "@lcmtypes_robotlocomotion",
+    ],
+)
+
 drake_cc_binary(
     name = "simple_tree_visualizer_demo",
     srcs = ["simple_tree_visualizer_demo.cc"],

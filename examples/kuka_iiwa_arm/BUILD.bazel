@@ -172,6 +172,7 @@ drake_cc_binary(
         "//common:text_logging_gflags",
         "//lcmtypes:iiwa",
         "//manipulation/planner:constraint_relaxing_ik",
+        "//manipulation/util:plan_utils",
         "//math:geometric_transform",
         "//multibody/parsers",
         "@lcm",
