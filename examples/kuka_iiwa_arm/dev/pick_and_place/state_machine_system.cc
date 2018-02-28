@@ -6,7 +6,9 @@
 #include "bot_core/robot_state_t.hpp"
 #include "robotlocomotion/robot_plan_t.hpp"
 
+#include "drake/examples/kuka_iiwa_arm/iiwa_common.h"
 #include "drake/multibody/parsers/urdf_parser.h"
+#include "drake/util/lcmUtil.h"
 
 using bot_core::robot_state_t;
 
@@ -44,6 +46,7 @@ struct PickAndPlaceStateMachineSystem::InternalState {
   InternalState(const PlannerConfiguration& configuration,
                 bool single_move)
       : world_state(
+            kIiwaArmNumJoints,
             configuration.num_tables,
             configuration.target_dimensions),
         state_machine(configuration, single_move),
@@ -143,15 +146,18 @@ void PickAndPlaceStateMachineSystem::DoCalcUnrestrictedUpdate(
       this->EvalAbstractInput(context, input_port_wsg_status_)
           ->GetValue<lcmt_schunk_wsg_status>();
 
-  internal_state.world_state.HandleIiwaStatus(iiwa_state, iiwa_base_pose);
-  internal_state.world_state.HandleWsgStatus(wsg_status);
-  internal_state.world_state.HandleObjectStatus(box_state);
+  internal_state.world_state.SetArmStatus(iiwa_state, iiwa_base_pose);
+  internal_state.world_state.SetGripperStatus(wsg_status);
+  internal_state.world_state.SetObjectStatus(
+      box_state.utime / 1e6, DecodePose(box_state.pose),
+      DecodeTwist(box_state.twist));
+
   const int kNumTables{num_tables()};
   for (int i = 0; i < kNumTables; ++i) {
     const Isometry3<double>& table_state =
         this->EvalAbstractInput(context, input_port_table_state_[i])
             ->GetValue<Isometry3<double>>();
-    internal_state.world_state.HandleTableStatus(i, table_state);
+    internal_state.world_state.SetTableStatus(i, table_state);
   }
 
   PickAndPlaceStateMachine::IiwaPublishCallback iiwa_callback =

@@ -34,27 +34,39 @@ class WorldState {
    * received status.
    */
   WorldState(
+      int num_arm_joints,
       int num_tables = 0,
       const Vector3<double>& object_dimensions = Vector3<double>::Zero());
 
   ~WorldState();
 
-  /// Update the stored iiwa status from the measured joint positions in @p
+  /// Update the stored arm status.
+  void SetArmStatus(double arm_time, VectorX<double> arm_q,
+                    VectorX<double> arm_v, const Isometry3<double>& arm_base);
+
+  /// Update the stored arm status from the measured joint positions in @p
   /// iiwa_msg and the base pose in @p iiwa_base.
-  void HandleIiwaStatus(const lcmt_iiwa_status& iiwa_msg,
-                        const Isometry3<double>& iiwa_base);
+  void SetArmStatus(const lcmt_iiwa_status& iiwa_msg,
+                    const Isometry3<double>& iiwa_base);
 
-  /// Update the stored wsg status from @p wsg_msg.
-  void HandleWsgStatus(const lcmt_schunk_wsg_status& wsg_msg);
+  /// Update the gripper state.  @p gripper_q is the distance between
+  /// the gripper fingers.
+  void SetGripperStatus(
+      double gripper_time, double gripper_q, double gripper_v);
 
-  /// Update the stored object status from @p obj_msg.
-  void HandleObjectStatus(const bot_core::robot_state_t& obj_msg);
+  /// Update the gripper status from a schunk wsg status message.
+  void SetGripperStatus(const lcmt_schunk_wsg_status& wsg_msg);
+
+  /// Update the stored object status.
+  void SetObjectStatus(double obj_time,
+                       const Isometry3<double>& obj_pose,
+                       const Vector6<double>& obj_velocity);
 
   /// Update the pose of table @p index from @p pose.
-  void HandleTableStatus(int index, const Isometry3<double>& pose);
+  void SetTableStatus(int index, const Isometry3<double>& pose);
 
-  double get_iiwa_time() const { return iiwa_time_; }
-  double get_wsg_time() const { return wsg_time_; }
+  double get_arm_time() const { return arm_time_; }
+  double get_gripper_time() const { return gripper_time_; }
   double get_obj_time() const { return obj_time_; }
   const std::vector<Isometry3<double>>& get_table_poses() const {
     return table_poses_;
@@ -65,27 +77,26 @@ class WorldState {
   const Vector3<double>& get_object_dimensions() const {
     return object_dimensions_;
   }
-  const Isometry3<double>& get_iiwa_base() const { return iiwa_base_; }
-  const VectorX<double>& get_iiwa_q() const { return iiwa_q_; }
-  const VectorX<double>& get_iiwa_v() const { return iiwa_v_; }
-  double get_wsg_q() const { return wsg_q_; }
-  double get_wsg_v() const { return wsg_v_; }
+  const Isometry3<double>& get_arm_base() const { return arm_base_; }
+  const VectorX<double>& get_arm_q() const { return arm_q_; }
+  const VectorX<double>& get_arm_v() const { return arm_v_; }
+  double get_gripper_q() const { return gripper_q_; }
+  double get_gripper_v() const { return gripper_v_; }
 
 
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
  private:
   // Iiwa status.
-  double iiwa_time_{};
-  Isometry3<double> iiwa_base_;
-  VectorX<double> iiwa_q_;
-  VectorX<double> iiwa_v_;
+  double arm_time_{};
+  Isometry3<double> arm_base_;
+  VectorX<double> arm_q_;
+  VectorX<double> arm_v_;
 
   // Gripper status.
-  double wsg_time_{};
-  double wsg_q_{};  // units [m]
-  double wsg_v_{};  // units [m/s]
-  double wsg_force_{};
+  double gripper_time_{};
+  double gripper_q_{};  // units [m]
+  double gripper_v_{};  // units [m/s]
 
   // Object status.
   double obj_time_{};

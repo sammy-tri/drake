@@ -1,29 +1,25 @@
 #include "drake/manipulation/pick_and_place_example/world_state.h"
 
-#include "drake/examples/kuka_iiwa_arm/iiwa_common.h"
 #include "drake/manipulation/util/bot_core_lcm_encode_decode.h"
-#include "drake/multibody/parsers/urdf_parser.h"
 
 namespace drake {
 namespace manipulation {
 namespace pick_and_place_example {
 
-using examples::kuka_iiwa_arm::kIiwaArmNumJoints;
-
-WorldState::WorldState(int num_tables,
+WorldState::WorldState(int num_arm_joints,
+                       int num_tables,
                        const Vector3<double>& object_dimensions)
     : object_dimensions_(object_dimensions) {
 
-  iiwa_time_ = -1;
-  iiwa_base_ = Isometry3<double>::Identity();
-  iiwa_q_ = VectorX<double>::Zero(kIiwaArmNumJoints);
-  iiwa_v_ = VectorX<double>::Zero(kIiwaArmNumJoints);
+  arm_time_ = -1;
+  arm_base_ = Isometry3<double>::Identity();
+  arm_q_ = VectorX<double>::Zero(num_arm_joints);
+  arm_v_ = VectorX<double>::Zero(num_arm_joints);
   table_poses_.resize(num_tables, Isometry3<double>::Identity());
 
-  wsg_time_ = -1;
-  wsg_q_ = 0;
-  wsg_v_ = 0;
-  wsg_force_ = 0;
+  gripper_time_ = -1;
+  gripper_q_ = 0;
+  gripper_v_ = 0;
 
   obj_time_ = -1;
   obj_pose_ = Isometry3<double>::Identity();
@@ -32,52 +28,68 @@ WorldState::WorldState(int num_tables,
 
 WorldState::~WorldState() { }
 
-void WorldState::HandleIiwaStatus(const lcmt_iiwa_status& iiwa_msg,
+void WorldState::SetArmStatus(
+    double arm_time, VectorX<double> arm_q,
+    VectorX<double> arm_v, const Isometry3<double>& arm_base) {
+
+  arm_time_ = arm_time;
+  arm_q_ = arm_q;
+  arm_v_ = arm_v;
+  arm_base_ = arm_base;
+}
+
+void WorldState::SetArmStatus(const lcmt_iiwa_status& iiwa_msg,
                                   const Isometry3<double>& iiwa_base) {
-  iiwa_base_ = iiwa_base;
-
-  iiwa_time_ = iiwa_msg.utime / 1e6;
-
   DRAKE_ASSERT(static_cast<size_t>(iiwa_msg.num_joints) ==
                iiwa_msg.joint_velocity_estimated.size());
   DRAKE_ASSERT(static_cast<size_t>(iiwa_msg.num_joints) ==
                iiwa_msg.joint_position_measured.size());
 
+  VectorX<double> new_q(iiwa_msg.num_joints);
+  VectorX<double> new_v(iiwa_msg.num_joints);
   for (int i = 0; i < iiwa_msg.num_joints; ++i) {
-    iiwa_v_[i] = iiwa_msg.joint_velocity_estimated[i];
-    iiwa_q_[i] = iiwa_msg.joint_position_measured[i];
+    new_v[i] = iiwa_msg.joint_velocity_estimated[i];
+    new_q[i] = iiwa_msg.joint_position_measured[i];
   }
+  SetArmStatus(iiwa_msg.utime / 1e6, new_q, new_v, iiwa_base);
 }
 
-void WorldState::HandleWsgStatus(const lcmt_schunk_wsg_status& wsg_msg) {
-  bool is_first_msg = wsg_time_ == -1;
-  double cur_time = wsg_msg.utime / 1e6;
-  double dt = cur_time - wsg_time_;
+void WorldState::SetGripperStatus(
+    double gripper_time, double gripper_q, double gripper_v) {
+  gripper_time_ = gripper_time;
+  gripper_q_ = gripper_q;
+  gripper_v_ = gripper_v;
+}
 
-  wsg_time_ = cur_time;
+void WorldState::SetGripperStatus(const lcmt_schunk_wsg_status& wsg_msg) {
+  bool is_first_msg = gripper_time_ == -1;
+  double cur_time = wsg_msg.utime / 1e6;
 
   if (is_first_msg) {
-    wsg_q_ = wsg_msg.actual_position_mm / 1000.;
-    wsg_v_ = 0;
-    wsg_force_ = wsg_msg.actual_force;
+    SetGripperStatus(cur_time, wsg_msg.actual_position_mm / 1000., 0);
     return;
   }
+
+  double dt = cur_time - gripper_time_;
 
   if (!is_first_msg && dt == 0) return;
 
   // TODO(siyuanfeng): Need to filter
-  wsg_v_ = (wsg_msg.actual_position_mm / 1000. - wsg_q_) / dt;
-  wsg_q_ = wsg_msg.actual_position_mm / 1000.;
-  wsg_force_ = wsg_msg.actual_force;
+  double new_q = wsg_msg.actual_position_mm / 1000.;
+  double new_v = (new_q - gripper_q_) / dt;
+  SetGripperStatus(cur_time, new_q, new_v);
 }
 
-void WorldState::HandleObjectStatus(const bot_core::robot_state_t& obj_msg) {
-  obj_time_ = obj_msg.utime / 1e6;
-  obj_pose_ = DecodePose(obj_msg.pose);
-  obj_vel_ = DecodeTwist(obj_msg.twist);
+void WorldState::SetObjectStatus(double obj_time,
+                                 const Isometry3<double>& obj_pose,
+                                 const Vector6<double>& obj_velocity) {
+  obj_time_ = obj_time;
+  obj_pose_ = obj_pose;
+  obj_vel_ = obj_velocity;
 }
 
-void WorldState::HandleTableStatus(int index, const Isometry3<double>& pose) {
+
+void WorldState::SetTableStatus(int index, const Isometry3<double>& pose) {
   DRAKE_THROW_UNLESS(index >= 0 &&
                      index < static_cast<int>(table_poses_.size()));
   table_poses_[index] = pose;

@@ -75,7 +75,7 @@ drake_cc_library(
         "//common/trajectories:piecewise_polynomial",
         "//common/trajectories:piecewise_quaternion",
         "//examples/kuka_iiwa_arm:iiwa_common",
-        "//examples/kuka_iiwa_arm:iiwa_lcm",
+        "//lcmtypes:iiwa",
         "//lcmtypes:schunk",
         "//lcmtypes:viewer",
         "//manipulation/util:bot_core_lcm_encode_decode",
@@ -122,6 +122,7 @@ drake_cc_googletest(
     deps = [
         ":pick_and_place_example",
         "//common:find_resource",
+        "//examples/kuka_iiwa_arm:iiwa_common",
     ],
 )
 
@@ -134,6 +135,7 @@ drake_cc_googletest(
         ":pick_and_place_example",
         "//common:find_resource",
         "//common/test_utilities:eigen_matrix_compare",
+        "//examples/kuka_iiwa_arm:iiwa_common",
     ],
 )
 

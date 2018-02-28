@@ -342,10 +342,10 @@ ComputeInitialAndFinalObjectPoses(const WorldState& env_state) {
   // O -- Object frame
   // T -- Table frame
 
-  // Since env_state.get_iiwa_base() returns the pose of the robot's base
+  // Since env_state.get_arm_base() returns the pose of the robot's base
   // relative to fixed sensor frame, inverting the returned transform yields the
   // world pose of the fixed sensor frame.
-  const Isometry3<double> X_WS{env_state.get_iiwa_base().inverse()};
+  const Isometry3<double> X_WS{env_state.get_arm_base().inverse()};
   const Isometry3<double> X_WO_initial = X_WS * env_state.get_object_pose();
 
   // Check that the object is oriented correctly.
@@ -582,7 +582,7 @@ ComputeNominalConfigurations(const WorldState& env_state,
   IKoptions ikoptions(robot);
   ikoptions.setFixInitialState(true);
   bool success = false;
-  VectorX<double> q_initial{env_state.get_iiwa_q()};
+  VectorX<double> q_initial{env_state.get_arm_q()};
   for (const auto& constraint_array : constraint_arrays) {
     MatrixX<double> q_knots_seed{robot->get_num_positions(), num_knots};
     for (int j = 0; j < num_knots; ++j) {
@@ -675,7 +675,7 @@ PickAndPlaceStateMachine::ComputeTrajectories(
         PickAndPlaceState::kApproachPlace,
         PickAndPlaceState::kLiftFromPlace};
     VectorX<double> q_0{robot->get_num_positions()};
-    q_0 << env_state.get_iiwa_q();
+    q_0 << env_state.get_arm_q();
     std::map<PickAndPlaceState, PiecewisePolynomial<double>>
         interpolation_result_map;
     const double extra_short_duration = 0.5;
@@ -834,7 +834,7 @@ void PickAndPlaceStateMachine::Update(const WorldState& env_state,
         iiwa_move_.MoveJoints(env_state, joint_names_, times, q, &plan);
         iiwa_callback(&plan);
 
-        drake::log()->info("{} at {}", state_, env_state.get_iiwa_time());
+        drake::log()->info("{} at {}", state_, env_state.get_arm_time());
       }
       if (iiwa_move_.ActionFinished(env_state)) {
         // If the object has moved since kPlan, we need to replan.
@@ -864,10 +864,10 @@ void PickAndPlaceStateMachine::Update(const WorldState& env_state,
         drake::log()->info("Object at: {} {}",
                            obj_pose.translation().transpose(),
                            math::rotmat2rpy(obj_pose.rotation()).transpose());
-        const Isometry3<double>& iiwa_pose = env_state.get_iiwa_base();
+        const Isometry3<double>& arm_pose = env_state.get_arm_base();
         drake::log()->info("Base at: {} {}",
-                           iiwa_pose.translation().transpose(),
-                           math::rotmat2rpy(iiwa_pose.rotation()).transpose());
+                           arm_pose.translation().transpose(),
+                           math::rotmat2rpy(arm_pose.rotation()).transpose());
       }
     }  // Intentionally fall through.
     case PickAndPlaceState::kGrasp:
@@ -878,7 +878,7 @@ void PickAndPlaceStateMachine::Update(const WorldState& env_state,
                       &wsg_act_, &msg);
         wsg_callback(&msg);
 
-        drake::log()->info("{} at {}", state_, env_state.get_iiwa_time());
+        drake::log()->info("{} at {}", state_, env_state.get_arm_time());
       }
       if (wsg_act_.ActionFinished(env_state)) {
         state_ = next_state;
@@ -887,13 +887,13 @@ void PickAndPlaceStateMachine::Update(const WorldState& env_state,
       break;
     }
     case PickAndPlaceState::kPlan: {
-      drake::log()->info("{} at {}", state_, env_state.get_iiwa_time());
+      drake::log()->info("{} at {}", state_, env_state.get_arm_time());
       // Compute all the desired configurations.
       expected_object_pose_ = env_state.get_object_pose();
       std::unique_ptr<RigidBodyTree<double>> robot{BuildTree(
           configuration_, true /*add_grasp_frame*/)};
 
-      VectorX<double> q_initial{env_state.get_iiwa_q()};
+      VectorX<double> q_initial{env_state.get_arm_q()};
       interpolation_result_map_ = ComputeTrajectories(
           env_state,
           q_traj_seed_.value_or(PiecewisePolynomial<double>::ZeroOrderHold(
@@ -917,7 +917,7 @@ void PickAndPlaceStateMachine::Update(const WorldState& env_state,
       if (single_move_) {
         state_ = PickAndPlaceState::kDone;
         iiwa_callback(&stopped_plan);
-        drake::log()->info("{} at {}", state_, env_state.get_iiwa_time());
+        drake::log()->info("{} at {}", state_, env_state.get_arm_time());
       } else {
         state_ = PickAndPlaceState::kOpenGripper;
       }

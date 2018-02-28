@@ -43,7 +43,7 @@ void IiwaMove::MoveJoints(const WorldState& est_state,
       examples::kuka_iiwa_arm::get_iiwa_max_joint_velocities();
   ApplyJointVelocityLimits(max_velocities, q_mat, &time);
   *plan = EncodeKeyFrames(joint_names, time, info, q_mat);
-  StartAction(est_state.get_iiwa_time());
+  StartAction(est_state.get_arm_time());
   // Set the duration for this action to be longer than that of the plan to
   // ensure that we do not advance to the next action befor the robot finishes
   // executing the plan.
@@ -60,8 +60,8 @@ bool IiwaMove::ActionFinished(const WorldState& est_state) const {
   if (!ActionStarted()) return false;
 
   const double max_finished_velocity = 1e-1;
-  if (get_time_since_action_start(est_state.get_iiwa_time()) > duration_ &&
-      est_state.get_iiwa_v().norm() < max_finished_velocity) {
+  if (get_time_since_action_start(est_state.get_arm_time()) > duration_ &&
+      est_state.get_arm_v().norm() < max_finished_velocity) {
     return true;
   } else {
     return false;
@@ -73,9 +73,9 @@ WsgAction::WsgAction() {}
 void WsgAction::OpenGripper(const WorldState& est_state,
                             double grip_force,
                             lcmt_schunk_wsg_command* msg) {
-  StartAction(est_state.get_wsg_time());
+  StartAction(est_state.get_gripper_time());
   *msg = lcmt_schunk_wsg_command();
-  msg->utime = est_state.get_wsg_time() * 1e6;
+  msg->utime = est_state.get_gripper_time() * 1e6;
   msg->target_position_mm = 100;  // Maximum aperture for WSG
   msg->force = grip_force;
   last_command_ = kOpen;
@@ -84,9 +84,9 @@ void WsgAction::OpenGripper(const WorldState& est_state,
 void WsgAction::CloseGripper(const WorldState& est_state,
                              double grip_force,
                              lcmt_schunk_wsg_command* msg) {
-  StartAction(est_state.get_wsg_time());
+  StartAction(est_state.get_gripper_time());
   *msg = lcmt_schunk_wsg_command();
-  msg->utime = est_state.get_wsg_time() * 1e6;
+  msg->utime = est_state.get_gripper_time() * 1e6;
   msg->target_position_mm = 8;  // 0 would smash the fingers together
                                 // and keep applying force on a real
                                 // WSG when no object is grasped.
@@ -96,13 +96,13 @@ void WsgAction::CloseGripper(const WorldState& est_state,
 
 bool WsgAction::ActionFinished(const WorldState& est_state) const {
   if (!ActionStarted()) return false;
-  if (std::abs(est_state.get_wsg_v()) < kFinalSpeedThreshold &&
-      (get_time_since_action_start(est_state.get_wsg_time()) > 0.5)) {
+  if (std::abs(est_state.get_gripper_v()) < kFinalSpeedThreshold &&
+      (get_time_since_action_start(est_state.get_gripper_time()) > 0.5)) {
     if (last_command_ == kOpen &&
-        est_state.get_wsg_q() > kOpenPositionThreshold) {
+        est_state.get_gripper_q() > kOpenPositionThreshold) {
       return true;
     } else if (last_command_ == kClose &&
-               est_state.get_wsg_q() < kOpenPositionThreshold) {
+               est_state.get_gripper_q() < kOpenPositionThreshold) {
       return true;
     }
   }

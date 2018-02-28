@@ -13,6 +13,7 @@
 #include "drake/common/drake_assert.h"
 #include "drake/common/drake_copyable.h"
 #include "drake/common/find_resource.h"
+#include "drake/examples/kuka_iiwa_arm/iiwa_common.h"
 #include "drake/lcmt_iiwa_status.hpp"
 #include "drake/lcmt_schunk_wsg_command.hpp"
 #include "drake/lcmt_schunk_wsg_status.hpp"
@@ -73,14 +74,14 @@ class WorldStateSubscriber {
                    iiwa_msg->joint_position.cend(),
                    std::back_inserter(iiwa_status.joint_position_measured),
                    [](float q) -> double { return q; });
-    state_->HandleIiwaStatus(iiwa_status, X_WB);
+    state_->SetArmStatus(iiwa_status, X_WB);
   }
 
   // Handles WSG states from the LCM message.
   void HandleWsgStatus(const lcm::ReceiveBuffer*, const std::string&,
                        const lcmt_schunk_wsg_status* wsg_msg) {
     DRAKE_DEMAND(wsg_msg != nullptr);
-    state_->HandleWsgStatus(*wsg_msg);
+    state_->SetGripperStatus(*wsg_msg);
   }
 
   // Handles object states from the LCM message.
@@ -88,7 +89,9 @@ class WorldStateSubscriber {
                           const std::string&,
                           const bot_core::robot_state_t* obj_msg) {
     DRAKE_DEMAND(obj_msg != nullptr);
-    state_->HandleObjectStatus(*obj_msg);
+    state_->SetObjectStatus(
+        obj_msg->utime / 1e6, DecodePose(obj_msg->pose),
+        DecodeTwist(obj_msg->twist));
   }
 
   // LCM subscription management.
@@ -103,12 +106,12 @@ void RunPickAndPlaceDemo() {
   lcm::LCM lcm;
 
   // Makes a WorldState, and sets up LCM subscriptions.
-  WorldState env_state;
+  WorldState env_state(kIiwaArmNumJoints);
   WorldStateSubscriber env_state_subscriber(&lcm, &env_state);
 
   // Spins until at least one message is received from every LCM channel.
-  while (lcm.handleTimeout(10) == 0 || env_state.get_iiwa_time() == -1 ||
-         env_state.get_obj_time() == -1 || env_state.get_wsg_time() == -1) {
+  while (lcm.handleTimeout(10) == 0 || env_state.get_arm_time() == -1 ||
+         env_state.get_obj_time() == -1 || env_state.get_gripper_time() == -1) {
   }
 
   PickAndPlaceStateMachine::IiwaPublishCallback iiwa_callback =
@@ -131,10 +134,10 @@ void RunPickAndPlaceDemo() {
   planner_configuration.num_tables = 2;
   Isometry3<double> X_WT{Isometry3<double>::Identity()};
   X_WT.translation() = Vector3<double>(0, 0.8, 0);
-  env_state.HandleTableStatus(0, X_WT);
+  env_state.SetTableStatus(0, X_WT);
 
   X_WT.translation() = Vector3<double>(0.8, 0, 0);
-  env_state.HandleTableStatus(1, X_WT);
+  env_state.SetTableStatus(1, X_WT);
 
   PickAndPlaceStateMachine machine(planner_configuration, true);
 

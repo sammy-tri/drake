@@ -12,10 +12,8 @@ namespace pick_and_place_example {
 namespace {
 
 GTEST_TEST(PickAndPlaceWorldStateTest, EndEffectorTest) {
-  WorldState dut;
 
   Isometry3<double> iiwa_base{Isometry3<double>::Identity()};
-
   lcmt_iiwa_status iiwa_msg{};
   iiwa_msg.utime = 1000;
   iiwa_msg.num_joints = examples::kuka_iiwa_arm::kIiwaArmNumJoints;
@@ -37,10 +35,11 @@ GTEST_TEST(PickAndPlaceWorldStateTest, EndEffectorTest) {
   iiwa_msg.joint_velocity_estimated.push_back(-0.8845549);
   iiwa_msg.joint_velocity_estimated.push_back(0.0);
 
-  dut.HandleIiwaStatus(iiwa_msg, iiwa_base);
+  WorldState dut(iiwa_msg.num_joints);
+  dut.SetArmStatus(iiwa_msg, iiwa_base);
 
-  EXPECT_EQ(dut.get_iiwa_time(), iiwa_msg.utime * 1e-6);
-  EXPECT_TRUE(dut.get_iiwa_base().isApprox(Isometry3<double>::Identity()));
+  EXPECT_EQ(dut.get_arm_time(), iiwa_msg.utime * 1e-6);
+  EXPECT_TRUE(dut.get_arm_base().isApprox(Isometry3<double>::Identity()));
 }
 
 }  // namespace

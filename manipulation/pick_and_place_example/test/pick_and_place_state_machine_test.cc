@@ -1,7 +1,7 @@
 #include "drake/manipulation/pick_and_place_example/pick_and_place_state_machine.h"
 
 #include <gtest/gtest.h>
-#include "bot_core/robot_state_t.hpp"
+
 #include "robotlocomotion/robot_plan_t.hpp"
 
 #include "drake/common/find_resource.h"
@@ -47,39 +47,33 @@ GTEST_TEST(PickAndPlaceStateMachineTest, StateMachineTest) {
   PickAndPlaceStateMachine dut(planner_configuration, true /*single_move*/);
 
   // Create world state and initialize with a trivial configuration.
-  WorldState world_state(planner_configuration.num_tables,
+  WorldState world_state(kIiwaArmNumJoints,
+                         planner_configuration.num_tables,
                          planner_configuration.target_dimensions);
 
-  Isometry3<double> iiwa_base{Isometry3<double>::Identity()};
+  Isometry3<double> arm_base{Isometry3<double>::Identity()};
   lcmt_iiwa_status iiwa_msg{};
   iiwa_msg.utime = 1000;
   iiwa_msg.num_joints = kIiwaArmNumJoints;
 
   iiwa_msg.joint_position_measured.resize(kIiwaArmNumJoints, 0);
   iiwa_msg.joint_velocity_estimated.resize(kIiwaArmNumJoints, 0);
-  world_state.HandleIiwaStatus(iiwa_msg, iiwa_base);
+  world_state.SetArmStatus(iiwa_msg, arm_base);
 
   lcmt_schunk_wsg_status wsg_msg;
   wsg_msg.utime = iiwa_msg.utime;
   wsg_msg.actual_position_mm = 0;
   wsg_msg.actual_force = 0;
-  world_state.HandleWsgStatus(wsg_msg);
+  world_state.SetGripperStatus(wsg_msg);
 
-  bot_core::robot_state_t object_msg{};
-  object_msg.utime = 1000;
-  object_msg.pose.translation.x = p_WO.x();
-  object_msg.pose.translation.y = p_WO.y();
-  object_msg.pose.translation.z = p_WO.z();
-  object_msg.pose.rotation.w = 1;
-  object_msg.pose.rotation.x = 0;
-  object_msg.pose.rotation.y = 0;
-  object_msg.pose.rotation.z = 0;
-  world_state.HandleObjectStatus(object_msg);
+  Isometry3<double> object_pose{Isometry3<double>::Identity()};
+  object_pose.translation() = p_WO;
+  world_state.SetObjectStatus(1000, object_pose, Vector6<double>::Zero());
 
   Isometry3<double> X_WT;
   X_WT.translation() = p_WT;
   X_WT.linear().setIdentity();
-  world_state.HandleTableStatus(0, X_WT);
+  world_state.SetTableStatus(0, X_WT);
 
   int iiwa_plan_count = 0;
   robotlocomotion::robot_plan_t iiwa_plan{};
@@ -161,18 +155,18 @@ GTEST_TEST(PickAndPlaceStateMachineTest, StateMachineTest) {
             iiwa_plan.plan.back().joint_position[i];
       }
     }
-    world_state.HandleIiwaStatus(iiwa_msg, iiwa_base);
+    world_state.SetArmStatus(iiwa_msg, arm_base);
 
     wsg_msg.utime = iiwa_msg.utime;
     wsg_msg.actual_position_mm = wsg_command.target_position_mm;
-    world_state.HandleWsgStatus(wsg_msg);
+    world_state.SetGripperStatus(wsg_msg);
 
     // Warp the object to the target y position when we expect to be
     // transitioning to kApproachPlace (this is the y value it would
     // have had after kApproachPlacePregrasp completed successfully).
     if (step.state_expected == PickAndPlaceState::kApproachPlace) {
-      object_msg.pose.translation.y = X_WT.translation()(1);
-      world_state.HandleObjectStatus(object_msg);
+      object_pose.translation().y() = X_WT.translation()(1);
+      world_state.SetObjectStatus(1000, object_pose, Vector6<double>::Zero());
     }
 
     dut.Update(world_state, iiwa_callback, wsg_callback);
