@@ -181,6 +181,7 @@ drake_cc_googletest(
     data = [
         "//manipulation/models/iiwa_description:models",
         "//manipulation/models/wsg_50_description:models",
+        "//manipulation/pick_and_place_example/models",
     ],
     deps = [
         ":sim_diagram_builder",

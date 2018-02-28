@@ -88,7 +88,7 @@ drake_cc_googletest(
     name = "robot_plan_interpolator_test",
     data = [
         "//manipulation/models/iiwa_description:models",
-    ],
+     ],
     deps = [
         ":robot_plan_interpolator",
         "//common:find_resource",
