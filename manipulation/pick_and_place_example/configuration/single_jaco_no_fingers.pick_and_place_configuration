@@ -29,7 +29,7 @@ model {
   items {
     key: "iiwa"
     value: {
-      simulation_model_path: "drake/manipulation/models/jaco_description/urdf/j2s7s300.urdf"
+      simulation_model_path: "drake/manipulation/models/jaco_description/urdf/j2s7s300_no_fingers.urdf"
     }
   }
 }
@@ -54,25 +54,6 @@ table {
   }
   pose {
     xyz: [0.6, -0.36, 0.91]
-  }
-}
-table {
-  model_name: "folding_table"
-  optitrack_info {
-    id: 12
-  }
-  pose {
-    xyz: [0.6, 0.36, 0.66]
-    rpy: [0.0, 0.0, 0.7]
-  }
-}
-table {
-  model_name: "folding_table"
-  optitrack_info {
-    id: 13
-  }
-  pose {
-    xyz: [0.1, -0.6, 0.66]
   }
 }
 

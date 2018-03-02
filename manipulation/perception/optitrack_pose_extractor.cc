@@ -62,6 +62,7 @@ optional<int> FindOptitrackObjectId(
   return nullopt;
 }
 
+
 OptitrackPoseExtractor::OptitrackPoseExtractor(
     int object_id, const Isometry3<double>& X_WO,
     double optitrack_lcm_status_period)

@@ -41,6 +41,7 @@ void IiwaMove::MoveJoints(const WorldState& est_state,
   for (size_t i = 0; i < q.size(); ++i) q_mat.col(i) = q[i];
   VectorX<double> max_velocities =
       examples::kuka_iiwa_arm::get_iiwa_max_joint_velocities();
+  max_velocities /= 3;
   ApplyJointVelocityLimits(max_velocities, q_mat, &time);
   *plan = EncodeKeyFrames(joint_names, time, info, q_mat);
   StartAction(est_state.get_arm_time());

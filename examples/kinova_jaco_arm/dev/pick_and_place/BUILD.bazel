@@ -38,3 +38,30 @@ drake_cc_binary(
         "@optitrack_driver//lcmtypes:optitrack_lcmtypes",
     ],
 )
+
+drake_cc_binary(
+    name = "jaco_lcm_pick_and_place_planner",
+    srcs = [
+        "jaco_lcm_pick_and_place_planner.cc",
+        "jaco_lcm_planner.h",
+        "jaco_lcm_planner.cc",
+    ],
+    data = [
+        "//manipulation/models/jaco_description:models",
+        "//manipulation/pick_and_place_example:configuration",
+        "//manipulation/pick_and_place_example/models",
+    ],
+    deps = [
+        "//common:text_logging_gflags",
+        "//lcm",
+        "//lcmtypes:jaco",
+        "//manipulation/perception:optitrack_pose_extractor",
+        "//manipulation/pick_and_place_example",
+        "//manipulation/pick_and_place_example:pick_and_place_configuration_parsing",  # noqa
+        "//systems/lcm",
+        "//systems/lcm:lcm_driven_loop",
+        "@gflags",
+        "@lcmtypes_bot2_core",
+        "@lcmtypes_robotlocomotion",
+    ],
+)

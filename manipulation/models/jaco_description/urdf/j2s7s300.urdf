@@ -49,12 +49,12 @@
       </geometry>
       <!--<material name="Black" /> -->
     </visual>
-    <collision>
+    <!-- <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <box size="0 0 0"/>
       </geometry>
-    </collision>
+    </collision> -->
   </link>
   <!-- ros_control plugin -->
   <gazebo>
@@ -106,11 +106,11 @@
         <mesh filename="../meshes/ring_big.obj"/>
       </geometry>
     </visual>
-    <collision>
+    <!-- <collision>
       <geometry>
         <mesh filename="../meshes/shoulder.obj"/>
       </geometry>
-    </collision>
+    </collision> -->
     <inertial>
       <mass value="0.7477"/>
       <origin xyz="0 -0.002 -0.0605"/>
@@ -149,11 +149,11 @@
         <mesh filename="../meshes/ring_big.obj"/>
       </geometry>
     </visual>
-    <collision>
+    <!-- <collision>
       <geometry>
         <mesh filename="../meshes/arm_half_1.obj"/>
       </geometry>
-    </collision>
+    </collision> -->
     <inertial>
       <mass value="0.8447"/>
       <origin xyz="0 -0.103563213 0"/>

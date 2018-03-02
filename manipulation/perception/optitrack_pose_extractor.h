@@ -49,6 +49,12 @@ optional<int> FindOptitrackObjectId(
     const std::string& object_name);
 
 /**
+ * Extract all rigid body poses from an LCM message.
+ */
+std::map<int, Isometry3<double>> ExtractOptitrackPoses(
+    const optitrack::optitrack_frame_t&);
+
+/**
  * Extracts and provides an output of the pose of a desired object as an
  * Eigen::Isometry3d from an Optitrack LCM OPTITRACK_FRAME_T message, the
  * pose transformed to a desired coordinate frame.
