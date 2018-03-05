@@ -7,6 +7,7 @@
 #include "optitrack/optitrack_frame_t.hpp"
 #include "robotlocomotion/robot_plan_t.hpp"
 
+#include "drake/examples/kinova_jaco_arm/jaco_lcm.h"
 #include "drake/manipulation/perception/optitrack_pose_extractor.h"
 
 using bot_core::robot_state_t;
@@ -152,8 +153,10 @@ void JacoLcmPlanner::DoCalcUnrestrictedUpdate(
   }
 
   for (int i = 0; i <  jaco_status.num_fingers; i++) {
-    arm_q(i + jaco_status.num_joints) = jaco_status.finger_position[i];
-    arm_v(i + jaco_status.num_joints) = jaco_status.finger_velocity[i];
+    arm_q(i + jaco_status.num_joints) =
+        jaco_status.finger_position[i] * kFingerSdkToUrdf;
+    arm_v(i + jaco_status.num_joints) =
+        jaco_status.finger_velocity[i] * kFingerSdkToUrdf;
   }
 
   internal_state.world_state.SetArmStatus(
@@ -162,7 +165,8 @@ void JacoLcmPlanner::DoCalcUnrestrictedUpdate(
 
   // TODO(sam.creasey) make this something sensible
   internal_state.world_state.SetGripperStatus(
-      jaco_status.utime / 1e6, jaco_status.finger_position[0],
+      jaco_status.utime / 1e6,
+      jaco_status.finger_position[0],
       jaco_status.finger_velocity[0]);
 
   PickAndPlaceStateMachine::IiwaPublishCallback iiwa_callback =

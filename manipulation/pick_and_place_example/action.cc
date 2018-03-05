@@ -1,5 +1,6 @@
 #include "drake/manipulation/pick_and_place_example/action.h"
 
+#include <iostream>
 #include <limits>
 
 #include "drake/examples/kuka_iiwa_arm/iiwa_common.h"
@@ -151,6 +152,7 @@ void JacoFingerAction::CloseGripper(const WorldState& est_state,
   MatrixX<double> q_mat(joint_names.size(), time.size());
   q_mat.col(0) = est_state.get_arm_q();
   q_mat.col(1) = est_state.get_arm_q();
+  // The command will be translated into URDF coordinates.
   q_mat.col(1).tail(3) = VectorX<double>::Ones(3) * 1.68;
   *plan = EncodeKeyFrames(joint_names, time, info, q_mat);
   last_command_ = kClose;
@@ -159,11 +161,15 @@ void JacoFingerAction::CloseGripper(const WorldState& est_state,
 bool JacoFingerAction::ActionFinished(const WorldState& est_state) const {
   if (!ActionStarted()) return false;
   if (get_time_since_action_start(est_state.get_gripper_time()) > 0.5) {
+    std::cout << "Gripper q: " << est_state.get_gripper_q()
+              << " v: " << est_state.get_gripper_v()
+              << "\n";
     if (last_command_ == kOpen &&
         est_state.get_gripper_q() < kOpenPositionThreshold) {
       return true;
     } else if (last_command_ == kClose &&
-               est_state.get_gripper_q() > kClosedPositionThreshold) {
+               est_state.get_gripper_q() > kClosedPositionThreshold &&
+               est_state.get_gripper_v() < kFinalSpeedThreshold) {
       return true;
     }
   }

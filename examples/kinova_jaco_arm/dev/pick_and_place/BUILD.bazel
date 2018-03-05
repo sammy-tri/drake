@@ -53,6 +53,7 @@ drake_cc_binary(
     ],
     deps = [
         "//common:text_logging_gflags",
+        "//examples/kinova_jaco_arm:jaco_lcm",
         "//lcm",
         "//lcmtypes:jaco",
         "//manipulation/perception:optitrack_pose_extractor",

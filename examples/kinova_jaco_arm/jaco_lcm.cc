@@ -15,19 +15,6 @@ using systems::Context;
 using systems::DiscreteValues;
 using systems::DiscreteUpdateEvent;
 
-namespace {
-// Kinova's JACO urdf's have a 0-114 degree (0-2 radian) range for the
-// finger joints, but the SDK's position values range from 0-6800
-// degrees (0-118.68 radian), which I suspect is the speed of the
-// motor driving the finger actuator (it's certainly not the angle of
-// the finger joint).  Convert these as appropriate here.  I
-// (sam.creasey) still don't think we wind up with the correct
-// simulated position vs. where the actual fingers are at the same
-// commanded value, but it's a start.
-constexpr double kFingerSdkToUrdf = 2. / 118.68;
-constexpr double kFingerUrdfToSdk = 118.68 / 2.;
-}  // namespace
-
 JacoCommandReceiver::JacoCommandReceiver(int num_joints, int num_fingers)
     : num_joints_(num_joints),
       num_fingers_(num_fingers) {

@@ -216,8 +216,11 @@ class JacoFingerAction : public Action {
 
  private:
   enum { kOpen, kClose } last_command_{kOpen};
-  static constexpr double kOpenPositionThreshold = 0.1;   // rad
-  static constexpr double kClosedPositionThreshold = 0.5;   // rad
+  static constexpr double kFinalSpeedThreshold = 2e-4;  // m/s
+  // The gripper position comes directly from the jaco status message,
+  // so the finger isn't translated into urdf coordinates.
+  static constexpr double kOpenPositionThreshold = 10.;   // rad
+  static constexpr double kClosedPositionThreshold = 11.;   // rad
 };
 
 }  // namespace pick_and_place_example
