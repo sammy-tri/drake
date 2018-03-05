@@ -137,14 +137,20 @@ void JacoLcmPlanner::DoCalcUnrestrictedUpdate(
   const lcmt_jaco_status& jaco_status =
       this->EvalAbstractInput(context, input_port_jaco_status_)
           ->GetValue<lcmt_jaco_status>();
-  DRAKE_THROW_UNLESS(jaco_status.num_joints == num_arm_joints_);
+  DRAKE_THROW_UNLESS(
+      (jaco_status.num_joints + jaco_status.num_fingers) == num_arm_joints_);
 
-  Eigen::VectorXd arm_q(jaco_status.num_joints);
-  Eigen::VectorXd arm_v(jaco_status.num_joints);
+  Eigen::VectorXd arm_q(jaco_status.num_joints + jaco_status.num_fingers);
+  Eigen::VectorXd arm_v(jaco_status.num_joints + jaco_status.num_fingers);
 
   for (int i = 0; i <  jaco_status.num_joints; i++) {
     arm_q(i) = jaco_status.joint_position[i];
     arm_v(i) = jaco_status.joint_velocity[i];
+  }
+
+  for (int i = 0; i <  jaco_status.num_fingers; i++) {
+    arm_q(i + jaco_status.num_joints) = jaco_status.finger_position[i];
+    arm_v(i + jaco_status.num_joints) = jaco_status.finger_velocity[i];
   }
 
   internal_state.world_state.SetArmStatus(

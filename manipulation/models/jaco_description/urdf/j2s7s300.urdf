@@ -410,7 +410,8 @@
     <child link="j2s7s300_end_effector"/>
     <axis xyz="0 0 0"/>
     <limit effort="2000" lower="0" upper="0" velocity="1"/>
-    <origin rpy="3.14159265359 0 0" xyz="0 0 -0.1600"/>
+    <!--<origin rpy="3.14159265359 0 0" xyz="0 0 -0.1600"/>-->
+    <origin rpy="1.57079632679 1.57079632679 1.57079632679" xyz="0 0 -0.1600"/>
   </joint>
   <link name="j2s7s300_link_finger_1">
     <visual>

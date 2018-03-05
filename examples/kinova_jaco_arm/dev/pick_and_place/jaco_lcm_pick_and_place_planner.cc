@@ -52,7 +52,7 @@ int DoMain(void) {
 
   // Add the LcmPlanner block, which contains all of the demo logic.
   auto planner = builder.AddSystem<JacoLcmPlanner>(
-      planner_configuration, optitrack_configuration, 7, false);
+      planner_configuration, optitrack_configuration, 10, false);
 
   // All LCM traffic for this planner will occur on channels that end with the
   // suffix specified below.

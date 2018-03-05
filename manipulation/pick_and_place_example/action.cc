@@ -1,5 +1,6 @@
 #include "drake/manipulation/pick_and_place_example/action.h"
 
+#include <iostream>
 #include <limits>
 
 #include "drake/examples/kuka_iiwa_arm/iiwa_common.h"
@@ -36,12 +37,17 @@ void IiwaMove::MoveJoints(const WorldState& est_state,
   DRAKE_DEMAND(time.size() == q.size());
   DRAKE_DEMAND(plan != nullptr);
 
+  std::cerr << "time start in " << time_in[0] << "\n";
+  std::cerr << "q front size " << q.front().size() << "\n";
   std::vector<int> info(time.size(), 1);
   MatrixX<double> q_mat(q.front().size(), q.size());
   for (size_t i = 0; i < q.size(); ++i) q_mat.col(i) = q[i];
-  VectorX<double> max_velocities =
+  VectorX<double> iiwa_max_velocities =
       examples::kuka_iiwa_arm::get_iiwa_max_joint_velocities();
-  max_velocities /= 3;
+  iiwa_max_velocities /= 3;
+  VectorX<double> max_velocities = VectorX<double>::Ones(joint_names.size());
+  max_velocities.head(iiwa_max_velocities.size()) = iiwa_max_velocities;
+
   ApplyJointVelocityLimits(max_velocities, q_mat, &time);
   *plan = EncodeKeyFrames(joint_names, time, info, q_mat);
   StartAction(est_state.get_arm_time());
@@ -50,6 +56,7 @@ void IiwaMove::MoveJoints(const WorldState& est_state,
   // executing the plan.
   const double additional_duaration{0.5};
   duration_ = time.back() + additional_duaration;
+  std::cerr << "time start out " << time[0] << "\n";
 }
 
 void IiwaMove::Reset() {

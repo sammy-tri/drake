@@ -113,6 +113,7 @@ object {
 # effector is attached to.
 task {
   end_effector_name: "j2s7s300_end_effector"
+  grasp_frame_translational_offset: 0.06
 }
 
 # Contact parameters
