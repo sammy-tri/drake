@@ -44,7 +44,7 @@ table {
     id: 8
   }
   pose {
-    xyz: [0.1, 0.6, 0.91]
+    xyz: [0.1, 0.8, 0.91]
   }
 }
 table {
@@ -53,7 +53,7 @@ table {
     id: 9
   }
   pose {
-    xyz: [0.6, -0.36, 0.91]
+    xyz: [0.8, -0.36, 0.91]
   }
 }
 
@@ -94,6 +94,7 @@ object {
 # effector is attached to.
 task {
   end_effector_name: "j2s7s300_end_effector"
+  grasp_frame_translational_offset: 0.06
 }
 
 # Contact parameters
