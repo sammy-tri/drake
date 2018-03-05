@@ -192,7 +192,7 @@ int DoMain(void) {
     const std::string suffix = (num_jaco > 1) ? "_" + std::to_string(i) : "";
     auto jaco_command_sub = builder->AddSystem(
         systems::lcm::LcmSubscriberSystem::Make<lcmt_jaco_command>(
-            "KINOVA_JACO_COMMAND" + suffix, &lcm));
+            "disabled_KINOVA_JACO_COMMAND" + suffix, &lcm));
     jaco_command_sub->set_name("jaco_command_subscriber" + suffix);
 
     JacoCommandReceiver* receiver = AddJacoCommandReceiver(
@@ -206,7 +206,7 @@ int DoMain(void) {
 
     auto jaco_status_pub = builder->AddSystem(
         systems::lcm::LcmPublisherSystem::Make<lcmt_jaco_status>(
-            "KINOVA_JACO_STATUS" + suffix, &lcm));
+            "disabled_KINOVA_JACO_STATUS" + suffix, &lcm));
     jaco_status_pub->set_name("jaco_status_publisher" + suffix);
     jaco_status_pub->set_publish_period(kJacoLcmStatusPeriod);
 
