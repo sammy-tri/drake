@@ -45,7 +45,13 @@ void IiwaMove::MoveJoints(const WorldState& est_state,
   }
   VectorX<double> iiwa_max_velocities =
       examples::kuka_iiwa_arm::get_iiwa_max_joint_velocities();
-  iiwa_max_velocities /= 3;
+  iiwa_max_velocities(0) = 0.628;
+  iiwa_max_velocities(1) = 0.628;
+  iiwa_max_velocities(2) = 0.628;
+  iiwa_max_velocities(3) = 0.628;
+  iiwa_max_velocities(4) = 0.837;
+  iiwa_max_velocities(5) = 0.837;
+  iiwa_max_velocities(6) = 0.837;
   VectorX<double> max_velocities = VectorX<double>::Ones(joint_names.size());
   max_velocities.head(iiwa_max_velocities.size()) = iiwa_max_velocities;
 
