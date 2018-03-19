@@ -1323,6 +1323,8 @@ void RigidBodyPlant<T>::ComputeDiscretizedSystemContactResults(
     // Allows us to stream penetration via LCM.
     contact_result.set_penetration_depth(contact.distance);
 
+    // Placeholder: stream slip velocity via LCM.
+
     contact_details.emplace_back(new PointContactDetail<T>(resultant_force));
     contact_result.set_contact_details(std::move(contact_details));
   }
