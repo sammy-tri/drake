@@ -19,6 +19,8 @@ namespace pick_and_place {
 namespace {
 
 using math::rpy2rotmat;
+using pick_and_place::RobotAttachment;
+using pick_and_place::RobotConfiguration;
 using pick_and_place::PlannerConfiguration;
 using pick_and_place::SimulatedPlantConfiguration;
 using pick_and_place::OptitrackConfiguration;
@@ -29,7 +31,13 @@ using pick_and_place::TargetIndex;
 const char kIiwaPath[] =
     "drake/manipulation/models/iiwa_description/urdf/"
     "iiwa14_polytope_collision.urdf";
-const char kEndEffectorName[] = "iiwa_link_ee";
+const char kEndEffectorName[] = "iiwa_frame_ee";
+const char kFixturePath[] =
+    "drake/examples/kuka_iiwa_arm/models/iiwa_wsg_fixture.urdf";
+const char kFixtureName[] = "iiwa_wsg_fixture";
+const char kWsgPath[] =
+    "drake/manipulation/models/wsg_50_description/sdf/"
+    "schunk_wsg_50_ball_contact.sdf";
 const char kYellowPostPath[] =
     "drake/examples/kuka_iiwa_arm/models/objects/yellow_post.urdf";
 const char kExtraHeavyDutyTablePath[] =
@@ -129,16 +137,11 @@ void ValidateSimulatedPlantConfiguration(
     const SimulatedPlantConfiguration& plant_configuration,
     const SimulatedPlantConfiguration& expected_plant_configuration) {
   EXPECT_TRUE(
-      CompareIsometry3Vectors(plant_configuration.robot_poses,
-                              expected_plant_configuration.robot_poses));
-  EXPECT_TRUE(
       CompareIsometry3Vectors(plant_configuration.table_poses,
                               expected_plant_configuration.table_poses));
   EXPECT_TRUE(
       CompareIsometry3Vectors(plant_configuration.object_poses,
                               expected_plant_configuration.object_poses));
-  EXPECT_EQ(plant_configuration.robot_models,
-            expected_plant_configuration.robot_models);
   EXPECT_EQ(plant_configuration.table_models,
             expected_plant_configuration.table_models);
   EXPECT_EQ(plant_configuration.object_models,
@@ -183,8 +186,6 @@ void ValidateOptitrackConfiguration(
 void ValidatePlannerConfiguration(
     const PlannerConfiguration& configuration,
     const PlannerConfiguration& expected_configuration) {
-  EXPECT_EQ(configuration.drake_relative_model_path,
-            expected_configuration.drake_relative_model_path);
   EXPECT_EQ(configuration.end_effector_name,
             expected_configuration.end_effector_name);
   EXPECT_EQ(configuration.robot_index, expected_configuration.robot_index);
@@ -194,15 +195,40 @@ void ValidatePlannerConfiguration(
   EXPECT_EQ(configuration.num_tables, expected_configuration.num_tables);
 }
 
+void ValidateRobotConfiguration(
+    const RobotConfiguration& configuration,
+    const RobotConfiguration& expected_configuration) {
+  EXPECT_EQ(configuration.model, expected_configuration.model);
+  EXPECT_TRUE(CompareMatrices(configuration.pose.matrix(),
+                              expected_configuration.pose.matrix()));
+  EXPECT_EQ(configuration.fixture->model,
+            expected_configuration.fixture->model);
+  EXPECT_EQ(configuration.fixture->attachment_frame,
+            expected_configuration.fixture->attachment_frame);
+  EXPECT_EQ(configuration.gripper->model,
+            expected_configuration.gripper->model);
+  EXPECT_EQ(configuration.gripper->attachment_frame,
+            expected_configuration.gripper->attachment_frame);
+}
+
 class ConfigurationParsingTests : public ::testing::Test {
  protected:
   void SetUp() {
     // Set robot parameters
     optitrack_configuration_.robot_base_optitrack_info.emplace_back();
     optitrack_configuration_.robot_base_optitrack_info.back().id = 1;
-    plant_configuration_.robot_poses.push_back(Isometry3<double>::Identity());
-    plant_configuration_.robot_poses.back().translation().z() = 0.7645;
-    plant_configuration_.robot_models.push_back(kIiwaPath);
+
+    robot_configuration_.model = kIiwaPath;
+    robot_configuration_.pose = Isometry3<double>::Identity();
+    robot_configuration_.pose.translation().z() = 0.7645;
+    RobotAttachment fixture;
+    fixture.model = kFixturePath;
+    fixture.attachment_frame = kEndEffectorName;
+    robot_configuration_.fixture = fixture;
+    RobotAttachment gripper;
+    gripper.model = kWsgPath;
+    gripper.attachment_frame = kFixtureName;
+    robot_configuration_.gripper = gripper;
 
     // Set table parameters
     const int num_tables = kTableModelPaths.size();
@@ -239,19 +265,26 @@ class ConfigurationParsingTests : public ::testing::Test {
     plant_configuration_.default_contact_material.set_dissipation(5);
 
     // Set planner parameters
-    planner_configuration_.drake_relative_model_path = kIiwaPath;
     planner_configuration_.end_effector_name = kEndEffectorName;
     planner_configuration_.target_dimensions = kTargetDimensions;
     planner_configuration_.num_tables = 6;
     planner_configuration_.grip_force = 42;
     planner_configuration_.grasp_frame_translational_offset = 0.191;
-    planner_configuration_.grasp_frame_angular_offset = -0.39269908;
   }
 
+  RobotConfiguration robot_configuration_;
   SimulatedPlantConfiguration plant_configuration_;
-  pick_and_place::OptitrackConfiguration optitrack_configuration_;
-  pick_and_place::PlannerConfiguration planner_configuration_;
+  OptitrackConfiguration optitrack_configuration_;
+  PlannerConfiguration planner_configuration_;
 };
+
+TEST_F(ConfigurationParsingTests, ParseRobotConfiguration) {
+  std::vector<RobotConfiguration> parsed_robot_configurations =
+      ParseRobotConfigurationsOrThrow(kConfigurationFile);
+  ASSERT_EQ(parsed_robot_configurations.size(), 1);
+  ValidateRobotConfiguration(parsed_robot_configurations.front(),
+                             robot_configuration_);
+}
 
 TEST_F(ConfigurationParsingTests, ParsePlannerConfigurationTaskIndex) {
   PlannerConfiguration parsed_planner_configuration =

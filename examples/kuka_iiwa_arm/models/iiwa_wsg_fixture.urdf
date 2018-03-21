@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<robot name="iiwa_wsg_fixture">
+  <link name="base"/>
+  <frame name="iiwa_wsg_fixture" link="base"
+	 rpy="0 -0.39269908 0" xyz="0 -0.015 -0.025"/>
+</robot>

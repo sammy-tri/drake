@@ -19,6 +19,11 @@ pick_and_place::PlannerConfiguration ParsePlannerConfigurationOrThrow(
     const std::string& filename, TaskIndex task_index = TaskIndex(0));
 
 /// Read the pick and place configuration from @p filename, returning
+/// the robot configurations.
+std::vector<pick_and_place::RobotConfiguration>
+ParseRobotConfigurationsOrThrow(const std::string& filename);
+
+/// Read the pick and place configuration from @p filename, returning
 /// the planner configuration for all tasks.
 std::vector<pick_and_place::PlannerConfiguration>
 ParsePlannerConfigurationsOrThrow(const std::string& filename);
@@ -28,11 +33,10 @@ ParsePlannerConfigurationsOrThrow(const std::string& filename);
 pick_and_place::SimulatedPlantConfiguration
 ParseSimulatedPlantConfigurationOrThrow(const std::string& filename);
 
-/// Parse the pick and place configuration from @p configuation,
+/// Parse the pick and place configuration from @p configuration,
 /// returning the simulated plant configuration.
 pick_and_place::SimulatedPlantConfiguration
 ParseSimulatedPlantConfigurationStringOrThrow(const std::string& configuration);
-
 
 /// Read the pick and place configuration from @p filename, returning
 /// the optitrack information for the scenario.

@@ -31,13 +31,11 @@ message OptitrackInfo {
     optional Pose X_MF = 2;
 }
 
-// Next ID: 3
-message Model{
-    // Path to the model file for simulation (relative to DRAKE_RESOURCE_ROOT).
+// Next ID: 2
+message Model {
+    // Path to the model file for simulation and planning (relative to
+    // DRAKE_RESOURCE_ROOT).
     required string simulation_model_path = 1;
-    // Path to the model file for planning (relative to DRAKE_RESOURCE_ROOT).
-    // DEFAULT: simulation_model_path
-    optional string planning_model_path = 2;
 }
 
 // Next ID: 4
@@ -50,6 +48,26 @@ message ModelInstance {
     // The [initial] world-pose of the model base.
     // DEFAULT: Identity
     optional Pose pose = 3;
+}
+
+// Next ID: 3
+message RobotAttachment {
+    // The name of the model to attach to the robot body.  This should
+    // correspond to a key in the model field of the
+    // PickAndPlaceConfiguration message.
+    required string model_name = 1;
+    // The frame to attach the model to.
+    required string attachment_frame = 2;
+}
+
+// Next ID: 4
+message RobotInstance {
+    // Information about the model
+    required ModelInstance robot_model = 1;
+    // An attachment placed between the robot and the gripper.
+    optional RobotAttachment fixture = 2;
+    // A gripper attached to the robot.
+    optional RobotAttachment gripper = 3;
 }
 
 // Next ID: 7
@@ -123,7 +141,7 @@ message PickAndPlaceConfiguration {
     // The objects that can be picked and placed
     repeated ModelInstance object = 4;
     // The robots that pick and place
-    repeated ModelInstance robot = 5;
+    repeated RobotInstance robot = 5;
 
     // Parameters for the compliant contact model
     // DEFAULT: as configured

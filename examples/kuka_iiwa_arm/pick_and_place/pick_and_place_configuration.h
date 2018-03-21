@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 
+#include "drake/common/drake_optional.h"
 #include "drake/common/eigen_types.h"
 #include "drake/common/find_resource.h"
 #include "drake/common/type_safe_index.h"
@@ -26,11 +27,22 @@ struct OptitrackInfo {
   Isometry3<double> X_MF{Isometry3<double>::Identity()};
 };
 
+struct RobotAttachment {
+  std::string model;
+  std::string attachment_frame;
+};
+
+/// Information describing an instance of a particular robot
+/// (including gripper configuration).
+struct RobotConfiguration {
+  std::string model;
+  Isometry3<double> pose;
+  optional<RobotAttachment> fixture;
+  optional<RobotAttachment> gripper;
+};
+
 /// Information required to set up a planner for a pick-and-place task.
 struct PlannerConfiguration {
-  /// Path (relative to DRAKE_RESOURCE_ROOT) to the model file describing the
-  /// robot arm.
-  std::string drake_relative_model_path;
   /// Name of the end-effector link on the robot arm.
   std::string end_effector_name;
   /// Type-safe index indicating for which robot arm in the scenario this
@@ -54,24 +66,11 @@ struct PlannerConfiguration {
   /// with an enveloping grasp, it might be in a different location
   /// along the fingers).
   double grasp_frame_translational_offset{0.19};
-  /// The rotation of the gripper (and therfore the grasp frame)
-  /// relative to the end effector link.
-  double grasp_frame_angular_offset{0.};
-
-  /// Returns the absolute path for our @p drake_relative_model_path.
-  std::string absolute_model_path() const {
-    return FindResourceOrThrow(drake_relative_model_path);
-  }
 };
 
 /// Information required to set up a simulation of a pick-and-place scenario
 /// with multiple arms, tables, and manipulable objects.
 struct SimulatedPlantConfiguration {
-  /// Path (relative to DRAKE_RESOURCE_ROOT) to the model file describing each
-  /// robot in the scenario.
-  std::vector<std::string> robot_models;
-  /// World poses of the base links of each robot arm in the scenario.
-  std::vector<Isometry3<double>> robot_poses;
   /// Path (relative to DRAKE_RESOURCE_ROOT) to the model file describing each
   /// table in the scenario.
   std::vector<std::string> table_models;
