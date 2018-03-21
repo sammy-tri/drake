@@ -3,6 +3,7 @@
 #include <map>
 #include <string>
 
+#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_tree.h"
 #include "drake/manipulation/util/frame_pose_tracker.h"
 #include "drake/systems/sensors/optitrack_encoder.h"
 #include "drake/systems/sensors/optitrack_sender.h"
@@ -35,8 +36,9 @@ const double kTableTopZInWorld = 0.736 + 0.057 / 2;
 
 std::unique_ptr<systems::RigidBodyPlant<double>> BuildPickAndPlacePlant(
     const pick_and_place::SimulatedPlantConfiguration& configuration,
+    const std::vector<RobotConfiguration>& robot_configuration,
     std::vector<ModelInstanceInfo<double>>* arm_instances,
-    std::vector<ModelInstanceInfo<double>>* wsg_instances,
+    std::vector<ModelInstanceInfo<double>>* gripper_instances,
     std::vector<ModelInstanceInfo<double>>* object_instances,
     std::vector<ModelInstanceInfo<double>>* table_instances) {
   auto tree_builder = std::make_unique<WorldSimTreeBuilder<double>>();
@@ -47,48 +49,30 @@ std::unique_ptr<systems::RigidBodyPlant<double>> BuildPickAndPlacePlant(
       "table",
       "drake/examples/kuka_iiwa_arm/models/table/"
       "extra_heavy_duty_table_surface_only_collision.sdf");
-  tree_builder->StoreDrakeModel("wsg",
-                                "drake/manipulation/models/wsg_50_description"
-                                "/sdf/schunk_wsg_50_ball_contact.sdf");
-
   tree_builder->AddGround();
 
   // Add the robots and the tables they sit on.
-  const int num_robots(configuration.robot_models.size());
+  const int num_robots(robot_configuration.size());
   DRAKE_THROW_UNLESS(num_robots ==
-                     static_cast<int>(configuration.robot_poses.size()));
+                     static_cast<int>(robot_configuration.size()));
   for (int i = 0; i < num_robots; ++i) {
     const std::string robot_tag{"robot_" + std::to_string(i)};
-    tree_builder->StoreDrakeModel(robot_tag, configuration.robot_models[i]);
-    // Add the arm.
-    const Isometry3<double>& robot_base_pose{configuration.robot_poses[i]};
-    int robot_base_id = tree_builder->AddFixedModelInstance(
-        robot_tag, robot_base_pose.translation(),
-        drake::math::rotmat2rpy(robot_base_pose.linear()));
-    arm_instances->push_back(
-        tree_builder->get_model_info_for_instance(robot_base_id));
-    if (wsg_instances) {
-      // Add the gripper.
-      std::shared_ptr<RigidBodyFrame<double>> frame_ee =
-          tree_builder->tree().findFrame(
-              "iiwa_frame_ee", arm_instances->back().instance_id);
-      auto wsg_frame = std::make_shared<RigidBodyFrame<double>>(*frame_ee);
-      wsg_frame->get_mutable_transform_to_body()->rotate(
-          Eigen::AngleAxisd(-0.39269908, Eigen::Vector3d::UnitY()));
-      wsg_frame->get_mutable_transform_to_body()->translate(
-          0.04 * Eigen::Vector3d::UnitY());
-      int wsg_id = tree_builder->AddModelInstanceToFrame(
-          "wsg", wsg_frame, drake::multibody::joints::kFixed);
-      wsg_instances->push_back(
-          tree_builder->get_model_info_for_instance(wsg_id));
-    }
+    ModelInstanceInfo<double> arm_instance;
+    ModelInstanceInfo<double> gripper_instance;
+    AddRobotToTree(robot_tag, robot_configuration[i], tree_builder.get(),
+                   &arm_instance,
+                   gripper_instances ? &gripper_instance : nullptr);
 
     // Add the table that the arm sits on.
     const Isometry3<double> X_WT{
-        robot_base_pose *
+        arm_instance.world_offset->get_transform_to_body() *
         Isometry3<double>::TranslationType(0.0, 0.0, -kTableTopZInWorld)};
     tree_builder->AddFixedModelInstance("table", X_WT.translation(),
                                         drake::math::rotmat2rpy(X_WT.linear()));
+    arm_instances->push_back(arm_instance);
+    if (gripper_instances) {
+      gripper_instances->push_back(gripper_instance);
+    }
   }
 
   // Add the objects.

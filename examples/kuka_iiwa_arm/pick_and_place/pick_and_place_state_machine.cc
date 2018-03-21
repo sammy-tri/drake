@@ -10,6 +10,7 @@
 #include "drake/common/drake_assert.h"
 #include "drake/common/text_logging.h"
 #include "drake/common/trajectories/piecewise_quaternion.h"
+#include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_tree.h"
 #include "drake/manipulation/util/world_sim_tree_builder.h"
 #include "drake/math/rotation_matrix.h"
 #include "drake/multibody/joints/fixed_joint.h"
@@ -274,17 +275,16 @@ void CloseGripper(const WorldState& env_state,
 }
 
 std::unique_ptr<RigidBodyTree<double>> BuildTree(
-    const pick_and_place::PlannerConfiguration& configuration,
-    bool add_grasp_frame = false, int num_arms = 1) {
+    const PlannerConfiguration& configuration,
+    const RobotConfiguration& robot_configuration,
+    bool add_grasp_frame = false) {
   WorldSimTreeBuilder<double> tree_builder;
-  tree_builder.StoreModel("iiwa", configuration.absolute_model_path());
-  std::vector<int> arm_instance_ids(num_arms, 0);
+
   auto previous_log_level = drake::log()->level();
   drake::log()->set_level(spdlog::level::warn);
-  for (int i = 0; i < num_arms; ++i) {
-    arm_instance_ids[i] =
-        tree_builder.AddFixedModelInstance("iiwa", Vector3<double>::Zero());
-  }
+  manipulation::util::ModelInstanceInfo<double> unused;
+  AddRobotToTree("robot", robot_configuration, &tree_builder,
+                 &unused, nullptr);
 
   std::unique_ptr<RigidBodyTree<double>> robot{tree_builder.Build()};
   if (add_grasp_frame) {
@@ -292,30 +292,53 @@ std::unique_ptr<RigidBodyTree<double>> BuildTree(
     // constraints.
     // TODO(avalenzu): Add a planning model for the gripper that includes the
     // grasp frame as a named frame.
-    auto grasp_frame = std::make_unique<RigidBody<double>>();
-    grasp_frame->set_name(kGraspFrameName);
-    // The gripper (and therfore the grasp frame) is rotated relative to the end
-    // effector link.
-    const double grasp_frame_angular_offset =
-        configuration.grasp_frame_angular_offset;
+    auto grasp_body = std::make_unique<RigidBody<double>>();
+    grasp_body->set_name(kGraspFrameName);
+
+    std::shared_ptr<RigidBodyFrame<double>> frame_ee =
+        robot->findFrame(configuration.end_effector_name);
+    auto grasp_frame = std::make_shared<RigidBodyFrame<double>>(*frame_ee);
+
     // The grasp frame is located between the fingertips of the gripper, which
     // puts it grasp_frame_translational_offset from the origin of the
     // end-effector link.
-    const double grasp_frame_translational_offset =
-        configuration.grasp_frame_translational_offset;
-    // Define the pose of the grasp frame (G) relative to the end effector (E).
-    Isometry3<double> X_EG{Isometry3<double>::Identity()};
-    X_EG.rotate(Eigen::AngleAxisd(grasp_frame_angular_offset,
-                                  Eigen::Vector3d::UnitX()));
-    X_EG.translation().x() = grasp_frame_translational_offset;
+
+    grasp_frame->get_mutable_transform_to_body()->translate(
+        configuration.grasp_frame_translational_offset *
+        Eigen::Vector3d::UnitY());
+
+    Isometry3<double> fixme = Isometry3<double>::Identity();
+    fixme.rotate(
+        Eigen::AngleAxisd(-3.14159265359, Eigen::Vector3d::UnitX()));
+    fixme.rotate(
+        Eigen::AngleAxisd(-1.57079632679, Eigen::Vector3d::UnitZ()));
+    fixme.translate(-0.04 * Eigen::Vector3d::UnitY());
+    *(grasp_frame->get_mutable_transform_to_body()) =
+        fixme * grasp_frame->get_transform_to_body();
+
+    fixme = Isometry3<double>::Identity();
+    fixme.rotate(
+        Eigen::AngleAxisd(1.57079632679, Eigen::Vector3d::UnitY()));
+    *(grasp_frame->get_mutable_transform_to_body()) =
+        fixme * grasp_frame->get_transform_to_body();
+
     // Rigidly affix the grasp frame RigidBody to the end effector RigidBody.
     std::string grasp_frame_joint_name = kGraspFrameName;
     grasp_frame_joint_name += "_joint";
     auto grasp_frame_fixed_joint =
-        std::make_unique<FixedJoint>(grasp_frame_joint_name, X_EG);
-    grasp_frame->add_joint(robot->FindBody(configuration.end_effector_name),
-                           std::move(grasp_frame_fixed_joint));
-    robot->add_rigid_body(std::move(grasp_frame));
+        std::make_unique<FixedJoint>(
+            grasp_frame_joint_name, grasp_frame->get_transform_to_body());
+    drake::log()->warn("Grasp body parent {} {}",
+                       grasp_frame->get_mutable_rigid_body()->get_name(),
+                       grasp_frame->get_mutable_rigid_body()->get_parent()->get_name());
+    auto transform = grasp_frame->get_transform_to_body();
+    drake::log()->warn("Transform: {} {}",
+                       transform.translation().transpose(),
+                       math::rotmat2rpy(transform.rotation()).transpose());
+
+    grasp_body->add_joint(grasp_frame->get_mutable_rigid_body(),
+                          std::move(grasp_frame_fixed_joint));
+    robot->add_rigid_body(std::move(grasp_body));
     robot->compile();
   }
 
@@ -642,7 +665,9 @@ std::ostream& operator<<(std::ostream& os, const PickAndPlaceState value) {
 }
 
 PickAndPlaceStateMachine::PickAndPlaceStateMachine(
-    const pick_and_place::PlannerConfiguration& configuration, bool single_move)
+    const pick_and_place::PlannerConfiguration& configuration,
+    const pick_and_place::RobotConfiguration& robot_configuration,
+    bool single_move)
     : single_move_(single_move),
       state_(PickAndPlaceState::kOpenGripper),
       // Position and rotation tolerances.  These were hand-tuned by
@@ -652,8 +677,10 @@ PickAndPlaceStateMachine::PickAndPlaceStateMachine(
       tight_rot_tol_(0.05),
       loose_pos_tol_(0.1, 0.1, 0.1),
       loose_rot_tol_(30 * M_PI / 180),
-      configuration_(configuration) {
-  std::unique_ptr<RigidBodyTree<double>> robot{BuildTree(configuration_)};
+      configuration_(configuration),
+      robot_configuration_(robot_configuration) {
+  std::unique_ptr<RigidBodyTree<double>> robot{
+    BuildTree(configuration_, robot_configuration)};
   const int num_positions = robot->get_num_positions();
   joint_names_.resize(num_positions);
   for (int i = 0; i < num_positions; ++i) {
@@ -893,7 +920,7 @@ void PickAndPlaceStateMachine::Update(const WorldState& env_state,
       // Compute all the desired configurations.
       expected_object_pose_ = env_state.get_object_pose();
       std::unique_ptr<RigidBodyTree<double>> robot{BuildTree(
-          configuration_, true /*add_grasp_frame*/)};
+          configuration_, robot_configuration_, true /*add_grasp_frame*/)};
 
       VectorX<double> q_initial{env_state.get_iiwa_q()};
       interpolation_result_map_ = ComputeTrajectories(

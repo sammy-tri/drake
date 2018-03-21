@@ -19,6 +19,8 @@ namespace {
 const char* const kIiwaUrdf =
     "drake/manipulation/models/iiwa_description/urdf/"
     "iiwa14_polytope_collision.urdf";
+const char kFixturePath[] =
+    "drake/examples/kuka_iiwa_arm/models/iiwa_wsg_fixture.urdf";
 
 struct TestStep {
   int iiwa_plan_count_expected;
@@ -32,10 +34,18 @@ struct TestStep {
 // does not loop.  The choice of the pick/place location is arbitrary.
 GTEST_TEST(PickAndPlaceStateMachineTest, StateMachineTest) {
   PlannerConfiguration planner_configuration;
-  planner_configuration.drake_relative_model_path = kIiwaUrdf;
-  planner_configuration.end_effector_name = "iiwa_link_ee";
+  planner_configuration.end_effector_name = "iiwa_wsg_fixture";
   planner_configuration.target_dimensions = {0.06, 0.06, 0.06};
   planner_configuration.num_tables = 2;
+  planner_configuration.grasp_frame_translational_offset = 0.05;
+
+  RobotConfiguration robot_configuration;
+  robot_configuration.model = kIiwaUrdf;
+  robot_configuration.pose = Isometry3<double>::Identity();
+  RobotAttachment fixture;
+  fixture.model = kFixturePath;
+  fixture.attachment_frame = "iiwa_frame_ee";
+  robot_configuration.fixture = fixture;
 
   // Arbitrary object (O) initial position.
   Vector3<double> p_WO{0.8, -0.36, 0.27};
@@ -43,7 +53,9 @@ GTEST_TEST(PickAndPlaceStateMachineTest, StateMachineTest) {
   Vector3<double> p_WT{0.8, 0.36, 0.0};
 
   // Test the non-looping configuration.
-  PickAndPlaceStateMachine dut(planner_configuration, true /*single_move*/);
+  PickAndPlaceStateMachine dut(planner_configuration,
+                               robot_configuration,
+                               true /*single_move*/);
 
   // Create world state and initialize with a trivial configuration.
   WorldState world_state(planner_configuration.num_tables,

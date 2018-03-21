@@ -26,8 +26,9 @@ using systems::ConstantVectorSource;
 
 LcmPlant::LcmPlant(
     const SimulatedPlantConfiguration& plant_configuration,
+    const std::vector<RobotConfiguration>& robot_configuration,
     const OptitrackConfiguration& optitrack_configuration) {
-  DRAKE_THROW_UNLESS(plant_configuration.robot_models.size() ==
+  DRAKE_THROW_UNLESS(robot_configuration.size() ==
                      optitrack_configuration.robot_base_optitrack_info.size());
   DRAKE_THROW_UNLESS(plant_configuration.object_models.size() ==
                      optitrack_configuration.object_optitrack_info.size());
@@ -38,7 +39,8 @@ LcmPlant::LcmPlant(
       object_instances, table_instances;
   std::unique_ptr<systems::RigidBodyPlant<double>> model_ptr =
       BuildPickAndPlacePlant(
-          plant_configuration, &iiwa_instances, &wsg_instances,
+          plant_configuration, robot_configuration,
+          &iiwa_instances, &wsg_instances,
           &object_instances, &table_instances);
   model_ptr->set_default_compliant_material(
       plant_configuration.default_contact_material);
@@ -73,7 +75,7 @@ LcmPlant::LcmPlant(
       builder.ExportOutput(iiwa_and_wsg_plant_->get_output_port_plant_state());
 
   std::vector<IiwaCommandReceiver*> iiwa_command_receivers;
-  const int kNumIiwas = plant_configuration.robot_poses.size();
+  const int kNumIiwas = robot_configuration.size();
   for (int i = 0; i < kNumIiwas; ++i) {
     const std::string suffix{"_" + std::to_string(i)};
     auto iiwa_command_receiver =

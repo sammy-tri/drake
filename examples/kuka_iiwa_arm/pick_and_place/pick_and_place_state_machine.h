@@ -57,6 +57,7 @@ class PickAndPlaceStateMachine {
   /// pick and place.
   PickAndPlaceStateMachine(
       const pick_and_place::PlannerConfiguration& configuration,
+      const pick_and_place::RobotConfiguration& robot_configuration,
       bool single_move);
 
   ~PickAndPlaceStateMachine();
@@ -104,6 +105,7 @@ class PickAndPlaceStateMachine {
   double loose_rot_tol_;
 
   pick_and_place::PlannerConfiguration configuration_;
+  pick_and_place::RobotConfiguration robot_configuration_;
 
   // Desired interpolation results for various states
   optional<

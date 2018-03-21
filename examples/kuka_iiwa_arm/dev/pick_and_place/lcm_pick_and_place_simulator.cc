@@ -47,11 +47,13 @@ namespace {
 
 int DoMain(void) {
   // Parse the configuration file.
-  const pick_and_place::SimulatedPlantConfiguration plant_configuration =
-      pick_and_place::ParseSimulatedPlantConfigurationOrThrow(
+  const SimulatedPlantConfiguration plant_configuration =
+      ParseSimulatedPlantConfigurationOrThrow(
           FLAGS_configuration_file);
-  const pick_and_place::OptitrackConfiguration optitrack_configuration =
-      pick_and_place::ParseOptitrackConfigurationOrThrow(
+  const std::vector<RobotConfiguration> robot_configuration =
+      ParseRobotConfigurationsOrThrow(FLAGS_configuration_file);
+  const OptitrackConfiguration optitrack_configuration =
+      ParseOptitrackConfigurationOrThrow(
           FLAGS_configuration_file);
 
   // Instantiate an LCM instance for use with publishers and subscribers.
@@ -61,8 +63,8 @@ int DoMain(void) {
   systems::DiagramBuilder<double> builder;
 
   // Add the plant.
-  auto plant = builder.AddSystem<pick_and_place::LcmPlant>(
-      plant_configuration, optitrack_configuration);
+  auto plant = builder.AddSystem<LcmPlant>(
+      plant_configuration, robot_configuration, optitrack_configuration);
 
   // Add the visualizer.
   auto drake_visualizer =

@@ -24,6 +24,7 @@ using systems::ZeroOrderHold;
 
 MonolithicPickAndPlaceSystem::MonolithicPickAndPlaceSystem(
     const pick_and_place::SimulatedPlantConfiguration& plant_configuration,
+    const std::vector<RobotConfiguration>& robot_configuration,
     const pick_and_place::OptitrackConfiguration& optitrack_configuration,
     const std::vector<pick_and_place::PlannerConfiguration>&
         planner_configurations,
@@ -32,6 +33,7 @@ MonolithicPickAndPlaceSystem::MonolithicPickAndPlaceSystem(
 
   // Add the plant.
   plant_ = builder.AddSystem<pick_and_place::LcmPlant>(plant_configuration,
+                                                       robot_configuration,
                                                        optitrack_configuration);
 
   // Add blocks to publish contact results.

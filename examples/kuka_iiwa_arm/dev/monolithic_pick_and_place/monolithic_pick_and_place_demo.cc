@@ -50,6 +50,8 @@ int DoMain(void) {
   const pick_and_place::SimulatedPlantConfiguration plant_configuration =
       pick_and_place::ParseSimulatedPlantConfigurationOrThrow(
           FLAGS_configuration_file);
+  const std::vector<RobotConfiguration> robot_configuration =
+      ParseRobotConfigurationsOrThrow(FLAGS_configuration_file);
   const pick_and_place::OptitrackConfiguration optitrack_configuration =
       pick_and_place::ParseOptitrackConfigurationOrThrow(
           FLAGS_configuration_file);
@@ -62,7 +64,8 @@ int DoMain(void) {
   systems::DiagramBuilder<double> builder;
 
   auto plant = builder.AddSystem<MonolithicPickAndPlaceSystem>(
-      plant_configuration, optitrack_configuration, planner_configurations,
+      plant_configuration, robot_configuration,
+      optitrack_configuration, planner_configurations,
       FLAGS_single_move);
 
   // Add blocks to publish contact results.

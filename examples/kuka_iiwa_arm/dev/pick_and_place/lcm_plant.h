@@ -51,8 +51,9 @@ The block diagram for a system with a single arm is shown below:
 class LcmPlant : public systems::Diagram<double> {
  public:
   LcmPlant(
-      const pick_and_place::SimulatedPlantConfiguration& plant_configuration,
-      const pick_and_place::OptitrackConfiguration& optitrack_configuration);
+      const SimulatedPlantConfiguration& plant_configuration,
+      const std::vector<RobotConfiguration>& robot_configuration,
+      const OptitrackConfiguration& optitrack_configuration);
 
   const systems::InputPortDescriptor<double>& get_input_port_iiwa_command(
       int index) const {

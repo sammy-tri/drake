@@ -19,7 +19,8 @@ namespace pick_and_place {
 /// be added to the simulation (this could be useful if, for example,
 /// your arm model includes a gripper).
 std::unique_ptr<systems::RigidBodyPlant<double>> BuildPickAndPlacePlant(
-    const pick_and_place::SimulatedPlantConfiguration& configuration,
+    const SimulatedPlantConfiguration& configuration,
+    const std::vector<RobotConfiguration>& robot_configuration,
     std::vector<manipulation::util::ModelInstanceInfo<double>>* arm_instances,
     std::vector<manipulation::util::ModelInstanceInfo<double>>* wsg_instances,
     std::vector<manipulation::util::ModelInstanceInfo<double>>*

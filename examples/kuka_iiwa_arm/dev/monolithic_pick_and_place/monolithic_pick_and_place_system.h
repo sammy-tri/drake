@@ -46,6 +46,7 @@ class MonolithicPickAndPlaceSystem : public systems::Diagram<double> {
  public:
   MonolithicPickAndPlaceSystem(
       const pick_and_place::SimulatedPlantConfiguration& plant_configuration,
+      const std::vector<RobotConfiguration>& robot_configuration,
       const pick_and_place::OptitrackConfiguration& optitrack_configuration,
       const std::vector<pick_and_place::PlannerConfiguration>&
           planner_configurations,

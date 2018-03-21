@@ -60,11 +60,13 @@ drake_cc_library(
     srcs = [
         "action.cc",
         "pick_and_place_state_machine.cc",
+        "pick_and_place_tree.cc",
         "world_state.cc",
     ],
     hdrs = [
         "action.h",
         "pick_and_place_state_machine.h",
+        "pick_and_place_tree.h",
         "world_state.h",
     ],
     deps = [
