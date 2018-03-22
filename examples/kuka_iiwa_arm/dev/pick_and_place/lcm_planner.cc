@@ -43,13 +43,14 @@ class OptitrackTranslatorSystem : public systems::LeafSystem<double> {
 }  // namespace
 
 LcmPlanner::LcmPlanner(
-    const pick_and_place::PlannerConfiguration& planner_configuration,
-    const pick_and_place::OptitrackConfiguration optitrack_configuration,
+    const PlannerConfiguration& planner_configuration,
+    const RobotConfiguration& robot_configuration,
+    const OptitrackConfiguration optitrack_configuration,
     bool single_move) {
   DiagramBuilder<double> builder;
 
   state_machine_ = builder.AddSystem<PickAndPlaceStateMachineSystem>(
-      planner_configuration, single_move);
+      planner_configuration, robot_configuration, single_move);
 
   // Export input ports for WSG status message.
   input_port_wsg_status_ =

@@ -10,7 +10,6 @@
 #include "drake/examples/kuka_iiwa_arm/pick_and_place/pick_and_place_state_machine.h"
 #include "drake/examples/kuka_iiwa_arm/pick_and_place/world_state.h"
 #include "drake/lcmt_iiwa_status.hpp"
-#include "drake/multibody/rigid_body_tree.h"
 #include "drake/systems/framework/leaf_system.h"
 #include "drake/systems/framework/system_symbolic_inspector.h"
 
@@ -35,7 +34,8 @@ class PickAndPlaceStateMachineSystem : public systems::LeafSystem<double> {
    * this system. This should be bigger than that of the PlanSource components.
    */
   PickAndPlaceStateMachineSystem(
-      const pick_and_place::PlannerConfiguration& configuration,
+      const PlannerConfiguration& configuration,
+      const RobotConfiguration& robot_configuration,
       bool single_move);
 
   std::unique_ptr<systems::AbstractValues> AllocateAbstractState()
@@ -112,13 +112,13 @@ class PickAndPlaceStateMachineSystem : public systems::LeafSystem<double> {
   }
 
   /// Return the state of the pick and place state machine.
-  pick_and_place::PickAndPlaceState state(
-      const systems::Context<double>&) const;
+  PickAndPlaceState state(const systems::Context<double>&) const;
+
 
   /// Return the state of the pick and place world.  Note that this
   /// reference is into data contained inside the passed in context.
-  const pick_and_place::WorldState& world_state(
-      const systems::Context<double>&) const;
+  const WorldState& world_state(const systems::Context<double>&) const;
+
 
  private:
   void CalcIiwaPlan(const systems::Context<double>& context,
@@ -139,7 +139,6 @@ class PickAndPlaceStateMachineSystem : public systems::LeafSystem<double> {
 
   struct InternalState;
 
-  RigidBodyTree<double> iiwa_tree_{};
   // Input ports.
   int input_port_iiwa_state_{-1};
   int input_port_iiwa_base_pose_{-1};
@@ -150,7 +149,8 @@ class PickAndPlaceStateMachineSystem : public systems::LeafSystem<double> {
   int output_port_iiwa_plan_{-1};
   int output_port_wsg_command_{-1};
 
-  const pick_and_place::PlannerConfiguration configuration_;
+  const PlannerConfiguration configuration_;
+  const RobotConfiguration robot_configuration_;
 
   bool single_move_;
 };

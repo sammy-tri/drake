@@ -65,7 +65,7 @@ struct PlannerConfiguration {
   /// position between the fingertips of the gripper.  For a gripper
   /// with an enveloping grasp, it might be in a different location
   /// along the fingers).
-  double grasp_frame_translational_offset{0.19};
+  double grasp_frame_translational_offset{0.05};
 };
 
 /// Information required to set up a simulation of a pick-and-place scenario

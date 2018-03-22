@@ -6,8 +6,6 @@
 #include "bot_core/robot_state_t.hpp"
 #include "robotlocomotion/robot_plan_t.hpp"
 
-#include "drake/multibody/parsers/urdf_parser.h"
-
 using bot_core::robot_state_t;
 
 namespace drake {
@@ -33,29 +31,32 @@ lcmt_schunk_wsg_command MakeDefaultWsgCommand() {
 }
 }  // namespace
 
-using pick_and_place::PickAndPlaceStateMachine;
-
 namespace pick_and_place {
 
 struct PickAndPlaceStateMachineSystem::InternalState {
-  InternalState(const pick_and_place::PlannerConfiguration& configuration,
+  InternalState(const PlannerConfiguration& configuration,
+                const RobotConfiguration& robot_configuration,
                 bool single_move)
       : world_state(
             configuration.num_tables,
             configuration.target_dimensions),
-        state_machine(configuration, single_move),
+        state_machine(configuration, robot_configuration, single_move),
         last_iiwa_plan(MakeDefaultIiwaPlan()),
         last_wsg_command(MakeDefaultWsgCommand()) {}
 
-  pick_and_place::WorldState world_state;
+  WorldState world_state;
   PickAndPlaceStateMachine state_machine;
   robotlocomotion::robot_plan_t last_iiwa_plan;
   lcmt_schunk_wsg_command last_wsg_command;
 };
 
 PickAndPlaceStateMachineSystem::PickAndPlaceStateMachineSystem(
-    const pick_and_place::PlannerConfiguration& configuration, bool single_move)
-    : configuration_(configuration), single_move_(single_move) {
+    const PlannerConfiguration& configuration,
+    const RobotConfiguration& robot_configuration,
+    bool single_move)
+    : configuration_(configuration),
+      robot_configuration_(robot_configuration),
+      single_move_(single_move) {
   input_port_iiwa_state_ = this->DeclareAbstractInputPort().get_index();
   input_port_iiwa_base_pose_ = this->DeclareAbstractInputPort().get_index();
   input_port_box_state_ = this->DeclareAbstractInputPort().get_index();
@@ -78,10 +79,6 @@ PickAndPlaceStateMachineSystem::PickAndPlaceStateMachineSystem(
           .get_index();
 
   this->DeclarePeriodicUnrestrictedUpdate(configuration.period_sec, 0);
-
-  parsers::urdf::AddModelInstanceFromUrdfFileToWorld(
-      configuration_.absolute_model_path(),
-      multibody::joints::kFixed, &iiwa_tree_);
 }
 
 std::unique_ptr<systems::AbstractValues>
@@ -89,7 +86,7 @@ PickAndPlaceStateMachineSystem::AllocateAbstractState() const {
   std::vector<std::unique_ptr<systems::AbstractValue>> abstract_vals;
   abstract_vals.push_back(
       std::unique_ptr<systems::AbstractValue>(new systems::Value<InternalState>(
-          InternalState(configuration_, single_move_))));
+          InternalState(configuration_, robot_configuration_, single_move_))));
   return std::make_unique<systems::AbstractValues>(std::move(abstract_vals));
 }
 
@@ -97,7 +94,7 @@ void PickAndPlaceStateMachineSystem::SetDefaultState(
     const systems::Context<double>&, systems::State<double>* state) const {
   InternalState& internal_state =
       state->get_mutable_abstract_state<InternalState>(kStateIndex);
-  internal_state = InternalState(configuration_, single_move_);
+  internal_state = InternalState(configuration_, robot_configuration_, single_move_);
 }
 
 void PickAndPlaceStateMachineSystem::CalcIiwaPlan(
@@ -164,14 +161,14 @@ void PickAndPlaceStateMachineSystem::DoCalcUnrestrictedUpdate(
                                       wsg_callback);
 }
 
-pick_and_place::PickAndPlaceState PickAndPlaceStateMachineSystem::state(
+PickAndPlaceState PickAndPlaceStateMachineSystem::state(
     const systems::Context<double>& context) const {
   const InternalState& internal_state =
       context.get_abstract_state<InternalState>(0);
   return internal_state.state_machine.state();
 }
 
-const pick_and_place::WorldState& PickAndPlaceStateMachineSystem::world_state(
+const WorldState& PickAndPlaceStateMachineSystem::world_state(
     const systems::Context<double>& context) const {
   const InternalState& internal_state =
       context.get_abstract_state<InternalState>(0);

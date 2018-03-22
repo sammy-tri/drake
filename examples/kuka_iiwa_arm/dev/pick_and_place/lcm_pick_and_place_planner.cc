@@ -35,13 +35,13 @@ namespace {
 
 int DoMain(void) {
   // Parse the configuration file.
-  const pick_and_place::PlannerConfiguration planner_configuration =
-      pick_and_place::ParsePlannerConfigurationOrThrow(
-          FLAGS_configuration_file,
-          pick_and_place::TaskIndex(FLAGS_task_index));
-
-  const pick_and_place::OptitrackConfiguration optitrack_configuration =
-      pick_and_place::ParseOptitrackConfigurationOrThrow(
+  const PlannerConfiguration planner_configuration =
+      ParsePlannerConfigurationOrThrow(
+          FLAGS_configuration_file, TaskIndex(FLAGS_task_index));
+  const std::vector<RobotConfiguration> robot_configuration =
+      ParseRobotConfigurationsOrThrow(FLAGS_configuration_file);
+  const OptitrackConfiguration optitrack_configuration =
+      ParseOptitrackConfigurationOrThrow(
           FLAGS_configuration_file);
 
   // Instantiate an LCM instance for use with publishers and subscribers.
@@ -51,8 +51,10 @@ int DoMain(void) {
   systems::DiagramBuilder<double> builder;
 
   // Add the LcmPlanner block, which contains all of the demo logic.
-  auto planner = builder.AddSystem<pick_and_place::LcmPlanner>(
-      planner_configuration, optitrack_configuration, false);
+  auto planner = builder.AddSystem<LcmPlanner>(
+      planner_configuration,
+      robot_configuration[planner_configuration.robot_index],
+      optitrack_configuration, false);
 
   // All LCM traffic for this planner will occur on channels that end with the
   // suffix specified below.

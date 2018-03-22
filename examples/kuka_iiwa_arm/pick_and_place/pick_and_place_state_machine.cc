@@ -557,7 +557,7 @@ ComputeNominalConfigurations(const WorldState& env_state,
       PickAndPlaceState::kApproachPlacePregrasp,
       PickAndPlaceState::kApproachPlace,
       PickAndPlaceState::kLiftFromPlace};
-  int num_knots = states.size() + 1;
+  int num_knots = 3;//states.size() + 1;
 
   VectorX<double> t{VectorX<double>::LinSpaced(num_knots, 0, num_knots - 1)};
   // Set up an inverse kinematics trajectory problem with one knot for each

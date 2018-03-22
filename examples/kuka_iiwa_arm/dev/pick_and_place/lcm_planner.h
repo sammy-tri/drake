@@ -14,8 +14,9 @@ namespace pick_and_place {
 class LcmPlanner : public systems::Diagram<double> {
  public:
   LcmPlanner(
-      const pick_and_place::PlannerConfiguration& configuration,
-      const pick_and_place::OptitrackConfiguration optitrack_configuration,
+      const PlannerConfiguration& configuration,
+      const RobotConfiguration& robot_configuration,
+      const OptitrackConfiguration optitrack_configuration,
       bool single_move);
 
   /**
@@ -56,13 +57,13 @@ class LcmPlanner : public systems::Diagram<double> {
     return this->get_output_port(output_port_wsg_command_);
   }
 
-  pick_and_place::PickAndPlaceState state(
+  PickAndPlaceState state(
       const systems::Context<double>& context) const {
     return state_machine_->state(
         this->GetSubsystemContext(*state_machine_, context));
   }
 
-  const pick_and_place::WorldState& world_state(
+  const WorldState& world_state(
       const systems::Context<double>& context) const {
     return state_machine_->world_state(
         this->GetSubsystemContext(*state_machine_, context));

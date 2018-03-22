@@ -50,18 +50,18 @@ model {
 # This section describes the fixed tables in the scenario. The `pose` field of
 # each entry defines the pose of the model's base link relative to the world
 # frame.
-table {
-  model_name: "yellow_post"
-  optitrack_info {
-    id: 2
-    X_MF {
-      xyz: [0.0, 0.0, 1.02]
-    }
-  }
-  pose {
-    xyz: [0.0, 1.0, 0.0]
-  }
-}
+# table {
+#   model_name: "yellow_post"
+#   optitrack_info {
+#     id: 2
+#     X_MF {
+#       xyz: [0.0, 0.0, 1.02]
+#     }
+#   }
+#   pose {
+#     xyz: [0.0, 1.0, 0.0]
+#   }
+# }
 table {
   model_name: "yellow_post"
   optitrack_info {
@@ -75,53 +75,65 @@ table {
   }
 }
 table {
-  model_name: "extra_heavy_duty_table"
-  optitrack_info {
-    id: 4
-    X_MF {
-      xyz: [0.0, 0.0, 0.7645]
-    }
-  }
-  pose {
-    xyz: [0.86, -0.36, -0.07]
-  }
-}
-table {
   model_name: "yellow_post"
   optitrack_info {
-    id: 5
+    id: 33
     X_MF {
       xyz: [0.0, 0.0, 1.02]
     }
   }
   pose {
-    xyz: [0.30, -0.9, 0.0]
+    xyz: [0.80, 0.36, 0.0]
   }
 }
-table {
-  model_name: "yellow_post"
-  optitrack_info {
-    id: 6
-    X_MF {
-      xyz: [0.0, 0.0, 1.02]
-    }
-  }
-  pose {
-    xyz: [-0.1, -1.0, 0.0]
-  }
-}
-table {
-  model_name: "yellow_post"
-  optitrack_info {
-    id: 7
-    X_MF {
-      xyz: [0.0, 0.0, 1.02]
-    }
-  }
-  pose {
-    xyz: [-0.47, -0.8, 0.0]
-  }
-}
+# table {
+#   model_name: "extra_heavy_duty_table"
+#   optitrack_info {
+#     id: 4
+#     X_MF {
+#       xyz: [0.0, 0.0, 0.7645]
+#     }
+#   }
+#   pose {
+#     xyz: [0.86, -0.36, -0.07]
+#   }
+# }
+# table {
+#   model_name: "yellow_post"
+#   optitrack_info {
+#     id: 5
+#     X_MF {
+#       xyz: [0.0, 0.0, 1.02]
+#     }
+#   }
+#   pose {
+#     xyz: [0.30, -0.9, 0.0]
+#   }
+# }
+# table {
+#   model_name: "yellow_post"
+#   optitrack_info {
+#     id: 6
+#     X_MF {
+#       xyz: [0.0, 0.0, 1.02]
+#     }
+#   }
+#   pose {
+#     xyz: [-0.1, -1.0, 0.0]
+#   }
+# }
+# table {
+#   model_name: "yellow_post"
+#   optitrack_info {
+#     id: 7
+#     X_MF {
+#       xyz: [0.0, 0.0, 1.02]
+#     }
+#   }
+#   pose {
+#     xyz: [-0.47, -0.8, 0.0]
+#   }
+# }
 
 # Robots
 # This section describes the robot arms in the scenario. The `pose` field of
@@ -169,11 +181,8 @@ object {
 # multiple robots in the scenario), and which link of the robot the end
 # effector is attached to.
 task {
-  end_effector_name: "iiwa_link_ee"
-  grip_force: 42
-  grasp_frame_translational_offset: 0.191
-  # -pi / 8
-  grasp_frame_angular_offset: -0.39269908
+  end_effector_name: "iiwa_wsg_fixture"
+  grasp_frame_translational_offset: 0.05
 }
 
 # Contact parameters
