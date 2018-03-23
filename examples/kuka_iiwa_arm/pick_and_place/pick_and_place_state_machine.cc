@@ -302,13 +302,6 @@ std::unique_ptr<RigidBodyTree<double>> BuildTree(
         robot->findFrame(configuration.end_effector_name);
     auto grasp_frame = std::make_shared<RigidBodyFrame<double>>(*frame_ee);
 
-    // The grasp frame is located between the fingertips of the gripper, which
-    // puts it grasp_frame_translational_offset from the origin of the
-    // end-effector link.
-    grasp_frame->get_mutable_transform_to_body()->translate(
-        configuration.grasp_frame_translational_offset *
-        Eigen::Vector3d::UnitY());
-
     // This planning code was originally written using iiwa_link_7 as
     // the origin when creating the grasp frame.  This is a
     // significantly different rotation from iiwa_frame_ee, which we
@@ -328,8 +321,16 @@ std::unique_ptr<RigidBodyTree<double>> BuildTree(
     frame_fixup = Isometry3<double>::Identity();
     frame_fixup.rotate(
         Eigen::AngleAxisd(1.57079632679, Eigen::Vector3d::UnitY()));
-    *(grasp_frame->get_mutable_transform_to_body()) =
-        frame_fixup * grasp_frame->get_transform_to_body();
+    //    *(grasp_frame->get_mutable_transform_to_body()) =
+    //frame_fixup * grasp_frame->get_transform_to_body();
+
+    // The grasp frame is located between the fingertips of the gripper, which
+    // puts it grasp_frame_translational_offset from the origin of the
+    // end-effector link.
+    grasp_frame->get_mutable_transform_to_body()->translate(
+        configuration.grasp_frame_translational_offset *
+        Eigen::Vector3d::UnitX());
+
 
     // Rigidly affix the grasp frame RigidBody to the end effector frame.
     std::string grasp_frame_joint_name = kGraspFrameName;
@@ -557,7 +558,7 @@ ComputeNominalConfigurations(const WorldState& env_state,
       PickAndPlaceState::kApproachPlacePregrasp,
       PickAndPlaceState::kApproachPlace,
       PickAndPlaceState::kLiftFromPlace};
-  int num_knots = 3;//states.size() + 1;
+  int num_knots = states.size() + 1;
 
   VectorX<double> t{VectorX<double>::LinSpaced(num_knots, 0, num_knots - 1)};
   // Set up an inverse kinematics trajectory problem with one knot for each
