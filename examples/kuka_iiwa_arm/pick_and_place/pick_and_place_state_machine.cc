@@ -311,10 +311,10 @@ std::unique_ptr<RigidBodyTree<double>> BuildTree(
     // the planning code expects.
 
     Isometry3<double> frame_fixup = Isometry3<double>::Identity();
+    //frame_fixup.rotate(
+    //Eigen::AngleAxisd(-3.14159265359, Eigen::Vector3d::UnitX()));
     frame_fixup.rotate(
-        Eigen::AngleAxisd(-3.14159265359, Eigen::Vector3d::UnitX()));
-    frame_fixup.rotate(
-        Eigen::AngleAxisd(-1.57079632679, Eigen::Vector3d::UnitZ()));
+        Eigen::AngleAxisd(1.57079632679, Eigen::Vector3d::UnitZ()));
     *(grasp_frame->get_mutable_transform_to_body()) =
         grasp_frame->get_transform_to_body() * frame_fixup;
 
