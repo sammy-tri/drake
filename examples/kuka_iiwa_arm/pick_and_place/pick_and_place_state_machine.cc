@@ -280,13 +280,13 @@ std::unique_ptr<RigidBodyTree<double>> BuildTree(
     bool add_grasp_frame = false) {
   WorldSimTreeBuilder<double> tree_builder;
 
-  RobotConfiguration robot_origin = robot_configuration;
-  robot_origin.pose = Isometry3<double>::Identity();
+  RobotConfiguration robot_config_origin = robot_configuration;
+  robot_config_origin.pose = Isometry3<double>::Identity();
 
   auto previous_log_level = drake::log()->level();
   drake::log()->set_level(spdlog::level::warn);
   manipulation::util::ModelInstanceInfo<double> unused;
-  AddRobotToTree("robot", robot_origin, &tree_builder,
+  AddRobotToTree("robot", robot_config_origin, &tree_builder,
                  &unused, nullptr);
 
   std::unique_ptr<RigidBodyTree<double>> robot{tree_builder.Build()};
@@ -305,27 +305,33 @@ std::unique_ptr<RigidBodyTree<double>> BuildTree(
     // The grasp frame is located between the fingertips of the gripper, which
     // puts it grasp_frame_translational_offset from the origin of the
     // end-effector link.
-
     grasp_frame->get_mutable_transform_to_body()->translate(
         configuration.grasp_frame_translational_offset *
         Eigen::Vector3d::UnitY());
 
-    Isometry3<double> fixme = Isometry3<double>::Identity();
-    fixme.rotate(
-        Eigen::AngleAxisd(-3.14159265359, Eigen::Vector3d::UnitX()));
-    fixme.rotate(
-        Eigen::AngleAxisd(-1.57079632679, Eigen::Vector3d::UnitZ()));
-    //fixme.translate(-0.04 * Eigen::Vector3d::UnitY());
-    *(grasp_frame->get_mutable_transform_to_body()) =
-        fixme * grasp_frame->get_transform_to_body();
+    // This planning code was originally written using iiwa_link_7 as
+    // the origin when creating the grasp frame.  This is a
+    // significantly different rotation from iiwa_frame_ee, which we
+    // use now (note: the fixture urdf can only be welded to an
+    // existing frame in the RigidBodyTree, not a body).  Add some
+    // rotations to the grasp frame to get the axes where the rest of
+    // the planning code expects.
 
-    fixme = Isometry3<double>::Identity();
-    fixme.rotate(
+    Isometry3<double> frame_fixup = Isometry3<double>::Identity();
+    frame_fixup.rotate(
+        Eigen::AngleAxisd(-3.14159265359, Eigen::Vector3d::UnitX()));
+    frame_fixup.rotate(
+        Eigen::AngleAxisd(-1.57079632679, Eigen::Vector3d::UnitZ()));
+    *(grasp_frame->get_mutable_transform_to_body()) =
+        frame_fixup * grasp_frame->get_transform_to_body();
+
+    frame_fixup = Isometry3<double>::Identity();
+    frame_fixup.rotate(
         Eigen::AngleAxisd(1.57079632679, Eigen::Vector3d::UnitY()));
     *(grasp_frame->get_mutable_transform_to_body()) =
-        fixme * grasp_frame->get_transform_to_body();
+        frame_fixup * grasp_frame->get_transform_to_body();
 
-    // Rigidly affix the grasp frame RigidBody to the end effector RigidBody.
+    // Rigidly affix the grasp frame RigidBody to the end effector frame.
     std::string grasp_frame_joint_name = kGraspFrameName;
     grasp_frame_joint_name += "_joint";
     auto grasp_frame_fixed_joint =
@@ -376,6 +382,10 @@ ComputeInitialAndFinalObjectPoses(const WorldState& env_state) {
   const Isometry3<double> X_WS{env_state.get_iiwa_base().inverse()};
   const Isometry3<double> X_WO_initial = X_WS * env_state.get_object_pose();
 
+
+  drake::log()->warn("X_WO_initial: {} {}",
+                     X_WO_initial.translation().transpose(),
+                     math::rotmat2rpy(X_WO_initial.rotation()).transpose());
   // Check that the object is oriented correctly.
   if (X_WO_initial.linear()(2, 2) < std::cos(20 * M_PI / 180)) {
     drake::log()->warn(
@@ -431,6 +441,9 @@ ComputeInitialAndFinalObjectPoses(const WorldState& env_state) {
   X_TO_final.translation() = r_TO_final;
   X_TO_final.linear() = R_TO_final;
   const Isometry3<double> X_WO_final = X_WT * X_TO_final;
+  drake::log()->warn("X_WO_final: {} {}",
+                     X_WO_final.translation().transpose(),
+                     math::rotmat2rpy(X_WO_final.rotation()).transpose());
   return std::make_pair(X_WO_initial, X_WO_final);
 }
 
@@ -505,6 +518,13 @@ optional<std::map<PickAndPlaceState, Isometry3<double>>> ComputeDesiredPoses(
     X_OfO.translation()[2] = sin(approach_angle) * pregrasp_offset;
     X_WG_desired.emplace(PickAndPlaceState::kLiftFromPlace,
                          X_WOf * X_OfO * X_OG);
+
+    for (auto it = X_WG_desired.begin(); it != X_WG_desired.end(); ++it) {
+      drake::log()->warn("X_WG state {} pose {} {}",
+                         it->first,
+                         it->second.translation().transpose(),
+                         math::rotmat2rpy(it->second.rotation()).transpose());
+    }
     return X_WG_desired;
   } else {
     return nullopt;
@@ -561,6 +581,12 @@ ComputeNominalConfigurations(const WorldState& env_state,
           const Vector3<double>& r_WG = X_WG.translation();
           const Quaternion<double>& quat_WG{X_WG.rotation()};
 
+          drake::log()->warn("X_WG2 state {} pose {} {} t {}",
+                             state,
+                             X_WG.translation().transpose(),
+                             math::rotmat2rpy(X_WG.rotation()).transpose(),
+                             t(i));
+
           // Constrain the end-effector position for all knots.
           position_constraints.emplace_back(new WorldPositionConstraint(
               robot, grasp_frame_index, end_effector_points,
@@ -575,11 +601,11 @@ ComputeNominalConfigurations(const WorldState& env_state,
                                                       quat_WG.y(), quat_WG.z()),
                                       orientation_tolerance, knot_tspan));
           constraint_arrays.back().push_back(
-              orientation_constraints.back().get());
+          orientation_constraints.back().get());
 
           // For each pair of adjacent knots, add a constraint on the change in
           // joint positions.
-          if (i > 1) {
+          if (i > 100) {
             const VectorX<int> joint_indices =
                 VectorX<int>::LinSpaced(num_joints, 0, num_joints - 1);
             const Vector2<double> segment_tspan{t(i - 1), t(i)};
@@ -610,13 +636,14 @@ ComputeNominalConfigurations(const WorldState& env_state,
   IKoptions ikoptions(robot);
   ikoptions.setFixInitialState(true);
   bool success = false;
-  VectorX<double> q_initial{env_state.get_iiwa_q()};
   for (const auto& constraint_array : constraint_arrays) {
     MatrixX<double> q_knots_seed{robot->get_num_positions(), num_knots};
     for (int j = 0; j < num_knots; ++j) {
       double s = static_cast<double>(j) / static_cast<double>(num_knots - 1);
       q_knots_seed.col(j) = q_traj_seed.value(s);
     }
+    drake::log()->warn("q knots_seed\n{}", q_knots_seed);
+    drake::log()->warn("constraint array size {}", constraint_array.size());
     ik_res = inverseKinTrajSimple(robot, t, q_knots_seed, q_nom,
                                   constraint_array, ikoptions);
     success = ik_res.info[0] == 1;

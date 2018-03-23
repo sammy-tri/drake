@@ -51,7 +51,7 @@ GTEST_TEST(PickAndPlaceStateMachineTest, StateMachineTest) {
   // Arbitrary object (O) initial position.
   Vector3<double> p_WO{0.8, -0.36, 0.27 + 0.7645};
   // Arbitrary destination table (T) fixed position.
-  Vector3<double> p_WT{0.8, 0.36, 0.27 + 0.7645};
+  Vector3<double> p_WT{0.8, 0.36, 0.24 + 0.7645};
 
   // Test the non-looping configuration.
   PickAndPlaceStateMachine dut(planner_configuration,
