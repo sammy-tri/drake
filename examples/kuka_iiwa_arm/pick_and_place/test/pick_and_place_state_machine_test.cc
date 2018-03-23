@@ -42,15 +42,16 @@ GTEST_TEST(PickAndPlaceStateMachineTest, StateMachineTest) {
   RobotConfiguration robot_configuration;
   robot_configuration.model = kIiwaUrdf;
   robot_configuration.pose = Isometry3<double>::Identity();
+  robot_configuration.pose.translation()(2) = 0.7645;
   RobotAttachment fixture;
   fixture.model = kFixturePath;
   fixture.attachment_frame = "iiwa_frame_ee";
   robot_configuration.fixture = fixture;
 
   // Arbitrary object (O) initial position.
-  Vector3<double> p_WO{0.8, -0.36, 0.27};
+  Vector3<double> p_WO{0.8, -0.36, 0.27 + 0.7645};
   // Arbitrary destination table (T) fixed position.
-  Vector3<double> p_WT{0.8, 0.36, 0.0};
+  Vector3<double> p_WT{0.8, 0.36, 0.27 + 0.7645};
 
   // Test the non-looping configuration.
   PickAndPlaceStateMachine dut(planner_configuration,
@@ -62,6 +63,7 @@ GTEST_TEST(PickAndPlaceStateMachineTest, StateMachineTest) {
                          planner_configuration.target_dimensions);
 
   Isometry3<double> iiwa_base{Isometry3<double>::Identity()};
+  iiwa_base.translation()(2) = 0.7645;
   lcmt_iiwa_status iiwa_msg{};
   iiwa_msg.utime = 1000;
   iiwa_msg.num_joints = kIiwaArmNumJoints;

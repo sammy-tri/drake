@@ -280,10 +280,13 @@ std::unique_ptr<RigidBodyTree<double>> BuildTree(
     bool add_grasp_frame = false) {
   WorldSimTreeBuilder<double> tree_builder;
 
+  RobotConfiguration robot_origin = robot_configuration;
+  robot_origin.pose = Isometry3<double>::Identity();
+
   auto previous_log_level = drake::log()->level();
   drake::log()->set_level(spdlog::level::warn);
   manipulation::util::ModelInstanceInfo<double> unused;
-  AddRobotToTree("robot", robot_configuration, &tree_builder,
+  AddRobotToTree("robot", robot_origin, &tree_builder,
                  &unused, nullptr);
 
   std::unique_ptr<RigidBodyTree<double>> robot{tree_builder.Build()};
@@ -312,7 +315,7 @@ std::unique_ptr<RigidBodyTree<double>> BuildTree(
         Eigen::AngleAxisd(-3.14159265359, Eigen::Vector3d::UnitX()));
     fixme.rotate(
         Eigen::AngleAxisd(-1.57079632679, Eigen::Vector3d::UnitZ()));
-    fixme.translate(-0.04 * Eigen::Vector3d::UnitY());
+    //fixme.translate(-0.04 * Eigen::Vector3d::UnitY());
     *(grasp_frame->get_mutable_transform_to_body()) =
         fixme * grasp_frame->get_transform_to_body();
 
