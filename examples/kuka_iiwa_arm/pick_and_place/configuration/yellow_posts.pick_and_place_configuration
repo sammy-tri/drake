@@ -50,18 +50,18 @@ model {
 # This section describes the fixed tables in the scenario. The `pose` field of
 # each entry defines the pose of the model's base link relative to the world
 # frame.
-# table {
-#   model_name: "yellow_post"
-#   optitrack_info {
-#     id: 2
-#     X_MF {
-#       xyz: [0.0, 0.0, 1.02]
-#     }
-#   }
-#   pose {
-#     xyz: [0.0, 1.0, 0.0]
-#   }
-# }
+table {
+  model_name: "yellow_post"
+  optitrack_info {
+    id: 2
+    X_MF {
+      xyz: [0.0, 0.0, 1.02]
+    }
+  }
+  pose {
+    xyz: [0.0, 1.0, 0.0]
+  }
+}
 table {
   model_name: "yellow_post"
   optitrack_info {
@@ -74,17 +74,6 @@ table {
     xyz: [0.80, 0.36, 0.0]
   }
 }
-table {
-  model_name: "yellow_post"
-  optitrack_info {
-    id: 33
-    X_MF {
-      xyz: [0.0, 0.0, 1.02]
-    }
-  }
-  pose {
-    xyz: [0.80, 0.36, 0.0]
-  }
 }
 # table {
 #   model_name: "extra_heavy_duty_table"
@@ -182,7 +171,7 @@ object {
 # effector is attached to.
 task {
   end_effector_name: "iiwa_wsg_fixture"
-  grasp_frame_translational_offset: 0.05
+  grasp_frame_translational_offset: 0.056
 }
 
 # Contact parameters

@@ -316,13 +316,13 @@ std::unique_ptr<RigidBodyTree<double>> BuildTree(
     frame_fixup.rotate(
         Eigen::AngleAxisd(-1.57079632679, Eigen::Vector3d::UnitZ()));
     *(grasp_frame->get_mutable_transform_to_body()) =
-        frame_fixup * grasp_frame->get_transform_to_body();
+        grasp_frame->get_transform_to_body() * frame_fixup;
 
-    frame_fixup = Isometry3<double>::Identity();
-    frame_fixup.rotate(
-        Eigen::AngleAxisd(1.57079632679, Eigen::Vector3d::UnitY()));
-    //    *(grasp_frame->get_mutable_transform_to_body()) =
-    //frame_fixup * grasp_frame->get_transform_to_body();
+    // frame_fixup = Isometry3<double>::Identity();
+    // frame_fixup.rotate(
+    //     Eigen::AngleAxisd(1.57079632679, Eigen::Vector3d::UnitY()));
+    //     *(grasp_frame->get_mutable_transform_to_body()) =
+    // frame_fixup * grasp_frame->get_transform_to_body();
 
     // The grasp frame is located between the fingertips of the gripper, which
     // puts it grasp_frame_translational_offset from the origin of the
@@ -330,7 +330,6 @@ std::unique_ptr<RigidBodyTree<double>> BuildTree(
     grasp_frame->get_mutable_transform_to_body()->translate(
         configuration.grasp_frame_translational_offset *
         Eigen::Vector3d::UnitX());
-
 
     // Rigidly affix the grasp frame RigidBody to the end effector frame.
     std::string grasp_frame_joint_name = kGraspFrameName;
