@@ -114,11 +114,11 @@ GTEST_TEST(PickAndPlaceStateMachineTest, StateMachineTest) {
     // Steps are long (5 seconds) so actions always complete in a
     // small number of steps.
     iiwa_msg.utime += 5000000;
-    world_state.HandleIiwaStatus(iiwa_msg, iiwa_base);
+    world_state.SetArmStatus(iiwa_msg, arm_base);
 
     wsg_msg.utime = iiwa_msg.utime;
     wsg_msg.actual_position_mm = wsg_command.target_position_mm;
-    world_state.HandleWsgStatus(wsg_msg);
+    world_state.SetGripperStatus(wsg_msg);
 
     dut.Update(world_state, iiwa_callback, wsg_callback);
     step_count++;

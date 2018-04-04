@@ -50,8 +50,6 @@ struct JacoLcmPlanner::InternalState {
         state_machine(configuration, single_move),
         last_plan(MakeDefaultPlan()) {}
 
-  ~InternalState() {}
-
   WorldState world_state;
   PickAndPlaceStateMachine state_machine;
   robotlocomotion::robot_plan_t last_plan;
