@@ -36,6 +36,8 @@ DEFINE_int32(num_joints,
 DEFINE_int32(num_fingers,
              drake::examples::kinova_jaco_arm::kJacoDefaultArmNumFingers,
              "Number of fingers on the arm");
+DEFINE_double(kp, 10., "P term of PID controller for arm joints");
+DEFINE_double(kd, 0., "D term of PID controller for arm joints");
 
 namespace drake {
 namespace examples {
@@ -96,9 +98,9 @@ int DoMain() {
 
   // I (sam.creasey) have no idea what would be good values here.
   // This seems to work OK at the low speeds of the jaco.
-  jaco_kp.head(num_joints).fill(10);
+  jaco_kp.head(num_joints).fill(FLAGS_kp);
   jaco_kp.tail(num_fingers).fill(1);
-  jaco_kd.head(num_joints).fill(1);
+  jaco_kd.head(num_joints).fill(FLAGS_kd);
 
   // The finger velocities reported from the Jaco aren't meaningful,
   // so we shouldn't try to control based on them.
