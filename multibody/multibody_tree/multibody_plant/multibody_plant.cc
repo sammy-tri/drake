@@ -46,9 +46,10 @@ using systems::Context;
 using systems::InputPortDescriptor;
 
 template<typename T>
-MultibodyPlant<T>::MultibodyPlant() :
+MultibodyPlant<T>::MultibodyPlant(double time_step) :
     systems::LeafSystem<T>(systems::SystemTypeTag<
-        drake::multibody::multibody_plant::MultibodyPlant>()) {
+        drake::multibody::multibody_plant::MultibodyPlant>()),
+    time_step_(time_step) {
   model_ = std::make_unique<MultibodyTree<T>>();
 }
 
@@ -212,6 +213,9 @@ template<typename T>
 void MultibodyPlant<T>::DoCalcTimeDerivatives(
     const systems::Context<T>& context,
     systems::ContinuousState<T>* derivatives) const {
+  // No derivatives to compute if state is discrete.
+  if (is_state_discrete()) return;
+
   const auto x =
       dynamic_cast<const systems::BasicVector<T>&>(
           context.get_continuous_state_vector()).get_value();
@@ -284,6 +288,111 @@ void MultibodyPlant<T>::DoCalcTimeDerivatives(
   model_->MapVelocityToQDot(context, v, &qdot);
   xdot << qdot, vdot;
   derivatives->SetFromVector(xdot);
+}
+
+template<typename T>
+void MultibodyPlant<T>::DoCalcDiscreteVariableUpdates(
+    const drake::systems::Context<T>& context,
+    const std::vector<const drake::systems::DiscreteUpdateEvent<T>*>& events,
+    drake::systems::DiscreteValues<T>* updates) const {
+  // If plant state is continuous, no discrete state to update.
+  if (!is_state_discrete()) return;
+
+  const T& dt = time_step_;  // shorter alias.
+
+  const int nq = this->num_positions();
+  const int nv = this->num_velocities();
+
+  // Get the system state (solution at previous time step).
+  auto x0 = context.get_discrete_state(0).get_value();
+  VectorX<T> q0 = x0.topRows(nq);
+  VectorX<T> v0 = x0.bottomRows(nv);
+
+  // Allocate workspace. We might want to cache these to avoid allocations.
+  // Mass matrix.
+  MatrixX<T> M(nv, nv);
+  // Forces.
+  MultibodyForces<T> forces(*model_);
+  // Bodies' accelerations, ordered by BodyNodeIndex.
+  std::vector<SpatialAcceleration<T>> A_WB_array(model_->num_bodies());
+  // Generalized accelerations.
+  VectorX<T> vdot = VectorX<T>::Zero(nv);
+
+  const PositionKinematicsCache<T>& pc = EvalPositionKinematics(context);
+  const VelocityKinematicsCache<T>& vc = EvalVelocityKinematics(context);
+
+  // Compute forces applied through force elements. This effectively resets
+  // the forces to zero and adds in contributions due to force elements.
+  model_->CalcForceElementsContribution(context, pc, vc, &forces);
+
+  // If there is any input actuation, add it to the multibody forces.
+  if (num_actuators() > 0) {
+    Eigen::VectorBlock<const VectorX<T>> u =
+        this->EvalEigenVectorInput(context, actuation_port_);
+    for (JointActuatorIndex actuator_index(0);
+         actuator_index < num_actuators(); ++actuator_index) {
+      const JointActuator<T>& actuator =
+          model().get_joint_actuator(actuator_index);
+      // We only support actuators on single dof joints for now.
+      DRAKE_DEMAND(actuator.joint().num_dofs() == 1);
+      for (int joint_dof = 0;
+           joint_dof < actuator.joint().num_dofs(); ++joint_dof) {
+        actuator.AddInOneForce(context, joint_dof, u[actuator_index], &forces);
+      }
+    }
+  }
+
+  model_->CalcMassMatrixViaInverseDynamics(context, &M);
+
+  ///////////////////////////////////////////////////////
+  // NEWTON-RAPHSON SETUP AND ITERATION SHOULD GO HERE.
+  // The result will be, together with forces, the generalized velocity vn.
+  ///////////////////////////////////////////////////////
+
+  // THIS SHOULD COME FROM MY NEWTON-RAPHSON ITERATION.
+  VectorX<T> vn(this->num_velocities());
+
+  VectorX<T> qdotn(this->num_positions());
+  model_->MapVelocityToQDot(context, vn, &qdotn);
+
+  // qn = q + dt*qdot.
+  VectorX<T> xn(this->num_multibody_states());
+  xn << q0 + dt * qdotn, vn;
+  updates->get_mutable_vector(0).SetFromVector(xn);
+
+#if 0
+  // WARNING: to reduce memory foot-print, we use the input applied arrays also
+  // as output arrays. This means that both the array of applied body forces and
+  // the array of applied generalized forces get overwritten on output. This is
+  // not important in this case since we don't need their values anymore.
+  // Please see the documentation for CalcInverseDynamics() for details.
+
+  // With vdot = 0, this computes:
+  //   tau = C(q, v)v - tau_app - ∑ J_WBᵀ(q) Fapp_Bo_W.
+  std::vector<SpatialForce<T>>& F_BBo_W_array = forces.mutable_body_forces();
+  VectorX<T>& tau_array = forces.mutable_generalized_forces();
+
+  // Compute contact forces on each body by penalty method.
+  if (get_num_collision_geometries() > 0) {
+    CalcAndAddContactForcesByPenaltyMethod(context, pc, vc, &F_BBo_W_array);
+  }
+
+  model_->CalcInverseDynamics(
+      context, pc, vc, vdot,
+      F_BBo_W_array, tau_array,
+      &A_WB_array,
+      &F_BBo_W_array, /* Notice these arrays gets overwritten on output. */
+      &tau_array);
+
+  vdot = M.ldlt().solve(-tau_array);
+
+  auto v = x.bottomRows(nv);
+  VectorX<T> xdot(this->num_multibody_states());
+  VectorX<T> qdot(this->num_positions());
+  model_->MapVelocityToQDot(context, v, &qdot);
+  xdot << qdot, vdot;
+  derivatives->SetFromVector(xdot);
+#endif
 }
 
 template<typename T>
@@ -522,10 +631,15 @@ void MultibodyPlant<T>::DeclareStateAndPorts() {
   // The model must be finalized.
   DRAKE_DEMAND(this->is_finalized());
 
-  this->DeclareContinuousState(
-      BasicVector<T>(model_->num_states()),
-      model_->num_positions(),
-      model_->num_velocities(), 0 /* num_z */);
+  if (is_state_discrete()) {
+    this->DeclarePeriodicDiscreteUpdate(time_step_);
+    this->DeclareDiscreteState(num_multibody_states());
+  } else {
+    this->DeclareContinuousState(
+        BasicVector<T>(model_->num_states()),
+        model_->num_positions(),
+        model_->num_velocities(), 0 /* num_z */);
+  }
 
   if (num_actuators() > 0) {
     actuation_port_ =
