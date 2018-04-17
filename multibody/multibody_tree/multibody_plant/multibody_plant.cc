@@ -316,7 +316,16 @@ VectorX<U> MultibodyPlant<double>::CalcFischerBurmeisterSolverResidual(
 
   VectorX<U> R(num_unknowns);
 
-  R.segment(0, nv) = M0 * (v - v0) / dt + tau0 - N.transpose() * cn;
+  VectorX<U> M0_on_U = M0.template cast<U>();
+  VectorX<U> v0_on_U = v0.template cast<U>();
+  VectorX<U> tau0_on_U = tau0.template cast<U>();
+
+  R.segment(0, nv) = M0_on_U * (v - v0_on_U) / dt + tau0_on_U;
+
+  if (num_contacts >0 ) {
+    VectorX<U> N_on_U = N.template cast<U>();
+    R.segment(0, nv) -= N_on_U.transpose() * cn;
+  }
 
   // Add Fischer-Burmeister terms to residual R here.
 
@@ -356,7 +365,7 @@ MatrixX<double> MultibodyPlant<double>::CalcFischerBurmeisterSolverJacobian(
   VectorX<AutoDiffXd> v_autodiff(nv);
   math::initializeAutoDiff(v, v_autodiff, num_unknowns, 0);
 
-  VectorX<AutoDiffXd> cn_autodiff(nv);
+  VectorX<AutoDiffXd> cn_autodiff(num_contacts);
   math::initializeAutoDiff(cn, cn_autodiff, num_unknowns, nv);
 
   VectorX<AutoDiffXd> R_autodiff(num_unknowns);
@@ -466,30 +475,14 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   //if (get_num_collision_geometries() == 0) return;
   VectorX<double> x_star(this->num_multibody_states());
   x_star << q_star, v_star;
-  std::unique_ptr<systems::LeafContext<double>> context_star = DoMakeLeafContext();
+  //std::unique_ptr<systems::LeafContext<double>> context_star = DoMakeLeafContext();
+  std::unique_ptr<systems::Context<double>> context_star = this->CreateDefaultContext();
+  DRAKE_DEMAND(context_star->get_num_discrete_state_groups() == 1);
   context_star->get_mutable_discrete_state(0).SetFromVector(x_star);
 
   std::vector<PenetrationAsPointPair<double>> contact_penetrations_star =
       ComputePenetrations(*context_star);
   int num_contacts = contact_penetrations_star.size();
-
-  // Vector of unknowns, at k-th iteration.
-  // X = [v; cn]
-  VectorX<double> Xk = VectorX<double>::Zero(this->num_multibody_states() + num_contacts);
-  // Aliases to different portions in Xk
-  auto vk = Xk.segment(0, nv);
-  auto cnk = Xk.segment(nv + 1, num_contacts);
-  (void)cnk;
-  // Reuse context_star for the NR iteration.
-  Context<double>& context_k = *context_star;
-  (void) context_k;
-
-  // Initial guess for NR iteration.
-  Xk.segment(0, nv) = v0;
-
-  const int max_iterations = 20;
-  const double tolerance = 1.0e-6;
-  //const bool update_geometry_every_iteration = false;
 
   // Compute normal velocities Jacobian at tstar.
   MatrixX<double> Nstar;
@@ -507,6 +500,24 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   //const VectorX<double> v0_double = v0.template cast<double>();
   //const MatrixX<double> M0_double = M0.template cast<double>();
   //(void) M0;
+
+  // Vector of unknowns, at k-th iteration.
+  // X = [v; cn]
+  VectorX<double> Xk = VectorX<double>::Zero(nv + num_contacts);
+  // Aliases to different portions in Xk
+  auto vk = Xk.segment(0, nv);
+  auto cnk = Xk.segment(nv + 1, num_contacts);
+  (void)cnk;
+  // Reuse context_star for the NR iteration.
+  //Context<double>& context_k = *context_star;
+  //(void) context_k;
+
+  // Initial guess for NR iteration.
+  Xk.segment(0, nv) = v0;
+
+  const int max_iterations = 20;
+  const double tolerance = 1.0e-6;
+  //const bool update_geometry_every_iteration = false;
 
   VectorX<double> Rk(Xk.size());
   MatrixX<double> Jk(Xk.size(), Xk.size());
@@ -535,6 +546,8 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
 
     PRINT_VAR(iter);
     PRINT_VAR(residual);
+    PRINT_VAR(vk.transpose());
+    PRINT_VAR(Xk.transpose());
 
     if (residual < tolerance) {
       break;
