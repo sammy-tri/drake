@@ -9,6 +9,8 @@
 #include "drake/geometry/frame_kinematics_vector.h"
 #include "drake/geometry/geometry_frame.h"
 #include "drake/geometry/geometry_instance.h"
+#include "drake/math/autodiff.h"
+#include "drake/math/autodiff_gradient.h"
 
 namespace drake {
 namespace multibody {
@@ -291,101 +293,192 @@ void MultibodyPlant<T>::DoCalcTimeDerivatives(
   derivatives->SetFromVector(xdot);
 }
 
+template<>
+template<typename U>
+VectorX<U> MultibodyPlant<double>::CalcFischerBurmeisterSolverResidual(
+    // state at t0
+    const VectorX<double>& v0,
+    const MatrixX<double>& M0,
+    // External forces (consider making them on <T>)
+    const VectorX<double> tau0,
+    // Normal velocity Jacobian (at either tstar or t0)
+    const MatrixX<double> N,
+    // Variables
+    const VectorX<U>& v, const VectorX<U>& cn) const {
+  const double dt = time_step_;  // shorter alias.
+
+  const int nv = v.size();
+  const int num_contacts = cn.size();
+  const int num_unknowns = nv + num_contacts;
+
+  VectorX<U> R(num_unknowns);
+
+  R.segment(0, nv) = M0 * (v - v0) / dt + tau0 + N.transpose() * cn;
+
+  // Add Fischer-Burmeister terms to residual R here.
+
+  return R;
+}
+
 template<typename T>
-void MultibodyPlant<T>::DoCalcDiscreteVariableUpdates(
-    const drake::systems::Context<T>& context,
-    const std::vector<const drake::systems::DiscreteUpdateEvent<T>*>& events,
-    drake::systems::DiscreteValues<T>* updates) const {
+template<typename U>
+VectorX<U> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidual(
+    // state at t0
+    const VectorX<double>& v0,
+    const MatrixX<double>& M0,
+    // External forces (consider making them on <T>)
+    const VectorX<double> tau0,
+    // Normal velocity Jacobian (at either tstar or t0)
+    const MatrixX<double> N,
+    // Variables
+    const VectorX<U>& v, const VectorX<U>& cn) const {
+  DRAKE_ABORT_MSG("T != double not supported");
+}
+
+template<>
+MatrixX<double> MultibodyPlant<double>::CalcFischerBurmeisterSolverJacobian(
+    // state at t0
+    const VectorX<double>& v0,
+    const MatrixX<double>& M0,
+    // External forces (consider making them on <T>)
+    const VectorX<double> tau0,
+    // Normal velocity Jacobian (at either tstar or t0)
+    const MatrixX<double> N,
+    const VectorX<double>& v, const VectorX<double>& cn,
+    VectorX<double>* R, MatrixX<double>* J) const {
+  const int nv = v.size();
+  const int num_contacts = cn.size();
+  const int num_unknowns = nv + num_contacts;
+
+  VectorX<AutoDiffXd> v_autodiff(nv);
+  math::initializeAutoDiff(v, v_autodiff, num_unknowns, 0);
+
+  VectorX<AutoDiffXd> cn_autodiff(nv);
+  math::initializeAutoDiff(cn, cn_autodiff, num_unknowns, nv);
+
+  VectorX<AutoDiffXd> R_autodiff(num_unknowns);
+
+  R_autodiff = CalcFischerBurmeisterSolverResidual(
+      v0, M0, tau0, N, v_autodiff, cn_autodiff);
+
+  *R = math::autoDiffToValueMatrix(R_autodiff);
+  *J = math::autoDiffToGradientMatrix(R_autodiff);
+
+  DRAKE_DEMAND(J->rows() == num_unknowns);
+  DRAKE_DEMAND(J->cols() == num_unknowns);
+
+  return *J;
+}
+
+template<typename T>
+MatrixX<double> MultibodyPlant<T>::CalcFischerBurmeisterSolverJacobian(
+    // state at t0
+    const VectorX<double>& v0,
+    const MatrixX<double>& M0,
+    // External forces (consider making them on <T>)
+    const VectorX<double> tau0,
+    // Normal velocity Jacobian (at either tstar or t0)
+    const MatrixX<double> N,
+    const VectorX<double>& v, const VectorX<double>& cn,
+    VectorX<double>* R, MatrixX<double>* J) const {
+  DRAKE_ABORT_MSG("T != double not supported.");
+}
+
+template<>
+void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
+    const drake::systems::Context<double>& context0,
+    const std::vector<const drake::systems::DiscreteUpdateEvent<double>*>& events,
+    drake::systems::DiscreteValues<double>* updates) const {
   // If plant state is continuous, no discrete state to update.
   if (!is_state_discrete()) return;
 
-  const T& dt = time_step_;  // shorter alias.
+  const double& dt = time_step_;  // shorter alias.
 
   const int nq = this->num_positions();
   const int nv = this->num_velocities();
 
   // Get the system state (solution at previous time step).
-  auto x0 = context.get_discrete_state(0).get_value();
-  VectorX<T> q0 = x0.topRows(nq);
-  VectorX<T> v0 = x0.bottomRows(nv);
+  auto x0 = context0.get_discrete_state(0).get_value();
+  VectorX<double> q0 = x0.topRows(nq);
+  VectorX<double> v0 = x0.bottomRows(nv);
 
   // Allocate workspace. We might want to cache these to avoid allocations.
   // Mass matrix.
-  MatrixX<T> M(nv, nv);
+  MatrixX<double> M0(nv, nv);
   // Forces.
-  MultibodyForces<T> forces(*model_);
+  MultibodyForces<double> forces(*model_);
   // Bodies' accelerations, ordered by BodyNodeIndex.
-  std::vector<SpatialAcceleration<T>> A_WB_array(model_->num_bodies());
+  std::vector<SpatialAcceleration<double>> A_WB_array(model_->num_bodies());
   // Generalized accelerations.
-  VectorX<T> vdot = VectorX<T>::Zero(nv);
+  VectorX<double> vdot = VectorX<double>::Zero(nv);
 
-  const PositionKinematicsCache<T>& pc = EvalPositionKinematics(context);
-  const VelocityKinematicsCache<T>& vc = EvalVelocityKinematics(context);
+  const PositionKinematicsCache<double>& pc = EvalPositionKinematics(context0);
+  const VelocityKinematicsCache<double>& vc = EvalVelocityKinematics(context0);
 
   // Compute forces applied through force elements. This effectively resets
   // the forces to zero and adds in contributions due to force elements.
-  model_->CalcForceElementsContribution(context, pc, vc, &forces);
+  model_->CalcForceElementsContribution(context0, pc, vc, &forces);
 
   // If there is any input actuation, add it to the multibody forces.
   if (num_actuators() > 0) {
-    Eigen::VectorBlock<const VectorX<T>> u =
-        this->EvalEigenVectorInput(context, actuation_port_);
+    Eigen::VectorBlock<const VectorX<double>> u =
+        this->EvalEigenVectorInput(context0, actuation_port_);
     for (JointActuatorIndex actuator_index(0);
          actuator_index < num_actuators(); ++actuator_index) {
-      const JointActuator<T>& actuator =
+      const JointActuator<double>& actuator =
           model().get_joint_actuator(actuator_index);
       // We only support actuators on single dof joints for now.
       DRAKE_DEMAND(actuator.joint().num_dofs() == 1);
       for (int joint_dof = 0;
            joint_dof < actuator.joint().num_dofs(); ++joint_dof) {
-        actuator.AddInOneForce(context, joint_dof, u[actuator_index], &forces);
+        actuator.AddInOneForce(context0, joint_dof, u[actuator_index], &forces);
       }
     }
   }
 
-  model_->CalcMassMatrixViaInverseDynamics(context, &M);
+  model_->CalcMassMatrixViaInverseDynamics(context0, &M0);
 
   // Velocity at next time step.
-  VectorX<T> vn(this->num_velocities());
+  VectorX<double> vn(this->num_velocities());
 
   // With vdot = 0, this computes:
   //   tau = C(q, v)v - tau_app - ∑ J_WBᵀ(q) Fapp_Bo_W.
-  std::vector<SpatialForce<T>>& F_BBo_W_array = forces.mutable_body_forces();
-  VectorX<T>& tau_array = forces.mutable_generalized_forces();
+  std::vector<SpatialForce<double>>& F_BBo_W_array = forces.mutable_body_forces();
+  VectorX<double>& tau0 = forces.mutable_generalized_forces();
   model_->CalcInverseDynamics(
-      context, pc, vc, vdot,
-      F_BBo_W_array, tau_array,
+      context0, pc, vc, vdot,
+      F_BBo_W_array, tau0,
       &A_WB_array,
       &F_BBo_W_array, /* Notice these arrays gets overwritten on output. */
-      &tau_array);
+      &tau0);
 
   // Compute discrete update without contact forces.
-  VectorX<T> v_star = vn = v0 + dt * M.ldlt().solve(-tau_array);
-  VectorX<T> qdot_star(this->num_positions());
-  model_->MapVelocityToQDot(context, vn, &qdot_star);
-  VectorX<T> q_star = q0 + dt * qdot_star;
+  VectorX<double> v_star = vn = v0 + dt * M0.ldlt().solve(-tau0);
+  VectorX<double> qdot_star(this->num_positions());
+  model_->MapVelocityToQDot(context0, vn, &qdot_star);
+  VectorX<double> q_star = q0 + dt * qdot_star;
 
   // At state star, compute (candidate) contact points.
 
   //if (get_num_collision_geometries() == 0) return;
-  VectorX<T> x_star(this->num_multibody_states());
+  VectorX<double> x_star(this->num_multibody_states());
   x_star << q_star, v_star;
-  std::unique_ptr<systems::LeafContext<T>> context_star = DoMakeLeafContext();
+  std::unique_ptr<systems::LeafContext<double>> context_star = DoMakeLeafContext();
   context_star->get_mutable_discrete_state(0).SetFromVector(x_star);
 
-  std::vector<PenetrationAsPointPair<T>> contact_penetrations_star =
+  std::vector<PenetrationAsPointPair<double>> contact_penetrations_star =
       ComputePenetrations(*context_star);
   int num_contacts = contact_penetrations_star.size();
 
   // Vector of unknowns, at k-th iteration.
   // X = [v; cn]
-  VectorX<T> Xk = VectorX<T>::Zero(this->num_multibody_states() + num_contacts);
+  VectorX<double> Xk = VectorX<double>::Zero(this->num_multibody_states() + num_contacts);
   // Aliases to different portions in Xk
   auto vk = Xk.segment(0, nv);
   auto cnk = Xk.segment(nv + 1, num_contacts);
   (void)cnk;
   // Reuse context_star for the NR iteration.
-  Context<T>& context_k = *context_star;
+  Context<double>& context_k = *context_star;
   (void) context_k;
 
   // Initial guess for NR iteration.
@@ -395,7 +488,7 @@ void MultibodyPlant<T>::DoCalcDiscreteVariableUpdates(
   //const bool update_geometry_every_iteration = false;
 
   // Compute normal velocities Jacobian at tstar.
-  MatrixX<T> Nstar;
+  MatrixX<double> Nstar;
   if (num_contacts > 0) {
     // NOTE: The approximation here is to use the state at t0 and the contact
     // penetraions at tstar. Ideally both would be at tc, but then there would
@@ -403,66 +496,53 @@ void MultibodyPlant<T>::DoCalcDiscreteVariableUpdates(
     // TODO(amcastro-tri): consider doing something better here. Would it be
     // possible to compute a cheap approximation to tc?
     Nstar = ComputeNormalVelocityJacobianMatrix(
-        context, contact_penetrations_star);
+        context0, contact_penetrations_star);
   }
 
-  VectorX<T> R(Xk.size());
+  // Compute constant terms
+  //const VectorX<double> v0_double = v0.template cast<double>();
+  //const MatrixX<double> M0_double = M0.template cast<double>();
+  //(void) M0;
+
+  VectorX<double> R(Xk.size());
+  MatrixX<double> J(Xk.size(), Xk.size());
   for (int iter = 0; iter < max_iterations; ++iter) {
     // Compute NR residual.
     // TODO(amcastro-tri): consider updating Nk = Nstar. This will however be
     // a more expensive operation.
-    R.segment(0, nv) = M * (vk - v0) / dt + tau_array + Nstar.transpose() * cnk;
+
+    //R = CalcFischerBurmeisterSolverResidual(
+      //  v0, M0, tau0, Nstar, VectorX<double>(vk), VectorX<double>(cnk));
+
+    // Compute Jacobian.
+    J = CalcFischerBurmeisterSolverJacobian(
+        v0, M0, tau0, Nstar, vk, cnk, &R, &J);
+
 
   }
 
-  vn = v0 + dt * M.ldlt().solve(-tau_array);
+  vn = v0 + dt * M0.ldlt().solve(-tau0);
 
   ///////////////////////////////////////////////////////
   // NEWTON-RAPHSON SETUP AND ITERATION SHOULD GO HERE.
   // The result will be, together with forces, the generalized velocity vn.
   ///////////////////////////////////////////////////////
 
-  VectorX<T> qdotn(this->num_positions());
-  model_->MapVelocityToQDot(context, vn, &qdotn);
+  VectorX<double> qdotn(this->num_positions());
+  model_->MapVelocityToQDot(context0, vn, &qdotn);
 
   // qn = q + dt*qdot.
-  VectorX<T> xn(this->num_multibody_states());
+  VectorX<double> xn(this->num_multibody_states());
   xn << q0 + dt * qdotn, vn;
   updates->get_mutable_vector(0).SetFromVector(xn);
+}
 
-#if 0
-  // WARNING: to reduce memory foot-print, we use the input applied arrays also
-  // as output arrays. This means that both the array of applied body forces and
-  // the array of applied generalized forces get overwritten on output. This is
-  // not important in this case since we don't need their values anymore.
-  // Please see the documentation for CalcInverseDynamics() for details.
-
-  // With vdot = 0, this computes:
-  //   tau = C(q, v)v - tau_app - ∑ J_WBᵀ(q) Fapp_Bo_W.
-  std::vector<SpatialForce<T>>& F_BBo_W_array = forces.mutable_body_forces();
-  VectorX<T>& tau_array = forces.mutable_generalized_forces();
-
-  // Compute contact forces on each body by penalty method.
-  if (get_num_collision_geometries() > 0) {
-    CalcAndAddContactForcesByPenaltyMethod(context, pc, vc, &F_BBo_W_array);
-  }
-
-  model_->CalcInverseDynamics(
-      context, pc, vc, vdot,
-      F_BBo_W_array, tau_array,
-      &A_WB_array,
-      &F_BBo_W_array, /* Notice these arrays gets overwritten on output. */
-      &tau_array);
-
-  vdot = M.ldlt().solve(-tau_array);
-
-  auto v = x.bottomRows(nv);
-  VectorX<T> xdot(this->num_multibody_states());
-  VectorX<T> qdot(this->num_positions());
-  model_->MapVelocityToQDot(context, v, &qdot);
-  xdot << qdot, vdot;
-  derivatives->SetFromVector(xdot);
-#endif
+template<typename T>
+void MultibodyPlant<T>::DoCalcDiscreteVariableUpdates(
+    const drake::systems::Context<T>& context,
+    const std::vector<const drake::systems::DiscreteUpdateEvent<T>*>& events,
+    drake::systems::DiscreteValues<T>* updates) const {
+  DRAKE_ABORT_MSG("T != double not supported.");
 }
 
 template <typename T>

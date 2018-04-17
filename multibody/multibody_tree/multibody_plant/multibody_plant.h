@@ -864,7 +864,7 @@ class MultibodyPlant : public systems::LeafSystem<T> {
       systems::ContinuousState<T>* derivatives) const override;
 
   void DoCalcDiscreteVariableUpdates(
-      const drake::systems::Context<T>& context,
+      const drake::systems::Context<T>& context0,
       const std::vector<const drake::systems::DiscreteUpdateEvent<T>*>& events,
       drake::systems::DiscreteValues<T>* updates) const override;
 
@@ -962,6 +962,29 @@ class MultibodyPlant : public systems::LeafSystem<T> {
   MatrixX<T> ComputeNormalVelocityJacobianMatrix(
       const systems::Context<T>& context,
       std::vector<geometry::PenetrationAsPointPair<T>>& penetrations) const;
+
+  template<typename U>
+  VectorX<U> CalcFischerBurmeisterSolverResidual(
+      // state at t0
+      const VectorX<double>& v0,
+      const MatrixX<double>& M0,
+      // External forces (consider making them on <T>)
+      const VectorX<double> tau0,
+      // Normal velocity Jacobian
+      const MatrixX<double> N,
+      // Variables
+      const VectorX<U>& v, const VectorX<U>& cn) const;
+
+  MatrixX<double> CalcFischerBurmeisterSolverJacobian(
+      // state at t0
+      const VectorX<double>& v0,
+      const MatrixX<double>& M0,
+      // External forces (consider making them on <T>)
+      const VectorX<double> tau0,
+      // Normal velocity Jacobian
+      const MatrixX<double> N,
+      const VectorX<double>& v, const VectorX<double>& cn,
+      VectorX<double>* R, MatrixX<double>* J) const;
 
   // The entire multibody model.
   std::unique_ptr<drake::multibody::MultibodyTree<T>> model_;
