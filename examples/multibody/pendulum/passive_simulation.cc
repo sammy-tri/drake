@@ -19,6 +19,9 @@
 #include "drake/systems/primitives/constant_vector_source.h"
 #include "drake/systems/rendering/pose_bundle_to_draw_message.h"
 
+#include <iostream>
+#define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
+
 namespace drake {
 
 using geometry::GeometrySystem;
@@ -48,6 +51,10 @@ DEFINE_string(integration_scheme, "runge_kutta3",
               "Integration scheme to be used. Available options are:"
               "'runge_kutta3','implicit_euler','semi_explicit_euler'");
 
+DEFINE_bool(is_time_stepping, false,
+            "True: runs a time stepping solver. "
+            "False: Runs a continuous simulation.");
+
 int do_main() {
   systems::DiagramBuilder<double> builder;
 
@@ -76,7 +83,11 @@ int do_main() {
   const double target_accuracy = 0.001;
 
   MultibodyPlant<double>& pendulum =
+      FLAGS_is_time_stepping ?
+      *builder.AddSystem(MakePendulumPlant(
+          parameters, max_time_step, &geometry_system)) :
       *builder.AddSystem(MakePendulumPlant(parameters, &geometry_system));
+
   const RevoluteJoint<double>& pin =
       pendulum.GetJointByName<RevoluteJoint>(parameters.pin_joint_name());
 
@@ -158,7 +169,12 @@ int do_main() {
   }
 
   // Checks for variable time step integrators.
-  if (!integrator->get_fixed_step_mode()) {
+  // Query not valid for time-stepping mode.
+  if (!integrator->get_fixed_step_mode() && !FLAGS_is_time_stepping) {
+
+    PRINT_VAR(integrator->get_largest_step_size_taken());
+    PRINT_VAR(max_time_step);
+
     DRAKE_DEMAND(integrator->get_largest_step_size_taken() <= max_time_step);
     DRAKE_DEMAND(integrator->get_smallest_adapted_step_size_taken() <=
         integrator->get_largest_step_size_taken());

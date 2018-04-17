@@ -98,6 +98,12 @@ MakePendulumPlant(
     const PendulumParameters& default_parameters,
     geometry::GeometrySystem<double>* geometry_system = nullptr);
 
+std::unique_ptr<drake::multibody::multibody_plant::MultibodyPlant<double>>
+MakePendulumPlant(
+    const PendulumParameters& default_parameters,
+    double dt,
+    geometry::GeometrySystem<double>* geometry_system = nullptr);
+
 }  // namespace pendulum
 }  // namespace benchmarks
 }  // namespace multibody

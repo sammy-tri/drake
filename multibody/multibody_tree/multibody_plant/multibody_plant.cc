@@ -206,7 +206,8 @@ template<typename T>
 std::unique_ptr<systems::LeafContext<T>>
 MultibodyPlant<T>::DoMakeLeafContext() const {
   DRAKE_THROW_UNLESS(is_finalized());
-  return std::make_unique<MultibodyTreeContext<T>>(model_->get_topology());
+  return std::make_unique<MultibodyTreeContext<T>>(
+      model_->get_topology(), is_state_discrete());
 }
 
 template<typename T>
@@ -344,13 +345,26 @@ void MultibodyPlant<T>::DoCalcDiscreteVariableUpdates(
 
   model_->CalcMassMatrixViaInverseDynamics(context, &M);
 
+  // Velocity at next time step.
+  VectorX<T> vn(this->num_velocities());
+
+  // With vdot = 0, this computes:
+  //   tau = C(q, v)v - tau_app - ∑ J_WBᵀ(q) Fapp_Bo_W.
+  std::vector<SpatialForce<T>>& F_BBo_W_array = forces.mutable_body_forces();
+  VectorX<T>& tau_array = forces.mutable_generalized_forces();
+  model_->CalcInverseDynamics(
+      context, pc, vc, vdot,
+      F_BBo_W_array, tau_array,
+      &A_WB_array,
+      &F_BBo_W_array, /* Notice these arrays gets overwritten on output. */
+      &tau_array);
+
+  vn = v0 + dt * M.ldlt().solve(-tau_array);
+
   ///////////////////////////////////////////////////////
   // NEWTON-RAPHSON SETUP AND ITERATION SHOULD GO HERE.
   // The result will be, together with forces, the generalized velocity vn.
   ///////////////////////////////////////////////////////
-
-  // THIS SHOULD COME FROM MY NEWTON-RAPHSON ITERATION.
-  VectorX<T> vn(this->num_velocities());
 
   VectorX<T> qdotn(this->num_positions());
   model_->MapVelocityToQDot(context, vn, &qdotn);

@@ -28,7 +28,15 @@ std::unique_ptr<drake::multibody::multibody_plant::MultibodyPlant<double>>
 MakePendulumPlant(
     const PendulumParameters& params,
     geometry::GeometrySystem<double>* geometry_system) {
-  auto plant = std::make_unique<MultibodyPlant<double>>();
+  return MakePendulumPlant(params, 0, geometry_system);
+}
+
+std::unique_ptr<drake::multibody::multibody_plant::MultibodyPlant<double>>
+MakePendulumPlant(
+    const PendulumParameters& params,
+    double dt,
+    geometry::GeometrySystem<double>* geometry_system) {
+  auto plant = std::make_unique<MultibodyPlant<double>>(dt);
 
   // Position of the com of the pendulum's body (in this case a point mass) in
   // the body's frame. The body's frame's origin Bo is defined to be at the
