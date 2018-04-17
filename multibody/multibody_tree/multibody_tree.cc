@@ -718,12 +718,9 @@ void MultibodyTree<T>::CalcAcrossNodeGeometricJacobianExpressedInWorld(
 template <typename T>
 void MultibodyTree<T>::CalcPointsGeometricJacobianExpressedInWorld(
     const systems::Context<T>& context,
-    const Frame<T>& frame_B, const Eigen::Ref<const MatrixX<T>>& p_BQi_set,
-    EigenPtr<MatrixX<T>> p_WQi_set, EigenPtr<MatrixX<T>> Jv_WQi) const {
-  DRAKE_THROW_UNLESS(p_BQi_set.rows() == 3);
-  const int num_points = p_BQi_set.cols();
-  DRAKE_THROW_UNLESS(p_WQi_set != nullptr);
-  DRAKE_THROW_UNLESS(p_WQi_set->cols() == num_points);
+    const Frame<T>& frame_B, const Eigen::Ref<const MatrixX<T>>& p_WQi_set,
+    EigenPtr<MatrixX<T>> Jv_WQi) const {
+  const int num_points = p_WQi_set.cols();
   DRAKE_THROW_UNLESS(Jv_WQi != nullptr);
   DRAKE_THROW_UNLESS(Jv_WQi->rows() == 3 * num_points);
   DRAKE_THROW_UNLESS(Jv_WQi->cols() == num_velocities());
@@ -740,10 +737,6 @@ void MultibodyTree<T>::CalcPointsGeometricJacobianExpressedInWorld(
   // TODO(amcastro-tri): Eval H_PB_W from the cache.
   std::vector<Vector6<T>> H_PB_W_cache(num_velocities());
   CalcAcrossNodeGeometricJacobianExpressedInWorld(context, pc, &H_PB_W_cache);
-
-  CalcPointsPositions(context,
-                      frame_B, p_BQi_set,            /* From frame B */
-                      world_frame(), p_WQi_set); /* To world frame W */
 
   // Performs a scan of all bodies in the kinematic path from body_B to the
   // world computing each node's contribution to Jv_WQi.
@@ -765,7 +758,7 @@ void MultibodyTree<T>::CalcPointsGeometricJacobianExpressedInWorld(
     const Vector3<T>& p_WBi = pc.get_X_WB(node.index()).translation();
 
     for (int ipoint = 0; ipoint < num_points; ++ipoint) {
-      const auto p_WQi = p_WQi_set->col(ipoint);
+      const auto p_WQi = p_WQi_set.col(ipoint);
       // Position of point Qi measured from Bi, expressed in the world W.
       const Vector3<T> p_BiQi_W = p_WQi - p_WBi;
 
@@ -782,6 +775,25 @@ void MultibodyTree<T>::CalcPointsGeometricJacobianExpressedInWorld(
       Hv_PBqi_W = Hv_PB_W + Hw_PB_W.colwise().cross(p_BiQi_W);
     }  // ipoint.
   }  // body_node_index
+}
+
+template <typename T>
+void MultibodyTree<T>::CalcPointsGeometricJacobianExpressedInWorld(
+    const systems::Context<T>& context,
+    const Frame<T>& frame_B, const Eigen::Ref<const MatrixX<T>>& p_BQi_set,
+    EigenPtr<MatrixX<T>> p_WQi_set, EigenPtr<MatrixX<T>> Jv_WQi) const {
+  DRAKE_THROW_UNLESS(p_BQi_set.rows() == 3);
+  const int num_points = p_BQi_set.cols();
+  DRAKE_THROW_UNLESS(p_WQi_set != nullptr);
+  DRAKE_THROW_UNLESS(p_WQi_set->cols() == num_points);
+  DRAKE_THROW_UNLESS(Jv_WQi != nullptr);
+  DRAKE_THROW_UNLESS(Jv_WQi->rows() == 3 * num_points);
+  DRAKE_THROW_UNLESS(Jv_WQi->cols() == num_velocities());
+  CalcPointsPositions(context,
+                      frame_B, p_BQi_set,        /* From frame B */
+                      world_frame(), p_WQi_set); /* To world frame W */
+  CalcPointsGeometricJacobianExpressedInWorld(
+      context, frame_B, *p_WQi_set, Jv_WQi);
 }
 
 template <typename T>

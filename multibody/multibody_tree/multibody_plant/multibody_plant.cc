@@ -359,6 +359,62 @@ void MultibodyPlant<T>::DoCalcDiscreteVariableUpdates(
       &F_BBo_W_array, /* Notice these arrays gets overwritten on output. */
       &tau_array);
 
+  // Compute discrete update without contact forces.
+  VectorX<T> v_star = vn = v0 + dt * M.ldlt().solve(-tau_array);
+  VectorX<T> qdot_star(this->num_positions());
+  model_->MapVelocityToQDot(context, vn, &qdot_star);
+  VectorX<T> q_star = q0 + dt * qdot_star;
+
+  // At state star, compute (candidate) contact points.
+
+  //if (get_num_collision_geometries() == 0) return;
+  VectorX<T> x_star(this->num_multibody_states());
+  x_star << q_star, v_star;
+  std::unique_ptr<systems::LeafContext<T>> context_star = DoMakeLeafContext();
+  context_star->get_mutable_discrete_state(0).SetFromVector(x_star);
+
+  std::vector<PenetrationAsPointPair<T>> contact_penetrations_star =
+      ComputePenetrations(*context_star);
+  int num_contacts = contact_penetrations_star.size();
+
+  // Vector of unknowns, at k-th iteration.
+  // X = [v; cn]
+  VectorX<T> Xk = VectorX<T>::Zero(this->num_multibody_states() + num_contacts);
+  // Aliases to different portions in Xk
+  auto vk = Xk.segment(0, nv);
+  auto cnk = Xk.segment(nv + 1, num_contacts);
+  (void)cnk;
+  // Reuse context_star for the NR iteration.
+  Context<T>& context_k = *context_star;
+  (void) context_k;
+
+  // Initial guess for NR iteration.
+  Xk.segment(0, nv) = v0;
+
+  const int max_iterations = 20;
+  //const bool update_geometry_every_iteration = false;
+
+  // Compute normal velocities Jacobian at tstar.
+  MatrixX<T> Nstar;
+  if (num_contacts > 0) {
+    // NOTE: The approximation here is to use the state at t0 and the contact
+    // penetraions at tstar. Ideally both would be at tc, but then there would
+    // be a different tc per contact pair.
+    // TODO(amcastro-tri): consider doing something better here. Would it be
+    // possible to compute a cheap approximation to tc?
+    Nstar = ComputeNormalVelocityJacobianMatrix(
+        context, contact_penetrations_star);
+  }
+
+  VectorX<T> R(Xk.size());
+  for (int iter = 0; iter < max_iterations; ++iter) {
+    // Compute NR residual.
+    // TODO(amcastro-tri): consider updating Nk = Nstar. This will however be
+    // a more expensive operation.
+    R.segment(0, nv) = M * (vk - v0) / dt + tau_array + Nstar.transpose() * cnk;
+
+  }
+
   vn = v0 + dt * M.ldlt().solve(-tau_array);
 
   ///////////////////////////////////////////////////////
@@ -407,6 +463,108 @@ void MultibodyPlant<T>::DoCalcDiscreteVariableUpdates(
   xdot << qdot, vdot;
   derivatives->SetFromVector(xdot);
 #endif
+}
+
+template <typename T>
+template <typename  T1>
+typename std::enable_if<
+    std::is_same<T1, double>::value,
+    std::vector<geometry::PenetrationAsPointPair<T>>>::type
+MultibodyPlant<T>::ComputePenetrations(
+    const Context<T>& context) const {
+  std::vector<PenetrationAsPointPair<T>> contact_penetrations;
+  if (get_num_collision_geometries() == 0) return contact_penetrations;
+
+  const geometry::QueryObject<double>& query_object =
+      this->EvalAbstractInput(context, geometry_query_port_)
+          ->template GetValue<geometry::QueryObject<double>>();
+  std::vector<PenetrationAsPointPair<double>> penetrations =
+      query_object.ComputePointPairPenetration();
+
+  // Count the number of contacts using filtering from visuals
+  for (const auto& penetration : penetrations) {
+    const GeometryId geometryA_id = penetration.id_A;
+    const GeometryId geometryB_id = penetration.id_B;
+    if (is_collision_geometry(geometryA_id) &&
+        is_collision_geometry(geometryB_id))
+      contact_penetrations.push_back(penetration);
+  }
+  return contact_penetrations;
+}
+
+template <typename T>
+template <typename  T1>
+typename std::enable_if<
+    !std::is_same<T1, double>::value,
+    std::vector<geometry::PenetrationAsPointPair<T>>>::type
+MultibodyPlant<T>::ComputePenetrations(const Context<T>&) const {
+  DRAKE_ABORT_MSG("Only <double> is supported.");
+}
+
+// This method is assuming that we are giving a compatible `context` with a
+// `contact_penetrations`, where each contact pair, in theory,
+// has point_pair.depth = 0. That is, each contact pair is "exactly" at contact.
+// However in practice these are usually computed with some finite penetration.
+template<typename T>
+MatrixX<T> MultibodyPlant<T>::ComputeNormalVelocityJacobianMatrix(
+    const Context<T>& context,
+    std::vector<PenetrationAsPointPair<T>>& contact_penetrations) const {
+  const int num_contacts = contact_penetrations.size();
+  MatrixX<T> N(num_contacts, num_velocities());
+
+  for (int icontact = 0; icontact < num_contacts; ++icontact) {
+    const auto& point_pair = contact_penetrations[icontact];
+
+    const GeometryId geometryA_id = point_pair.id_A;
+    const GeometryId geometryB_id = point_pair.id_B;
+
+    // TODO(amcastro-tri): Request GeometrySystem to do this filtering for us
+    // when that capability lands.
+    // TODO(amcastro-tri): consider allowing this id's to belong to a third
+    // external system when they correspond to anchored geometry.
+    if (!is_collision_geometry(geometryA_id) ||
+        !is_collision_geometry(geometryB_id))
+      continue;
+
+    BodyIndex bodyA_index = geometry_id_to_body_index_.at(geometryA_id);
+    const Body<T>& bodyA = model().get_body(bodyA_index);
+    BodyIndex bodyB_index = geometry_id_to_body_index_.at(geometryB_id);
+    const Body<T>& bodyB = model().get_body(bodyB_index);
+
+    // Penetration depth, > 0 during point_pair.
+    const T& x = point_pair.depth;
+    DRAKE_ASSERT(x >= 0);
+    const Vector3<T>& nhat_BA_W = point_pair.nhat_BA_W;
+    const Vector3<T>& p_WCa = point_pair.p_WCa;
+    const Vector3<T>& p_WCb = point_pair.p_WCb;
+
+    // Approximate the position of the contact point as:
+    // In theory p_WC = p_WCa = p_WCb.
+    const Vector3<T> p_WC = 0.5 * (p_WCa + p_WCb);  // notice this is at t_star.
+    // TODO(amcastro-tri): for each contact point, consider computing
+    // dtc = phi / phidot and then estimate the contact point as:
+    //  p_WCa = p_WCa_star + dtc * v0_WCa
+    //  p_WCb = p_WCb_star + dtc * v0_WCb
+    // In theory, these two estimations should be very close to the actual p_WC.
+    // Then do:
+    //  p_WC = 0.5 * (p_WCa + p_WCb);
+
+    MatrixX<T> Jv_WAc;  // s.t.: v_WAc = Jv_WAc * v.
+    model().CalcPointsGeometricJacobianExpressedInWorld(
+        context, bodyA.body_frame(), p_WC, &Jv_WAc);
+
+    MatrixX<T> Jv_WBc;  // s.t.: v_WBc = Jv_WBc * v.
+    model().CalcPointsGeometricJacobianExpressedInWorld(
+        context, bodyB.body_frame(), p_WC, &Jv_WBc);
+
+    // Therefore v_AcBc_W = v_WBc - v_WAc.
+    // if xdot = vn > 0 ==> they are getting closer.
+    // vn = v_AcBc_W.dot(nhat_BA_W);
+    // vn = (nhat^T * J) * v
+    N.row(icontact) = nhat_BA_W.transpose() * (Jv_WBc - Jv_WAc);
+  }
+
+  return N;
 }
 
 template<typename T>
