@@ -12,6 +12,9 @@
 #include "drake/math/autodiff.h"
 #include "drake/math/autodiff_gradient.h"
 
+#include <iostream>
+#define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
+
 namespace drake {
 namespace multibody {
 namespace multibody_plant {
@@ -313,7 +316,7 @@ VectorX<U> MultibodyPlant<double>::CalcFischerBurmeisterSolverResidual(
 
   VectorX<U> R(num_unknowns);
 
-  R.segment(0, nv) = M0 * (v - v0) / dt + tau0 + N.transpose() * cn;
+  R.segment(0, nv) = M0 * (v - v0) / dt + tau0 - N.transpose() * cn;
 
   // Add Fischer-Burmeister terms to residual R here.
 
@@ -485,6 +488,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   Xk.segment(0, nv) = v0;
 
   const int max_iterations = 20;
+  const double tolerance = 1.0e-6;
   //const bool update_geometry_every_iteration = false;
 
   // Compute normal velocities Jacobian at tstar.
@@ -504,8 +508,9 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   //const MatrixX<double> M0_double = M0.template cast<double>();
   //(void) M0;
 
-  VectorX<double> R(Xk.size());
-  MatrixX<double> J(Xk.size(), Xk.size());
+  VectorX<double> Rk(Xk.size());
+  MatrixX<double> Jk(Xk.size(), Xk.size());
+  VectorX<double> DeltaXk(Xk.size());
   for (int iter = 0; iter < max_iterations; ++iter) {
     // Compute NR residual.
     // TODO(amcastro-tri): consider updating Nk = Nstar. This will however be
@@ -514,19 +519,32 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
     //R = CalcFischerBurmeisterSolverResidual(
       //  v0, M0, tau0, Nstar, VectorX<double>(vk), VectorX<double>(cnk));
 
-    // Compute Jacobian.
-    J = CalcFischerBurmeisterSolverJacobian(
-        v0, M0, tau0, Nstar, vk, cnk, &R, &J);
+    // Compute Residual and Jacobian.
+    CalcFischerBurmeisterSolverJacobian(v0, M0, tau0, Nstar, vk, cnk, &Rk, &Jk);
 
+    // Compute the complete orthogonal factorization of J.
+    Eigen::CompleteOrthogonalDecomposition<MatrixX<double>> Jk_QTZ(Jk);
 
+    // Solve
+    DeltaXk = -Jk_QTZ.solve(Rk);
+
+    // Update solution:
+    Xk = Xk + DeltaXk;
+
+    double residual = DeltaXk.segment(0, nv).norm();
+
+    PRINT_VAR(iter);
+    PRINT_VAR(residual);
+
+    if (residual < tolerance) {
+      break;
+    }
   }
 
-  vn = v0 + dt * M0.ldlt().solve(-tau0);
+  // Output solution
+  vn = Xk.segment(0, nv);
 
-  ///////////////////////////////////////////////////////
-  // NEWTON-RAPHSON SETUP AND ITERATION SHOULD GO HERE.
-  // The result will be, together with forces, the generalized velocity vn.
-  ///////////////////////////////////////////////////////
+  //vn = v0 + dt * M0.ldlt().solve(-tau0);
 
   VectorX<double> qdotn(this->num_positions());
   model_->MapVelocityToQDot(context0, vn, &qdotn);
