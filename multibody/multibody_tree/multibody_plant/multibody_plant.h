@@ -969,9 +969,9 @@ class MultibodyPlant : public systems::LeafSystem<T> {
       const VectorX<double>& v0,
       const MatrixX<double>& M0,
       // External forces (consider making them on <T>)
-      const VectorX<double> tau0,
+      const VectorX<double>& tau0,
       // Normal velocity Jacobian
-      const MatrixX<double> N,
+      const MatrixX<double>& N,
       // Variables
       const VectorX<U>& v, const VectorX<U>& cn) const;
 
@@ -985,6 +985,12 @@ class MultibodyPlant : public systems::LeafSystem<T> {
       const MatrixX<double> N,
       const VectorX<double>& v, const VectorX<double>& cn,
       VectorX<double>* R, MatrixX<double>* J) const;
+
+  template<typename U>
+  static U FischerBurmeisterFunction(const U& x, const U& y) {
+    using std::sqrt;
+    return sqrt(x * x + y * y) - x - y;
+  }
 
   // The entire multibody model.
   std::unique_ptr<drake::multibody::MultibodyTree<T>> model_;

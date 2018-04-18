@@ -39,6 +39,10 @@ DEFINE_string(integration_scheme, "runge_kutta2",
 DEFINE_double(simulation_time, 10.0,
               "Desired duration of the simulation in seconds.");
 
+DEFINE_bool(is_time_stepping, true,
+            "True: runs a time stepping solver. "
+            "False: Runs a continuous simulation.");
+
 using Eigen::AngleAxisd;
 using Eigen::Isometry3d;
 using Eigen::Matrix3d;
@@ -77,19 +81,26 @@ int do_main() {
   const CoulombFriction<double> coulomb_friction(
       0.8 /* static friction */, 0.3 /* dynamic friction */);
 
+  const double time_step = FLAGS_is_time_stepping ? 0.001 : 0;
+
   MultibodyPlant<double>& plant =
       *builder.AddSystem(MakeBouncingBallPlant(
           radius, mass, coulomb_friction, -g * Vector3d::UnitZ(),
-          &geometry_system));
+          time_step, &geometry_system));
   const MultibodyTree<double>& model = plant.model();
-  // Set how much penetration (in meters) we are willing to accept.
-  plant.set_penetration_allowance(0.001);
 
-  // Hint the integrator's time step based on the contact time scale.
-  // A fraction of this time scale is used which is chosen so that the fixed
-  // time step integrators are stable.
-  const double max_time_step =
-      plant.get_contact_penalty_method_time_scale() / 30;
+  double max_time_step;
+  if (!FLAGS_is_time_stepping) {
+    // Set how much penetration (in meters) we are willing to accept.
+    plant.set_penetration_allowance(0.001);
+
+    // Hint the integrator's time step based on the contact time scale.
+    // A fraction of this time scale is used which is chosen so that the fixed
+    // time step integrators are stable.
+    max_time_step = plant.get_contact_penalty_method_time_scale() / 30;
+  } else {
+    max_time_step = time_step;
+  }
 
   DRAKE_DEMAND(plant.num_velocities() == 6);
   DRAKE_DEMAND(plant.num_positions() == 7);

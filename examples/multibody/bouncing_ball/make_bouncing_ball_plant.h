@@ -33,6 +33,7 @@ MakeBouncingBallPlant(
     double radius, double mass,
     const drake::multibody::multibody_plant::CoulombFriction<double>&
     surface_friction, const Vector3<double>& gravity_W,
+    double dt,
     geometry::GeometrySystem<double>* geometry_system = nullptr);
 
 }  // namespace bouncing_ball

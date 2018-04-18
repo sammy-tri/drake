@@ -14,6 +14,9 @@
 
 #include <iostream>
 #define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
+#define PRINT_VARn(a) std::cout << #a":\n" << a << std::endl;
+//#define PRINT_VAR(a) (void) a;
+//#define PRINT_VARn(a) (void) a;
 
 namespace drake {
 namespace multibody {
@@ -303,9 +306,9 @@ VectorX<U> MultibodyPlant<double>::CalcFischerBurmeisterSolverResidual(
     const VectorX<double>& v0,
     const MatrixX<double>& M0,
     // External forces (consider making them on <T>)
-    const VectorX<double> tau0,
+    const VectorX<double>& tau0,
     // Normal velocity Jacobian (at either tstar or t0)
-    const MatrixX<double> N,
+    const MatrixX<double>& N,
     // Variables
     const VectorX<U>& v, const VectorX<U>& cn) const {
   const double dt = time_step_;  // shorter alias.
@@ -316,18 +319,39 @@ VectorX<U> MultibodyPlant<double>::CalcFischerBurmeisterSolverResidual(
 
   VectorX<U> R(num_unknowns);
 
-  VectorX<U> M0_on_U = M0.template cast<U>();
+  MatrixX<U> M0_on_U = M0.template cast<U>();
   VectorX<U> v0_on_U = v0.template cast<U>();
   VectorX<U> tau0_on_U = tau0.template cast<U>();
 
   R.segment(0, nv) = M0_on_U * (v - v0_on_U) / dt + tau0_on_U;
 
-  if (num_contacts >0 ) {
-    VectorX<U> N_on_U = N.template cast<U>();
-    R.segment(0, nv) -= N_on_U.transpose() * cn;
-  }
+#if 0
+  if (std::is_same<U, AutoDiffXd>::value) {
+    PRINT_VAR("CalcFischerBurmeisterSolverResidual: AutoDiffXd");
+    PRINT_VAR(v(0).derivatives().transpose());
+    PRINT_VAR(v(1).derivatives().transpose());
+    PRINT_VAR(v(2).derivatives().transpose());
+    PRINT_VAR(v(3).derivatives().transpose());
+    PRINT_VAR(v(4).derivatives().transpose());
+    PRINT_VAR(v(5).derivatives().transpose());
 
-  // Add Fischer-Burmeister terms to residual R here.
+    PRINT_VAR(M0_on_U(0, 0).value());
+    PRINT_VAR(M0_on_U(1, 1).value());
+    PRINT_VAR(M0_on_U(2, 2).value());
+  }
+#endif
+
+  if (num_contacts >0 ) {
+    MatrixX<U> N_on_U = N.template cast<U>();
+    R.segment(0, nv) -= N_on_U.transpose() * cn;
+
+    // Add Fischer-Burmeister terms to residual R.
+    for (int icontact = 0; icontact < num_contacts; ++icontact) {
+      int iunknown = nv + icontact;
+      const U vn = N_on_U.row(icontact) * v;
+      R(iunknown) = FischerBurmeisterFunction(vn, cn(icontact));
+    }
+  }
 
   return R;
 }
@@ -339,9 +363,9 @@ VectorX<U> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidual(
     const VectorX<double>& v0,
     const MatrixX<double>& M0,
     // External forces (consider making them on <T>)
-    const VectorX<double> tau0,
+    const VectorX<double>& tau0,
     // Normal velocity Jacobian (at either tstar or t0)
-    const MatrixX<double> N,
+    const MatrixX<double>& N,
     // Variables
     const VectorX<U>& v, const VectorX<U>& cn) const {
   DRAKE_ABORT_MSG("T != double not supported");
@@ -365,9 +389,22 @@ MatrixX<double> MultibodyPlant<double>::CalcFischerBurmeisterSolverJacobian(
   VectorX<AutoDiffXd> v_autodiff(nv);
   math::initializeAutoDiff(v, v_autodiff, num_unknowns, 0);
 
+#if 0
+  PRINT_VAR(v_autodiff(0).derivatives().transpose());
+  PRINT_VAR(v_autodiff(1).derivatives().transpose());
+  PRINT_VAR(v_autodiff(2).derivatives().transpose());
+  PRINT_VAR(v_autodiff(3).derivatives().transpose());
+  PRINT_VAR(v_autodiff(4).derivatives().transpose());
+  PRINT_VAR(v_autodiff(5).derivatives().transpose());
+
   VectorX<AutoDiffXd> cn_autodiff(num_contacts);
   math::initializeAutoDiff(cn, cn_autodiff, num_unknowns, nv);
 
+  PRINT_VAR(num_contacts);
+  PRINT_VAR(num_unknowns);
+  PRINT_VAR(cn_autodiff.size());
+#endif
+  
   VectorX<AutoDiffXd> R_autodiff(num_unknowns);
 
   R_autodiff = CalcFischerBurmeisterSolverResidual(
@@ -375,6 +412,22 @@ MatrixX<double> MultibodyPlant<double>::CalcFischerBurmeisterSolverJacobian(
 
   *R = math::autoDiffToValueMatrix(R_autodiff);
   *J = math::autoDiffToGradientMatrix(R_autodiff);
+
+  PRINT_VAR(R_autodiff(0).value());
+  PRINT_VAR(R_autodiff(1).value());
+  PRINT_VAR(R_autodiff(2).value());
+  PRINT_VAR(R_autodiff(3).value());
+  PRINT_VAR(R_autodiff(4).value());
+  PRINT_VAR(R_autodiff(5).value());
+
+  PRINT_VAR(R_autodiff(0).derivatives().transpose());
+  PRINT_VAR(R_autodiff(1).derivatives().transpose());
+  PRINT_VAR(R_autodiff(2).derivatives().transpose());
+  PRINT_VAR(R_autodiff(3).derivatives().transpose());
+  PRINT_VAR(R_autodiff(4).derivatives().transpose());
+  PRINT_VAR(R_autodiff(5).derivatives().transpose());
+
+  PRINT_VARn(*J);
 
   DRAKE_DEMAND(J->rows() == num_unknowns);
   DRAKE_DEMAND(J->cols() == num_unknowns);
@@ -398,7 +451,7 @@ MatrixX<double> MultibodyPlant<T>::CalcFischerBurmeisterSolverJacobian(
 
 template<>
 void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
-    const drake::systems::Context<double>& context0,
+    const drake::systems::Context<double>& context,
     const std::vector<const drake::systems::DiscreteUpdateEvent<double>*>& events,
     drake::systems::DiscreteValues<double>* updates) const {
   // If plant state is continuous, no discrete state to update.
@@ -409,10 +462,27 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   const int nq = this->num_positions();
   const int nv = this->num_velocities();
 
-  // Get the system state (solution at previous time step).
+  // BIG HACK #1!!! context0 can only be used in MBP/MBT queries!! if used for GS
+  // queries or something outside this system scope, it'll cause a crash.
+  // Create a copy of context into context0.
+  //std::unique_ptr<systems::Context<double>> context0 = this->CreateDefaultContext();
+  //DRAKE_DEMAND(context0->get_num_discrete_state_groups() == 1);
+  //context0->get_mutable_discrete_state(0).SetFromVector(con);
+  //context0->SetTimeStateAndParametersFrom(context);
+  Context<double>& context0 = const_cast<Context<double>&>(context);
+
+  // BIG HACK #2!!! get a mutable reference to context so that we can modify it
+  // to hold the solution at tstar. That will allow us to perform GS queries.
+  Context<double>& context_star = const_cast<Context<double>&>(context);
+
+  // Save the system state as a raw Eigen vector (solution at previous time step).
   auto x0 = context0.get_discrete_state(0).get_value();
   VectorX<double> q0 = x0.topRows(nq);
   VectorX<double> v0 = x0.bottomRows(nv);
+
+  //////////////////////////////////////////////////////////////////////////////
+  // WORK WITH CONTEXT0
+  //////////////////////////////////////////////////////////////////////////////
 
   // Allocate workspace. We might want to cache these to avoid allocations.
   // Mass matrix.
@@ -424,12 +494,12 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   // Generalized accelerations.
   VectorX<double> vdot = VectorX<double>::Zero(nv);
 
-  const PositionKinematicsCache<double>& pc = EvalPositionKinematics(context0);
-  const VelocityKinematicsCache<double>& vc = EvalVelocityKinematics(context0);
+  const PositionKinematicsCache<double>& pc0 = EvalPositionKinematics(context0);
+  const VelocityKinematicsCache<double>& vc0 = EvalVelocityKinematics(context0);
 
   // Compute forces applied through force elements. This effectively resets
   // the forces to zero and adds in contributions due to force elements.
-  model_->CalcForceElementsContribution(context0, pc, vc, &forces);
+  model_->CalcForceElementsContribution(context0, pc0, vc0, &forces);
 
   // If there is any input actuation, add it to the multibody forces.
   if (num_actuators() > 0) {
@@ -458,11 +528,15 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   std::vector<SpatialForce<double>>& F_BBo_W_array = forces.mutable_body_forces();
   VectorX<double>& tau0 = forces.mutable_generalized_forces();
   model_->CalcInverseDynamics(
-      context0, pc, vc, vdot,
+      context0, pc0, vc0, vdot,
       F_BBo_W_array, tau0,
       &A_WB_array,
       &F_BBo_W_array, /* Notice these arrays gets overwritten on output. */
       &tau0);
+
+  //////////////////////////////////////////////////////////////////////////////
+  // WORK WITH CONTEXT_STAR
+  //////////////////////////////////////////////////////////////////////////////
 
   // Compute discrete update without contact forces.
   VectorX<double> v_star = vn = v0 + dt * M0.ldlt().solve(-tau0);
@@ -476,13 +550,18 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   VectorX<double> x_star(this->num_multibody_states());
   x_star << q_star, v_star;
   //std::unique_ptr<systems::LeafContext<double>> context_star = DoMakeLeafContext();
-  std::unique_ptr<systems::Context<double>> context_star = this->CreateDefaultContext();
-  DRAKE_DEMAND(context_star->get_num_discrete_state_groups() == 1);
-  context_star->get_mutable_discrete_state(0).SetFromVector(x_star);
+  //std::unique_ptr<systems::Context<double>> context_star = this->CreateDefaultContext();
+  DRAKE_DEMAND(context_star.get_num_discrete_state_groups() == 1);
+  context_star.get_mutable_discrete_state(0).SetFromVector(x_star);
 
   std::vector<PenetrationAsPointPair<double>> contact_penetrations_star =
-      ComputePenetrations(*context_star);
+      ComputePenetrations(context_star);
   int num_contacts = contact_penetrations_star.size();
+
+  //////////////////////////////////////////////////////////////////////////////
+  // WORK WITH CONTEXT0
+  //////////////////////////////////////////////////////////////////////////////
+  context0.get_mutable_discrete_state(0).SetFromVector(x0);
 
   // Compute normal velocities Jacobian at tstar.
   MatrixX<double> Nstar;
@@ -533,6 +612,14 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
     // Compute Residual and Jacobian.
     CalcFischerBurmeisterSolverJacobian(v0, M0, tau0, Nstar, vk, cnk, &Rk, &Jk);
 
+    PRINT_VAR(iter);
+    PRINT_VARn(num_contacts);
+    PRINT_VARn(M0);
+    PRINT_VAR(tau0.transpose());
+    PRINT_VARn(Nstar);
+    PRINT_VAR(Rk.transpose());
+    PRINT_VARn(Jk);
+
     // Compute the complete orthogonal factorization of J.
     Eigen::CompleteOrthogonalDecomposition<MatrixX<double>> Jk_QTZ(Jk);
 
@@ -544,7 +631,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
 
     double residual = DeltaXk.segment(0, nv).norm();
 
-    PRINT_VAR(iter);
+
     PRINT_VAR(residual);
     PRINT_VAR(vk.transpose());
     PRINT_VAR(Xk.transpose());

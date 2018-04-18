@@ -21,8 +21,9 @@ std::unique_ptr<drake::multibody::multibody_plant::MultibodyPlant<double>>
 MakeBouncingBallPlant(double radius, double mass,
                       const CoulombFriction<double>& surface_friction,
                       const Vector3<double>& gravity_W,
+                      double dt,
                       geometry::GeometrySystem<double>* geometry_system) {
-  auto plant = std::make_unique<MultibodyPlant<double>>();
+  auto plant = std::make_unique<MultibodyPlant<double>>(dt);
 
   UnitInertia<double> G_Bcm = UnitInertia<double>::SolidSphere(radius);
   SpatialInertia<double> M_Bcm(mass, Vector3<double>::Zero(), G_Bcm);
