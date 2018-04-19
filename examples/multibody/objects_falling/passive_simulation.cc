@@ -70,25 +70,24 @@ int do_main() {
 
   const double simulation_time = 30.00;
 
-  // Make the desired maximum time step a fraction of the simulation time.
-  const double max_time_step = 1e-4; //simulation_time / 1000.0;
-
   // The target accuracy determines the size of the actual time steps taken
   // whenever a variable time step integrator is used.
-  const double target_accuracy = 0.01;
+  const double target_accuracy = 0.1;
 
   // Plant's parameters.
   const double radius = 0.05;   // m
   const double mass = 0.1;      // kg
   const double g = 9.81;        // m/s^2
   const double z0 = 0.3;        // Initial height.
-  const int nballs = 5;
-  const int ncylinders = 4;
+  const int nballs = 0;
+  const int ncylinders = 1;
+
+  const double time_step = 1e-3;
 
   MultibodyPlant<double>& plant =
       *builder.AddSystem(MakeObjectsFallingPlant(
           radius, mass, -g * Vector3d::UnitZ(),
-          nballs, ncylinders,
+          nballs, ncylinders, time_step,
           &geometry_system));
   const MultibodyTree<double>& model = plant.model();
 
@@ -99,8 +98,14 @@ int do_main() {
   const double damping_ratio = 0.5;  // not realy, but should be close.
   const double damping = damping_ratio * (1.0/omega)/penetration_length; // Approx critically damped.
 #endif
-  plant.set_penetration_allowance(penetration_length);
-  plant.set_stiction_tolerance(0.05);
+  double max_time_step = time_step;
+  if (time_step == 0) {
+    plant.set_penetration_allowance(penetration_length);
+    plant.set_stiction_tolerance(0.05);
+    // Make the desired maximum time step a fraction of the simulation time.
+    max_time_step = plant.get_contact_penalty_method_time_scale() / 50;
+  }
+  PRINT_VARn(max_time_step);
   //plant.set_contact_penalty_stiffness(stiffness);
   //plant.set_contact_penalty_damping(damping);
   //plant.set_contact_penalty_damping(0.0);

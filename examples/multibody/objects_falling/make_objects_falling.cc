@@ -30,13 +30,14 @@ std::unique_ptr<drake::multibody::multibody_plant::MultibodyPlant<double>>
 MakeObjectsFallingPlant(
     double radius, double mass, const Vector3<double>& gravity,
     int nballs, int ncylinders,
+    double time_step,
     geometry::GeometrySystem<double>* geometry_system) {
   DRAKE_THROW_UNLESS(geometry_system != nullptr);
 
   double theta = M_PI / 6;  // each plane forms this angle with the x-y plane.
   int nplanes = 6;
 
-  auto plant = std::make_unique<MultibodyPlant<double>>();
+  auto plant = std::make_unique<MultibodyPlant<double>>(time_step);
 
   CoulombFriction<double> friction(1.0, 0.3);
 
