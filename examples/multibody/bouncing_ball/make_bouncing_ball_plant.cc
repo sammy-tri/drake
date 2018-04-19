@@ -43,11 +43,38 @@ MakeBouncingBallPlant(double radius, double mass,
         geometry_system);
 
     // Add sphere geometry for the ball.
+    const double length = 4 * radius;
     plant->RegisterCollisionGeometry(
         ball,
         /* Pose X_BG of the geometry frame G in the ball frame B. */
         Isometry3<double>::Identity(),
-        Sphere(radius), surface_friction, geometry_system);
+        geometry::Cylinder(radius, length), surface_friction, geometry_system);
+        //Sphere(radius), surface_friction, geometry_system);
+
+    // Add a bunch of little spheres to simulate "multi-contact".
+    const int nspheres = 13;
+    const double contact_spheres_radius = radius / 50.0;
+    for (int i = 0; i < nspheres; ++i) {
+      const double theta = 2.0 * i / nspheres * M_PI;
+      const double x = cos(theta) * (radius + 1.01 * contact_spheres_radius);
+      const double y = sin(theta) * (radius + 1.01 * contact_spheres_radius);
+      Isometry3<double> X_BG = Isometry3<double>::Identity();
+      // Top spheres:
+      X_BG.translation() << x, y, length / 2;
+      plant->RegisterCollisionGeometry(
+          ball,
+          /* Pose X_BG of the geometry frame G in the ball frame B. */
+          X_BG,
+          Sphere(contact_spheres_radius), surface_friction, geometry_system);
+
+      // Bottom spheres:
+      X_BG.translation() << x, y, -length / 2;
+      plant->RegisterCollisionGeometry(
+          ball,
+          /* Pose X_BG of the geometry frame G in the ball frame B. */
+          X_BG,
+          Sphere(contact_spheres_radius), surface_friction, geometry_system);
+    }
   }
 
   // Gravity acting in the -z direction.

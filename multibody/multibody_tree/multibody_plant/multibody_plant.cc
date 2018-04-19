@@ -13,10 +13,10 @@
 #include "drake/math/autodiff_gradient.h"
 
 #include <iostream>
-//#define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
-//#define PRINT_VARn(a) std::cout << #a":\n" << a << std::endl;
-#define PRINT_VAR(a) (void) a;
-#define PRINT_VARn(a) (void) a;
+#define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
+#define PRINT_VARn(a) std::cout << #a":\n" << a << std::endl;
+//#define PRINT_VAR(a) (void) a;
+//#define PRINT_VARn(a) (void) a;
 
 namespace drake {
 namespace multibody {
@@ -616,18 +616,6 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
     // Compute Residual and Jacobian.
     CalcFischerBurmeisterSolverJacobian(v0, M0, tau0, Nstar, vk, cnk, &Rk, &Jk);
 
-    if (num_contacts > 0) {
-      PRINT_VAR(iter);
-      PRINT_VARn(num_contacts);
-      PRINT_VARn(M0);
-      PRINT_VAR(tau0.transpose());
-      PRINT_VARn(Nstar);
-      PRINT_VAR(Rk.transpose());
-      PRINT_VARn(Jk);
-      PRINT_VAR(vk.transpose());
-      PRINT_VAR(cnk.transpose());
-    }
-
     // Compute the complete orthogonal factorization of J.
     Eigen::CompleteOrthogonalDecomposition<MatrixX<double>> Jk_QTZ(Jk);
 
@@ -637,8 +625,21 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
     // Update solution:
     Xk = Xk + DeltaXk;
 
+    if (num_contacts > 0) {
+      PRINT_VAR(iter);
+      PRINT_VAR(num_contacts);
+      //PRINT_VARn(M0);
+      //PRINT_VAR(tau0.transpose());
+      PRINT_VARn(Nstar);
+      PRINT_VAR(Rk.transpose());
+      PRINT_VARn(Jk);
+      PRINT_VAR(vk.transpose());
+      PRINT_VAR(cnk.transpose());
+    }
+
     double residual = DeltaXk.segment(0, nv).norm();
 
+    PRINT_VAR(context.get_time());
     PRINT_VAR(residual);
 
 #if 0
