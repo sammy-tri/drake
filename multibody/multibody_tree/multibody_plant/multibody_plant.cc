@@ -13,10 +13,10 @@
 #include "drake/math/autodiff_gradient.h"
 
 #include <iostream>
-#define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
-#define PRINT_VARn(a) std::cout << #a":\n" << a << std::endl;
-//#define PRINT_VAR(a) (void) a;
-//#define PRINT_VARn(a) (void) a;
+//#define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
+//#define PRINT_VARn(a) std::cout << #a":\n" << a << std::endl;
+#define PRINT_VAR(a) (void) a;
+#define PRINT_VARn(a) (void) a;
 
 namespace drake {
 namespace multibody {
@@ -396,15 +396,17 @@ MatrixX<double> MultibodyPlant<double>::CalcFischerBurmeisterSolverJacobian(
   PRINT_VAR(v_autodiff(3).derivatives().transpose());
   PRINT_VAR(v_autodiff(4).derivatives().transpose());
   PRINT_VAR(v_autodiff(5).derivatives().transpose());
+#endif
 
   VectorX<AutoDiffXd> cn_autodiff(num_contacts);
   math::initializeAutoDiff(cn, cn_autodiff, num_unknowns, nv);
 
+#if 0
   PRINT_VAR(num_contacts);
   PRINT_VAR(num_unknowns);
   PRINT_VAR(cn_autodiff.size());
 #endif
-  
+
   VectorX<AutoDiffXd> R_autodiff(num_unknowns);
 
   R_autodiff = CalcFischerBurmeisterSolverResidual(
@@ -413,6 +415,7 @@ MatrixX<double> MultibodyPlant<double>::CalcFischerBurmeisterSolverJacobian(
   *R = math::autoDiffToValueMatrix(R_autodiff);
   *J = math::autoDiffToGradientMatrix(R_autodiff);
 
+#if 0
   PRINT_VAR(R_autodiff(0).value());
   PRINT_VAR(R_autodiff(1).value());
   PRINT_VAR(R_autodiff(2).value());
@@ -428,6 +431,7 @@ MatrixX<double> MultibodyPlant<double>::CalcFischerBurmeisterSolverJacobian(
   PRINT_VAR(R_autodiff(5).derivatives().transpose());
 
   PRINT_VARn(*J);
+#endif
 
   DRAKE_DEMAND(J->rows() == num_unknowns);
   DRAKE_DEMAND(J->cols() == num_unknowns);
@@ -585,7 +589,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   VectorX<double> Xk = VectorX<double>::Zero(nv + num_contacts);
   // Aliases to different portions in Xk
   auto vk = Xk.segment(0, nv);
-  auto cnk = Xk.segment(nv + 1, num_contacts);
+  auto cnk = Xk.segment(nv, num_contacts);
   (void)cnk;
   // Reuse context_star for the NR iteration.
   //Context<double>& context_k = *context_star;
@@ -612,13 +616,17 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
     // Compute Residual and Jacobian.
     CalcFischerBurmeisterSolverJacobian(v0, M0, tau0, Nstar, vk, cnk, &Rk, &Jk);
 
-    PRINT_VAR(iter);
-    PRINT_VARn(num_contacts);
-    PRINT_VARn(M0);
-    PRINT_VAR(tau0.transpose());
-    PRINT_VARn(Nstar);
-    PRINT_VAR(Rk.transpose());
-    PRINT_VARn(Jk);
+    if (num_contacts > 0) {
+      PRINT_VAR(iter);
+      PRINT_VARn(num_contacts);
+      PRINT_VARn(M0);
+      PRINT_VAR(tau0.transpose());
+      PRINT_VARn(Nstar);
+      PRINT_VAR(Rk.transpose());
+      PRINT_VARn(Jk);
+      PRINT_VAR(vk.transpose());
+      PRINT_VAR(cnk.transpose());
+    }
 
     // Compute the complete orthogonal factorization of J.
     Eigen::CompleteOrthogonalDecomposition<MatrixX<double>> Jk_QTZ(Jk);
@@ -631,10 +639,13 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
 
     double residual = DeltaXk.segment(0, nv).norm();
 
+    PRINT_VAR(residual);
 
+#if 0
     PRINT_VAR(residual);
     PRINT_VAR(vk.transpose());
     PRINT_VAR(Xk.transpose());
+#endif
 
     if (residual < tolerance) {
       break;
@@ -747,11 +758,11 @@ MatrixX<T> MultibodyPlant<T>::ComputeNormalVelocityJacobianMatrix(
     // Then do:
     //  p_WC = 0.5 * (p_WCa + p_WCb);
 
-    MatrixX<T> Jv_WAc;  // s.t.: v_WAc = Jv_WAc * v.
+    MatrixX<T> Jv_WAc(3, this->num_velocities());  // s.t.: v_WAc = Jv_WAc * v.
     model().CalcPointsGeometricJacobianExpressedInWorld(
         context, bodyA.body_frame(), p_WC, &Jv_WAc);
 
-    MatrixX<T> Jv_WBc;  // s.t.: v_WBc = Jv_WBc * v.
+    MatrixX<T> Jv_WBc(3, this->num_velocities());  // s.t.: v_WBc = Jv_WBc * v.
     model().CalcPointsGeometricJacobianExpressedInWorld(
         context, bodyB.body_frame(), p_WC, &Jv_WBc);
 
@@ -759,7 +770,8 @@ MatrixX<T> MultibodyPlant<T>::ComputeNormalVelocityJacobianMatrix(
     // if xdot = vn > 0 ==> they are getting closer.
     // vn = v_AcBc_W.dot(nhat_BA_W);
     // vn = (nhat^T * J) * v
-    N.row(icontact) = nhat_BA_W.transpose() * (Jv_WBc - Jv_WAc);
+    //N.row(icontact) = nhat_BA_W.transpose() * (Jv_WBc - Jv_WAc);
+    N.row(icontact) = nhat_BA_W.transpose() * (Jv_WAc - Jv_WBc);
   }
 
   return N;
