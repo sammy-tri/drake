@@ -597,6 +597,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
 
   // Initial guess for NR iteration.
   Xk.segment(0, nv) = v0;
+  cnk.setConstant(1.0e-10);
 
   const int max_iterations = 20;
   const double tolerance = 1.0e-6;
@@ -772,7 +773,17 @@ MatrixX<T> MultibodyPlant<T>::ComputeNormalVelocityJacobianMatrix(
     // vn = v_AcBc_W.dot(nhat_BA_W);
     // vn = (nhat^T * J) * v
     //N.row(icontact) = nhat_BA_W.transpose() * (Jv_WBc - Jv_WAc);
+    PRINT_VAR(icontact);
+    PRINT_VAR(nhat_BA_W.transpose());
+    PRINT_VAR(bodyA.name());
+    PRINT_VARn(Jv_WAc);
+    PRINT_VAR(bodyB.name());
+    PRINT_VARn(Jv_WBc);
+    PRINT_VARn(N.row(icontact));
+
     N.row(icontact) = nhat_BA_W.transpose() * (Jv_WAc - Jv_WBc);
+
+    PRINT_VARn(N.row(icontact));
   }
 
   return N;

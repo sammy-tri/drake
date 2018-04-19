@@ -728,12 +728,11 @@ void MultibodyTree<T>::CalcPointsGeometricJacobianExpressedInWorld(
   // Body to which frame B is attached to:
   const Body<T>& body_B = frame_B.body();
 
+  Jv_WQi->setZero();
+
   // Do nothing for the world body and return a zero Jacobian.
   // That is Jv_WQi * v = 0, always, for the world body.
-  if (body_B.index() == world_index()) {
-    Jv_WQi->setZero();
-    return;
-  }
+  if (body_B.index() == world_index()) return;
 
   // Compute kinematic path from body B to the world:
   std::vector<BodyNodeIndex> path_to_world;

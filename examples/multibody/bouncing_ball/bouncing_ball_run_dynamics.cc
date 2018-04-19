@@ -102,8 +102,8 @@ int do_main() {
     max_time_step = time_step;
   }
 
-  DRAKE_DEMAND(plant.num_velocities() == 6);
-  DRAKE_DEMAND(plant.num_positions() == 7);
+ // DRAKE_DEMAND(plant.num_velocities() == 6);
+  //DRAKE_DEMAND(plant.num_positions() == 7);
 
   // Boilerplate used to connect the plant to a GeometrySystem for
   // visualization.
@@ -154,6 +154,10 @@ int do_main() {
   X_WB.translation() = Vector3d(0.0, 0.0, z0);
   model.SetFreeBodyPoseOrThrow(
       model.GetBodyByName("Ball"), X_WB, &plant_context);
+
+  X_WB.translation() = Vector3d(1.5 * radius, 0.0, z0+radius);
+  model.SetFreeBodyPoseOrThrow(
+      model.GetBodyByName("Ball2"), X_WB, &plant_context);
 
   systems::Simulator<double> simulator(*diagram, std::move(diagram_context));
 
