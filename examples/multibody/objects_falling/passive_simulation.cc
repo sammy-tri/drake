@@ -79,10 +79,10 @@ int do_main() {
   const double mass = 0.1;      // kg
   const double g = 9.81;        // m/s^2
   const double z0 = 0.3;        // Initial height.
-  const int nballs = 2;
-  const int ncylinders = 0;
+  const int nballs = 3;
+  const int ncylinders = 3;
 
-  const double time_step = 1e-4;
+  const double time_step = 1e-3;
 
   MultibodyPlant<double>& plant =
       *builder.AddSystem(MakeObjectsFallingPlant(

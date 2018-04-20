@@ -26,6 +26,44 @@ using drake::multibody::SpatialInertia;
 using drake::multibody::UniformGravityFieldElement;
 using drake::multibody::UnitInertia;
 
+void AddCylinderWithMultiContact(
+    MultibodyPlant<double>* plant, GeometrySystem<double>* geometry_system,
+    const RigidBody<double>& body,
+    double radius, double length, const CoulombFriction<double>& friction,
+    double contact_radius, int num_contacts) {
+  // Add sphere geometry for the ball.
+  plant->RegisterCollisionGeometry(
+      body,
+      /* Pose X_BG of the geometry frame G in the ball frame B. */
+      Isometry3d::Identity(), Cylinder(radius - 1.05 * contact_radius, length),
+      friction, geometry_system);
+
+  // Add a bunch of little spheres to simulate "multi-contact".
+  const int nspheres = num_contacts;
+  const double contact_spheres_radius = contact_radius;
+  for (int i = 0; i < nspheres; ++i) {
+    const double theta = 2.0 * i / nspheres * M_PI;
+    const double x = cos(theta) * radius;
+    const double y = sin(theta) * radius;
+    Isometry3<double> X_BG = Isometry3<double>::Identity();
+    // Top spheres:
+    X_BG.translation() << x, y, length / 2;
+    plant->RegisterCollisionGeometry(
+        body,
+        /* Pose X_BG of the geometry frame G in the ball frame B. */
+        X_BG,
+        Sphere(contact_spheres_radius), friction, geometry_system);
+
+    // Bottom spheres:
+    X_BG.translation() << x, y, -length / 2;
+    plant->RegisterCollisionGeometry(
+        body,
+        /* Pose X_BG of the geometry frame G in the ball frame B. */
+        X_BG,
+        Sphere(contact_spheres_radius), friction, geometry_system);
+  }
+}
+
 std::unique_ptr<drake::multibody::multibody_plant::MultibodyPlant<double>>
 MakeObjectsFallingPlant(
     double radius, double mass, const Vector3<double>& gravity,
@@ -89,6 +127,12 @@ MakeObjectsFallingPlant(
   for (int i = 0; i < ncylinders; ++i) {
     std:: string name = "Cylinder" + std::to_string(i);
     const RigidBody<double> &ball = plant->AddRigidBody(name, M_Bcm);
+
+    AddCylinderWithMultiContact(
+        plant.get(), geometry_system, ball,
+        radius/2, 2 * radius, friction,
+        radius / 50, 8);
+
     // Add sphere geometry for the ball.
     plant->RegisterCollisionGeometry(
         ball,
