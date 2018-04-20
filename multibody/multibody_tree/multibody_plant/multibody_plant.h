@@ -903,6 +903,7 @@ class MultibodyPlant : public systems::LeafSystem<T> {
   geometry::GeometryId RegisterGeometry(
       const Body<T>& body,
       const Isometry3<double>& X_BG, const geometry::Shape& shape,
+      geometry::VisualMaterial& color,
       geometry::GeometrySystem<T>* geometry_system);
 
   // Helper method to register anchored geometry to the world, either visual or

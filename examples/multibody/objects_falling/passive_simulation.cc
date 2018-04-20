@@ -21,6 +21,7 @@
 #include "drake/systems/lcm/serializer.h"
 #include "drake/systems/rendering/pose_bundle_to_draw_message.h"
 
+#include <fstream>
 #include <iostream>
 #define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
 #define PRINT_VARn(a) std::cout << #a":\n" << a << std::endl;
@@ -83,6 +84,10 @@ int do_main() {
   const int ncylinders = 3;
 
   const double time_step = 1e-3;
+
+  std::ofstream outfile;
+  outfile.open("nr_iteration.dat");
+  outfile.close();
 
   MultibodyPlant<double>& plant =
       *builder.AddSystem(MakeObjectsFallingPlant(

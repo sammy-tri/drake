@@ -1,6 +1,7 @@
 #include "drake/multibody/multibody_tree/multibody_plant/multibody_plant.h"
 
 #include <algorithm>
+#include <fmt/format.h>
 #include <memory>
 #include <vector>
 
@@ -12,6 +13,7 @@
 #include "drake/math/autodiff.h"
 #include "drake/math/autodiff_gradient.h"
 
+#include <fstream>
 #include <iostream>
 //#define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
 //#define PRINT_VARn(a) std::cout << #a":\n" << a << std::endl;
@@ -104,13 +106,16 @@ void MultibodyPlant<T>::RegisterVisualGeometry(
         "GeometrySystem used on the first call to "
         "RegisterAsSourceForGeometrySystem()");
   }
+
+  geometry::VisualMaterial color;
+
   GeometryId id;
   // TODO(amcastro-tri): Consider doing this after finalize so that we can
   // register anchored geometry on ANY body welded to the world.
   if (body.index() == world_index()) {
     id = RegisterAnchoredGeometry(X_BG, shape, geometry_system);
   } else {
-    id = RegisterGeometry(body, X_BG, shape, geometry_system);
+    id = RegisterGeometry(body, X_BG, shape, color, geometry_system);
   }
   const int visual_index = geometry_id_to_visual_index_.size();
   geometry_id_to_visual_index_[id] = visual_index;
@@ -132,12 +137,13 @@ geometry::GeometryId MultibodyPlant<T>::RegisterCollisionGeometry(
         "RegisterAsSourceForGeometrySystem()");
   }
   GeometryId id;
+  geometry::VisualMaterial color(Vector4<double>(0, 0, 0, 0));
   // TODO(amcastro-tri): Consider doing this after finalize so that we can
   // register anchored geometry on ANY body welded to the world.
   if (body.index() == world_index()) {
     id = RegisterAnchoredGeometry(X_BG, shape, geometry_system);
   } else {
-    id = RegisterGeometry(body, X_BG, shape, geometry_system);
+    id = RegisterGeometry(body, X_BG, shape, color, geometry_system);
   }
   const int collision_index = geometry_id_to_collision_index_.size();
   geometry_id_to_collision_index_[id] = collision_index;
@@ -151,6 +157,7 @@ template<typename T>
 geometry::GeometryId MultibodyPlant<T>::RegisterGeometry(
     const Body<T>& body,
     const Isometry3<double>& X_BG, const geometry::Shape& shape,
+    geometry::VisualMaterial& color,
     geometry::GeometrySystem<T>* geometry_system) {
   DRAKE_ASSERT(!is_finalized());
   DRAKE_ASSERT(geometry_source_is_registered());
@@ -169,7 +176,7 @@ geometry::GeometryId MultibodyPlant<T>::RegisterGeometry(
   // Register geometry in the body frame.
   GeometryId geometry_id = geometry_system->RegisterGeometry(
       source_id_.value(), body_index_to_frame_id_[body.index()],
-      std::make_unique<GeometryInstance>(X_BG, shape.Clone()));
+      std::make_unique<GeometryInstance>(X_BG, shape.Clone(), color));
   geometry_id_to_body_index_[geometry_id] = body.index();
   return geometry_id;
 }
@@ -599,14 +606,16 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   Xk.segment(0, nv) = v0;
   cnk.setConstant(1.0e-10);
 
-  const int max_iterations = 20;
-  const double tolerance = 1.0e-6;
+  const int max_iterations = 40;
+  const double tolerance = 1.0e-4;
   //const bool update_geometry_every_iteration = false;
 
   VectorX<double> Rk(Xk.size());
   MatrixX<double> Jk(Xk.size(), Xk.size());
   VectorX<double> DeltaXk(Xk.size());
-  for (int iter = 0; iter < max_iterations; ++iter) {
+  int iter;
+  double residual;
+  for (iter = 0; iter < max_iterations; ++iter) {
     // Compute NR residual.
     // TODO(amcastro-tri): consider updating Nk = Nstar. This will however be
     // a more expensive operation.
@@ -638,7 +647,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
       PRINT_VAR(cnk.transpose());
     }
 
-    double residual = DeltaXk.segment(0, nv).norm();
+    residual = DeltaXk.segment(0, nv).norm();
 
     PRINT_VAR(context.get_time());
     PRINT_VAR(residual);
@@ -653,6 +662,11 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
       break;
     }
   }
+
+  std::ofstream outfile;
+  outfile.open("nr_iteration.dat", std::ios_base::app);
+  outfile << fmt::format("{0:14.6e} {1:d} {2:d} {3:14.6e}\n", context.get_time(), iter+1, num_contacts,residual);
+  outfile.close();
 
   // Output solution
   vn = Xk.segment(0, nv);

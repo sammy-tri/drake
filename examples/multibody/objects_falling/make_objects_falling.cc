@@ -38,6 +38,12 @@ void AddCylinderWithMultiContact(
       Isometry3d::Identity(), Cylinder(radius - 1.05 * contact_radius, length),
       friction, geometry_system);
 
+  // Visual for the Cylinder
+  plant->RegisterVisualGeometry(
+      body,
+      /* Pose X_BG of the geometry frame G in the ball frame B. */
+      Isometry3d::Identity(), Cylinder(radius, length), geometry_system);
+
   // Add a bunch of little spheres to simulate "multi-contact".
   const int nspheres = num_contacts;
   const double contact_spheres_radius = contact_radius;
@@ -62,6 +68,60 @@ void AddCylinderWithMultiContact(
         X_BG,
         Sphere(contact_spheres_radius), friction, geometry_system);
   }
+}
+
+void AddSphereWithSpokes(
+    MultibodyPlant<double>* plant, GeometrySystem<double>* geometry_system,
+    const RigidBody<double>& body,
+    double radius, const CoulombFriction<double>& friction) {
+
+  // Add sphere geometry for the ball.
+  const double spoke_radius = radius / 10;
+  plant->RegisterCollisionGeometry(
+      body,
+      /* Pose X_BG of the geometry frame G in the ball frame B. */
+      Isometry3d::Identity(),
+      Sphere(radius), friction, geometry_system);
+
+  // Adds visual
+  plant->RegisterVisualGeometry(
+      body,
+      /* Pose X_BG of the geometry frame G in the ball frame B. */
+      Isometry3d::Identity(),
+      Sphere(radius), geometry_system);
+
+  // Adds little spherical spokes highlight the sphere's rotation.
+  plant->RegisterVisualGeometry(
+      body,
+      /* Pose X_BG of the geometry frame G in the ball frame B. */
+      Isometry3<double>(Translation3<double>(0, 0, radius)), Sphere(spoke_radius),
+      geometry_system);
+  plant->RegisterVisualGeometry(
+      body,
+      /* Pose X_BG of the geometry frame G in the ball frame B. */
+      Isometry3<double>(Translation3<double>(0, 0, -radius)),
+      Sphere(spoke_radius), geometry_system);
+  plant->RegisterVisualGeometry(
+      body,
+      /* Pose X_BG of the geometry frame G in the ball frame B. */
+      Isometry3<double>(Translation3<double>(radius, 0, 0)), Sphere(spoke_radius),
+      geometry_system);
+  plant->RegisterVisualGeometry(
+      body,
+      /* Pose X_BG of the geometry frame G in the ball frame B. */
+      Isometry3<double>(Translation3<double>(-radius, 0, 0)),
+      Sphere(spoke_radius), geometry_system);
+  plant->RegisterVisualGeometry(
+      body,
+      /* Pose X_BG of the geometry frame G in the ball frame B. */
+      Isometry3<double>(Translation3<double>(0, radius, 0)), Sphere(spoke_radius),
+      geometry_system);
+  plant->RegisterVisualGeometry(
+      body,
+      /* Pose X_BG of the geometry frame G in the ball frame B. */
+      Isometry3<double>(Translation3<double>(0, -radius, 0)),
+      Sphere(spoke_radius), geometry_system);
+
 }
 
 std::unique_ptr<drake::multibody::multibody_plant::MultibodyPlant<double>>
@@ -117,11 +177,16 @@ MakeObjectsFallingPlant(
     std:: string name = "Ball" + std::to_string(i);
     const RigidBody<double> &ball = plant->AddRigidBody(name, M_Bcm);
     // Add sphere geometry for the ball.
+#if 0
     plant->RegisterCollisionGeometry(
         ball,
         /* Pose X_BG of the geometry frame G in the ball frame B. */
         Isometry3d::Identity(),
         Sphere(radius), friction, geometry_system);
+#endif
+
+    AddSphereWithSpokes(
+        plant.get(), geometry_system, ball, radius, friction);
   }
 
   for (int i = 0; i < ncylinders; ++i) {
@@ -130,15 +195,8 @@ MakeObjectsFallingPlant(
 
     AddCylinderWithMultiContact(
         plant.get(), geometry_system, ball,
-        radius/2, 2 * radius, friction,
+        radius/2, 4 * radius, friction,
         radius / 50, 8);
-
-    // Add sphere geometry for the ball.
-    plant->RegisterCollisionGeometry(
-        ball,
-        /* Pose X_BG of the geometry frame G in the ball frame B. */
-        Isometry3d::Identity(),
-        Cylinder(radius/2, 2 * radius), friction, geometry_system);
   }
   
   // Gravity acting in the -z direction.
