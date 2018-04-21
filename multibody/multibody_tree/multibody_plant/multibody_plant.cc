@@ -354,10 +354,12 @@ VectorX<U> MultibodyPlant<double>::CalcFischerBurmeisterSolverResidual(
   // nv + num_contacts + num_betas + num_lambdas)
 
   if (num_contacts >0 ) {
+#if 0
     const int num_betas = 4 * num_contacts;
     const int num_lambda = 2 * num_contacts;
     const int betas_start = nv + num_contacts;
     const int lambdas_start = betas_start + num_betas;
+#endif
 
     MatrixX<U> N_on_U = N.template cast<U>();
     R.segment(0, nv) -= N_on_U.transpose() * cn;
@@ -370,6 +372,7 @@ VectorX<U> MultibodyPlant<double>::CalcFischerBurmeisterSolverResidual(
       const U vn = N_on_U.row(icontact) * v;
       R(inormal_impulse) = FischerBurmeisterFunction(vn, cn(icontact));
 
+#if 0
       // Friction direction
       const int ibeta1_plus  = betas_start + 4 * icontact;
       const int ibeta1_minus = betas_start + 4 * icontact + 1;
@@ -398,6 +401,7 @@ VectorX<U> MultibodyPlant<double>::CalcFischerBurmeisterSolverResidual(
       const U gamma = mu * cn(icontact) - ff_norm;
       R(ilambda1) = FischerBurmeisterFunction(gamma, lambda1);
       R(ilambda2) = FischerBurmeisterFunction(gamma, lambda2);
+#endif
     }
   }
 
@@ -638,14 +642,17 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
 
   // Vector of unknowns, at k-th iteration.
   // X = [v; cn]
+#if 0
   const int num_betas = 4 * num_contacts;
   const int num_lambdas = 2 * num_contacts;
-  VectorX<double> Xk = VectorX<double>::Zero(nv + num_contacts + num_betas + num_lambdas);
+#endif
+  const int num_unknowns = nv + num_contacts; // + num_betas + num_lambdas;
+  VectorX<double> Xk = VectorX<double>::Zero(num_unknowns);
   // Aliases to different portions in Xk
   auto vk = Xk.segment(0, nv);
   auto cnk = Xk.segment(nv, num_contacts);
-  auto betak = Xk.segment(nv + num_contacts, num_betas);
-  auto lambdak = Xk.segment(nv + num_contacts + num_betas, num_lambdas);
+  //auto betak = Xk.segment(nv + num_contacts, num_betas);
+  //auto lambdak = Xk.segment(nv + num_contacts + num_betas, num_lambdas);
   (void)cnk;
   // Reuse context_star for the NR iteration.
   //Context<double>& context_k = *context_star;
@@ -654,7 +661,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   // Initial guess for NR iteration.
   Xk.segment(0, nv) = v0;
   cnk.setConstant(1.0e-10);
-  betak.setConstant(1.0e-10);
+  //betak.setConstant(1.0e-10);
 
   const int max_iterations = 40;
   const double tolerance = 1.0e-4;
@@ -864,7 +871,12 @@ MatrixX<T> MultibodyPlant<T>::ComputeTangentVelocityJacobianMatrix(
     const Context<T>& context,
     std::vector<PenetrationAsPointPair<T>>& contact_penetrations) const {
   const int num_contacts = contact_penetrations.size();
-  MatrixX<T> T(2 * num_contacts, num_velocities());
+  // Per contact we have, in this order:
+  //   - beta1_plus
+  //   - beta1_minus
+  //   - beta2_plus
+  //   - beta2_minus
+  MatrixX<T> D(4 * num_contacts, num_velocities());
 
   for (int icontact = 0; icontact < num_contacts; ++icontact) {
     const auto& point_pair = contact_penetrations[icontact];
@@ -933,13 +945,19 @@ MatrixX<T> MultibodyPlant<T>::ComputeTangentVelocityJacobianMatrix(
     PRINT_VARn(N.row(icontact));
 #endif
 
-    T.row(2 * icontact + 0) = that1_W.transpose() * (Jv_WAc - Jv_WBc);
-    T.row(2 * icontact + 1) = that2_W.transpose() * (Jv_WAc - Jv_WBc);
+    // beta1_plus
+    D.row(4 * icontact + 0) = that1_W.transpose() * (Jv_WAc - Jv_WBc);
+    // beta1_minus
+    D.row(4 * icontact + 1) = -D.row(4 * icontact + 0);
+    // beta2_plus
+    D.row(4 * icontact + 2) = that2_W.transpose() * (Jv_WAc - Jv_WBc);
+    // beta2_minus
+    D.row(4 * icontact + 3) = -D.row(4 * icontact + 2);
 
     //PRINT_VARn(N.row(icontact));
   }
 
-  return T;
+  return D;
 }
 
 template<typename T>
