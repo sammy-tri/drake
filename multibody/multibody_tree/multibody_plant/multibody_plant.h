@@ -980,6 +980,11 @@ class MultibodyPlant : public systems::LeafSystem<T> {
       // Variables
       const VectorX<U>& v, const VectorX<U>& cn) const;
 
+  VectorX<T> CalcFischerBurmeisterSolverResidualOnConstraintsOnly(
+      const VectorX<T>& vstar,
+      const MatrixX<T>& W,
+      const VectorX<T>& cn, MatrixX<T>* J) const;
+
   MatrixX<double> CalcFischerBurmeisterSolverJacobian(
       // state at t0
       const VectorX<double>& v0,
@@ -995,6 +1000,23 @@ class MultibodyPlant : public systems::LeafSystem<T> {
   static U FischerBurmeisterFunction(const U& x, const U& y) {
     using std::sqrt;
     return sqrt(x * x + y * y) - x - y;
+  }
+
+  // Evaluate F-B component-wise.
+  static VectorX<T> FischerBurmeisterFunction(
+      const VectorX<T>& x, const VectorX<T>& y) {
+    using std::sqrt;
+    return sqrt(x.array() * x.array() + y.array() * y.array()) - x.array() - y.array();
+  }
+
+  static VectorX<T> FischerBurmeisterGradX(const VectorX<T>& x, const VectorX<T>& y) {
+    using std::sqrt;
+    return x.array() / (sqrt(x.array() * x.array() + y.array() * y.array()) + 1e-14) - 1;
+  }
+
+  static VectorX<T> FischerBurmeisterGradY(const VectorX<T>& x, const VectorX<T>& y) {
+    using std::sqrt;
+    return y.array() / (sqrt(x.array() * x.array() + y.array() * y.array()) + 1e-14) - 1;
   }
 
   // The entire multibody model.

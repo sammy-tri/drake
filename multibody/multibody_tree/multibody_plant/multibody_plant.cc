@@ -307,6 +307,38 @@ void MultibodyPlant<T>::DoCalcTimeDerivatives(
   derivatives->SetFromVector(xdot);
 }
 
+template<typename T>
+VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOnly(
+    const VectorX<T>& vnstar,
+    const MatrixX<T>& W,
+    const VectorX<T>& cn, MatrixX<T>* J) const {
+  const int num_contacts = cn.size();
+  const int num_unknowns = num_contacts;
+
+  DRAKE_DEMAND(vnstar.size() == num_contacts);
+  DRAKE_DEMAND(W.rows() == num_contacts && W.cols() == num_contacts);
+
+  VectorX<T> R(num_unknowns);
+
+  if (num_contacts >0 ) {
+#if 0
+    const int num_betas = 4 * num_contacts;
+    const int num_lambda = 2 * num_contacts;
+    const int betas_start = nv + num_contacts;
+    const int lambdas_start = betas_start + num_betas;
+#endif
+
+    // Add Fischer-Burmeister terms to residual R.
+    VectorX<T> vn_plus = vnstar + W * cn;
+    R = FischerBurmeisterFunction(vn_plus, cn);
+
+    *J = FischerBurmeisterGradX(vn_plus, cn) * W;
+    J->diagonal() += FischerBurmeisterGradY(vn_plus, cn);
+  }
+
+  return R;
+}
+
 template<>
 template<typename U>
 VectorX<U> MultibodyPlant<double>::CalcFischerBurmeisterSolverResidual(
@@ -574,7 +606,9 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
     }
   }
 
+  // Mass matrix and its LDLT factorization.
   model_->CalcMassMatrixViaInverseDynamics(context0, &M0);
+  auto M0_ldlt = M0.ldlt();
 
   // Velocity at next time step.
   VectorX<double> vn(this->num_velocities());
@@ -595,7 +629,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   //////////////////////////////////////////////////////////////////////////////
 
   // Compute discrete update without contact forces.
-  VectorX<double> v_star = vn = v0 + dt * M0.ldlt().solve(-tau0);
+  VectorX<double> v_star = vn = v0 + dt * M0_ldlt.solve(-tau0);
   VectorX<double> qdot_star(this->num_positions());
   model_->MapVelocityToQDot(context0, vn, &qdot_star);
   VectorX<double> q_star = q0 + dt * qdot_star;
@@ -620,8 +654,10 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   context0.get_mutable_discrete_state(0).SetFromVector(x0);
 
   // Compute normal and tangential velocity Jacobians at tstar.
-  MatrixX<double> Nstar;
-  MatrixX<double> Tstar;
+  MatrixX<double> Nstar(num_contacts, nv);  // of size nc x nv]
+  //MatrixX<double> Dstar;
+  MatrixX<double> M0inv_times_Ntrans(nv, num_contacts);  // of size nv x nc.
+  MatrixX<double> W(num_contacts, num_contacts);  // of size nc x nc
   if (num_contacts > 0) {
     // NOTE: The approximation here is to use the state at t0 and the contact
     // penetraions at tstar. Ideally both would be at tc, but then there would
@@ -631,8 +667,14 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
     Nstar = ComputeNormalVelocityJacobianMatrix(
         context0, contact_penetrations_star);
 
-    Tstar = ComputeTangentVelocityJacobianMatrix(
-        context0, contact_penetrations_star);
+    //Dstar = ComputeTangentVelocityJacobianMatrix(
+    //    context0, contact_penetrations_star);
+
+    // M0^{-1} * N^{T}
+    M0inv_times_Ntrans = M0_ldlt.solve(Nstar.transpose());
+
+    // Delasuss operator: N * M0^{-1} * N^{T}:
+    W = Nstar * M0inv_times_Ntrans;
   }
 
   // Compute constant terms
