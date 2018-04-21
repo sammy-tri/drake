@@ -12,6 +12,7 @@
 #include "drake/geometry/geometry_instance.h"
 #include "drake/math/autodiff.h"
 #include "drake/math/autodiff_gradient.h"
+#include "drake/math/orthonormal_basis.h"
 
 #include <fstream>
 #include <iostream>
@@ -318,6 +319,8 @@ VectorX<U> MultibodyPlant<double>::CalcFischerBurmeisterSolverResidual(
     const MatrixX<double>& N,
     // Variables
     const VectorX<U>& v, const VectorX<U>& cn) const {
+  using std::sqrt;
+
   const double dt = time_step_;  // shorter alias.
 
   const int nv = v.size();
@@ -348,15 +351,53 @@ VectorX<U> MultibodyPlant<double>::CalcFischerBurmeisterSolverResidual(
   }
 #endif
 
+  // nv + num_contacts + num_betas + num_lambdas)
+
   if (num_contacts >0 ) {
+    const int num_betas = 4 * num_contacts;
+    const int num_lambda = 2 * num_contacts;
+    const int betas_start = nv + num_contacts;
+    const int lambdas_start = betas_start + num_betas;
+
     MatrixX<U> N_on_U = N.template cast<U>();
     R.segment(0, nv) -= N_on_U.transpose() * cn;
 
     // Add Fischer-Burmeister terms to residual R.
     for (int icontact = 0; icontact < num_contacts; ++icontact) {
-      int iunknown = nv + icontact;
+      int inormal_impulse = nv + icontact;
+
+      // Normal velocitty complementary to normal force
       const U vn = N_on_U.row(icontact) * v;
-      R(iunknown) = FischerBurmeisterFunction(vn, cn(icontact));
+      R(inormal_impulse) = FischerBurmeisterFunction(vn, cn(icontact));
+
+      // Friction direction
+      const int ibeta1_plus  = betas_start + 4 * icontact;
+      const int ibeta1_minus = betas_start + 4 * icontact + 1;
+      const int ibeta2_plus  = betas_start + 4 * icontact + 2;
+      const int ibeta2_minus = betas_start + 4 * icontact + 3;
+      const U vf1 = T_on_U.row(2 * icontact + 0) * v;
+      const U vf2 = T_on_U.row(2 * icontact + 1) * v;
+      const U lambda1 = lambda(2 * icontact + 0);
+      const U lambda2 = lambda(2 * icontact + 1);
+      const U beta1_plus  = beta(4 * icontact + 0);
+      const U beta1_minus = beta(4 * icontact + 1);
+      const U beta2_plus  = beta(4 * icontact + 2);
+      const U beta2_minus = beta(4 * icontact + 3);
+      R(ibeta1_plus)  = FischerBurmeisterFunction(lambda1 + vf1, beta1_plus);
+      R(ibeta1_minus) = FischerBurmeisterFunction(lambda1 - vf1, beta1_minus);
+      R(ibeta2_plus)  = FischerBurmeisterFunction(lambda2 + vf2, beta2_plus);
+      R(ibeta2_minus) = FischerBurmeisterFunction(lambda2 - vf2, beta2_minus);
+
+      // Sliding vs rolling.
+      const int ilambda1 = lambdas_start + 2 * icontact + 0;
+      const int ilambda2 = lambdas_start + 2 * icontact + 1;
+      const U ff_norm = sqrt(
+          (beta1_plus + beta1_minus) * (beta1_plus + beta1_minus) +
+          (beta2_plus + beta2_minus) * (beta2_plus + beta2_minus));
+      const U mu = contact_friction(icontact);
+      const U gamma = mu * cn(icontact) - ff_norm;
+      R(ilambda1) = FischerBurmeisterFunction(gamma, lambda1);
+      R(ilambda2) = FischerBurmeisterFunction(gamma, lambda2);
     }
   }
 
@@ -574,8 +615,9 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   //////////////////////////////////////////////////////////////////////////////
   context0.get_mutable_discrete_state(0).SetFromVector(x0);
 
-  // Compute normal velocities Jacobian at tstar.
+  // Compute normal and tangential velocity Jacobians at tstar.
   MatrixX<double> Nstar;
+  MatrixX<double> Tstar;
   if (num_contacts > 0) {
     // NOTE: The approximation here is to use the state at t0 and the contact
     // penetraions at tstar. Ideally both would be at tc, but then there would
@@ -583,6 +625,9 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
     // TODO(amcastro-tri): consider doing something better here. Would it be
     // possible to compute a cheap approximation to tc?
     Nstar = ComputeNormalVelocityJacobianMatrix(
+        context0, contact_penetrations_star);
+
+    Tstar = ComputeTangentVelocityJacobianMatrix(
         context0, contact_penetrations_star);
   }
 
@@ -593,10 +638,14 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
 
   // Vector of unknowns, at k-th iteration.
   // X = [v; cn]
-  VectorX<double> Xk = VectorX<double>::Zero(nv + num_contacts);
+  const int num_betas = 4 * num_contacts;
+  const int num_lambdas = 2 * num_contacts;
+  VectorX<double> Xk = VectorX<double>::Zero(nv + num_contacts + num_betas + num_lambdas);
   // Aliases to different portions in Xk
   auto vk = Xk.segment(0, nv);
   auto cnk = Xk.segment(nv, num_contacts);
+  auto betak = Xk.segment(nv + num_contacts, num_betas);
+  auto lambdak = Xk.segment(nv + num_contacts + num_betas, num_lambdas);
   (void)cnk;
   // Reuse context_star for the NR iteration.
   //Context<double>& context_k = *context_star;
@@ -605,6 +654,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   // Initial guess for NR iteration.
   Xk.segment(0, nv) = v0;
   cnk.setConstant(1.0e-10);
+  betak.setConstant(1.0e-10);
 
   const int max_iterations = 40;
   const double tolerance = 1.0e-4;
@@ -787,6 +837,7 @@ MatrixX<T> MultibodyPlant<T>::ComputeNormalVelocityJacobianMatrix(
     // vn = v_AcBc_W.dot(nhat_BA_W);
     // vn = (nhat^T * J) * v
     //N.row(icontact) = nhat_BA_W.transpose() * (Jv_WBc - Jv_WAc);
+#if 0
     PRINT_VAR(icontact);
     PRINT_VAR(nhat_BA_W.transpose());
     PRINT_VAR(bodyA.name());
@@ -794,13 +845,101 @@ MatrixX<T> MultibodyPlant<T>::ComputeNormalVelocityJacobianMatrix(
     PRINT_VAR(bodyB.name());
     PRINT_VARn(Jv_WBc);
     PRINT_VARn(N.row(icontact));
+#endif
 
     N.row(icontact) = nhat_BA_W.transpose() * (Jv_WAc - Jv_WBc);
 
-    PRINT_VARn(N.row(icontact));
+    //PRINT_VARn(N.row(icontact));
   }
 
   return N;
+}
+
+// This method is assuming that we are giving a compatible `context` with a
+// `contact_penetrations`, where each contact pair, in theory,
+// has point_pair.depth = 0. That is, each contact pair is "exactly" at contact.
+// However in practice these are usually computed with some finite penetration.
+template<typename T>
+MatrixX<T> MultibodyPlant<T>::ComputeTangentVelocityJacobianMatrix(
+    const Context<T>& context,
+    std::vector<PenetrationAsPointPair<T>>& contact_penetrations) const {
+  const int num_contacts = contact_penetrations.size();
+  MatrixX<T> T(2 * num_contacts, num_velocities());
+
+  for (int icontact = 0; icontact < num_contacts; ++icontact) {
+    const auto& point_pair = contact_penetrations[icontact];
+
+    const GeometryId geometryA_id = point_pair.id_A;
+    const GeometryId geometryB_id = point_pair.id_B;
+
+    // TODO(amcastro-tri): Request GeometrySystem to do this filtering for us
+    // when that capability lands.
+    // TODO(amcastro-tri): consider allowing this id's to belong to a third
+    // external system when they correspond to anchored geometry.
+    if (!is_collision_geometry(geometryA_id) ||
+        !is_collision_geometry(geometryB_id))
+      continue;
+
+    BodyIndex bodyA_index = geometry_id_to_body_index_.at(geometryA_id);
+    const Body<T>& bodyA = model().get_body(bodyA_index);
+    BodyIndex bodyB_index = geometry_id_to_body_index_.at(geometryB_id);
+    const Body<T>& bodyB = model().get_body(bodyB_index);
+
+    // Penetration depth, > 0 during point_pair.
+    const T& x = point_pair.depth;
+    DRAKE_ASSERT(x >= 0);
+    const Vector3<T>& nhat_BA_W = point_pair.nhat_BA_W;
+    const Vector3<T>& p_WCa = point_pair.p_WCa;
+    const Vector3<T>& p_WCb = point_pair.p_WCb;
+
+    // Approximate the position of the contact point as:
+    // In theory p_WC = p_WCa = p_WCb.
+    const Vector3<T> p_WC = 0.5 * (p_WCa + p_WCb);  // notice this is at t_star.
+    // TODO(amcastro-tri): for each contact point, consider computing
+    // dtc = phi / phidot and then estimate the contact point as:
+    //  p_WCa = p_WCa_star + dtc * v0_WCa
+    //  p_WCb = p_WCb_star + dtc * v0_WCb
+    // In theory, these two estimations should be very close to the actual p_WC.
+    // Then do:
+    //  p_WC = 0.5 * (p_WCa + p_WCb);
+
+    // Compute the orientation of a contact frame C at the contact point such
+    // that the z-axis is aligned to nhat_BA_W. The tangent vectors are
+    // arbitrary.
+    const Matrix3<T> R_WC = math::ComputeBasisFromAxis(2, nhat_BA_W);
+    const Vector3<T> that1_W = R_WC.col(0);
+    const Vector3<T> that2_W = R_WC.col(1);
+
+    MatrixX<T> Jv_WAc(3, this->num_velocities());  // s.t.: v_WAc = Jv_WAc * v.
+    model().CalcPointsGeometricJacobianExpressedInWorld(
+        context, bodyA.body_frame(), p_WC, &Jv_WAc);
+
+    MatrixX<T> Jv_WBc(3, this->num_velocities());  // s.t.: v_WBc = Jv_WBc * v.
+    model().CalcPointsGeometricJacobianExpressedInWorld(
+        context, bodyB.body_frame(), p_WC, &Jv_WBc);
+
+    // Therefore v_AcBc_W = v_WBc - v_WAc.
+    // if xdot = vn > 0 ==> they are getting closer.
+    // vn = v_AcBc_W.dot(nhat_BA_W);
+    // vn = (nhat^T * J) * v
+    //N.row(icontact) = nhat_BA_W.transpose() * (Jv_WBc - Jv_WAc);
+#if 0
+    PRINT_VAR(icontact);
+    PRINT_VAR(nhat_BA_W.transpose());
+    PRINT_VAR(bodyA.name());
+    PRINT_VARn(Jv_WAc);
+    PRINT_VAR(bodyB.name());
+    PRINT_VARn(Jv_WBc);
+    PRINT_VARn(N.row(icontact));
+#endif
+
+    T.row(2 * icontact + 0) = that1_W.transpose() * (Jv_WAc - Jv_WBc);
+    T.row(2 * icontact + 1) = that2_W.transpose() * (Jv_WAc - Jv_WBc);
+
+    //PRINT_VARn(N.row(icontact));
+  }
+
+  return T;
 }
 
 template<typename T>
@@ -937,9 +1076,9 @@ void MultibodyPlant<double>::CalcAndAddContactForcesByPenaltyMethod(
       // Since the normal force is positive (non-zero), compute the friction
       // force. First obtain the friction coefficients:
       const int collision_indexA =
-          geometry_id_to_collision_index_.at(geometryA_id);;
+          geometry_id_to_collision_index_.at(geometryA_id);
       const int collision_indexB =
-          geometry_id_to_collision_index_.at(geometryB_id);;
+          geometry_id_to_collision_index_.at(geometryB_id);
       const CoulombFriction<double>& geometryA_friction =
           default_coulomb_friction_[collision_indexA];
       const CoulombFriction<double>& geometryB_friction =

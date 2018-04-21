@@ -964,6 +964,10 @@ class MultibodyPlant : public systems::LeafSystem<T> {
       const systems::Context<T>& context,
       std::vector<geometry::PenetrationAsPointPair<T>>& penetrations) const;
 
+  MatrixX<T> ComputeTangentVelocityJacobianMatrix(
+      const systems::Context<T>& context,
+      std::vector<geometry::PenetrationAsPointPair<T>>& penetrations) const;
+
   template<typename U>
   VectorX<U> CalcFischerBurmeisterSolverResidual(
       // state at t0
