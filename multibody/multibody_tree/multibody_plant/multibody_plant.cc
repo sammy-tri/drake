@@ -332,7 +332,7 @@ VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOn
     VectorX<T> vn_plus = vnstar + W * cn;
     R = FischerBurmeisterFunction(vn_plus, cn);
 
-    *J = FischerBurmeisterGradX(vn_plus, cn) * W;
+    *J = FischerBurmeisterGradX(vn_plus, cn).asDiagonal() * W;
     J->diagonal() += FischerBurmeisterGradY(vn_plus, cn);
   }
 
@@ -658,6 +658,8 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   //MatrixX<double> Dstar;
   MatrixX<double> M0inv_times_Ntrans(nv, num_contacts);  // of size nv x nc.
   MatrixX<double> W(num_contacts, num_contacts);  // of size nc x nc
+  VectorX<double> vnstar(num_contacts);
+  //Eigen::LDLT<MatrixX<double>> W_ldlt;
   if (num_contacts > 0) {
     // NOTE: The approximation here is to use the state at t0 and the contact
     // penetraions at tstar. Ideally both would be at tc, but then there would
@@ -666,6 +668,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
     // possible to compute a cheap approximation to tc?
     Nstar = ComputeNormalVelocityJacobianMatrix(
         context0, contact_penetrations_star);
+    vnstar = Nstar * v_star;
 
     //Dstar = ComputeTangentVelocityJacobianMatrix(
     //    context0, contact_penetrations_star);
@@ -675,6 +678,12 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
 
     // Delasuss operator: N * M0^{-1} * N^{T}:
     W = Nstar * M0inv_times_Ntrans;
+
+    PRINT_VARn(M0);
+    PRINT_VARn(Nstar);
+    PRINT_VARn(M0inv_times_Ntrans);
+    PRINT_VARn(W);
+    //W_ldlt = W.ldlt();
   }
 
   // Compute constant terms
@@ -688,77 +697,80 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   const int num_betas = 4 * num_contacts;
   const int num_lambdas = 2 * num_contacts;
 #endif
-  const int num_unknowns = nv + num_contacts; // + num_betas + num_lambdas;
+
+  int iter(0);
+  double residual(0);
+  const int num_unknowns = num_contacts; // + num_betas + num_lambdas;
   VectorX<double> Xk = VectorX<double>::Zero(num_unknowns);
   // Aliases to different portions in Xk
-  auto vk = Xk.segment(0, nv);
-  auto cnk = Xk.segment(nv, num_contacts);
-  //auto betak = Xk.segment(nv + num_contacts, num_betas);
-  //auto lambdak = Xk.segment(nv + num_contacts + num_betas, num_lambdas);
-  (void)cnk;
-  // Reuse context_star for the NR iteration.
-  //Context<double>& context_k = *context_star;
-  //(void) context_k;
+  auto cnk = Xk.segment(0, num_contacts);
 
-  // Initial guess for NR iteration.
-  Xk.segment(0, nv) = v0;
-  cnk.setConstant(1.0e-10);
-  //betak.setConstant(1.0e-10);
+  if (num_contacts > 0) {
+    //auto betak = Xk.segment(nv + num_contacts, num_betas);
+    //auto lambdak = Xk.segment(nv + num_contacts + num_betas, num_lambdas);
+    // Reuse context_star for the NR iteration.
+    //Context<double>& context_k = *context_star;
+    //(void) context_k;
 
-  const int max_iterations = 40;
-  const double tolerance = 1.0e-4;
-  //const bool update_geometry_every_iteration = false;
+    // Initial guess for NR iteration.
+    cnk.setConstant(1.0e-10);
+    //betak.setConstant(1.0e-10);
 
-  VectorX<double> Rk(Xk.size());
-  MatrixX<double> Jk(Xk.size(), Xk.size());
-  VectorX<double> DeltaXk(Xk.size());
-  int iter;
-  double residual;
-  for (iter = 0; iter < max_iterations; ++iter) {
-    // Compute NR residual.
-    // TODO(amcastro-tri): consider updating Nk = Nstar. This will however be
-    // a more expensive operation.
+    const int max_iterations = 40;
+    const double tolerance = 1.0e-4;
+    //const bool update_geometry_every_iteration = false;
 
-    //R = CalcFischerBurmeisterSolverResidual(
+    VectorX<double> Rk(Xk.size());
+    MatrixX<double> Jk(Xk.size(), Xk.size());
+    VectorX<double> DeltaXk(Xk.size());
+    for (iter = 0; iter < max_iterations; ++iter) {
+      // Compute NR residual.
+      // TODO(amcastro-tri): consider updating Nk = Nstar. This will however be
+      // a more expensive operation.
+
+      //R = CalcFischerBurmeisterSolverResidual(
       //  v0, M0, tau0, Nstar, VectorX<double>(vk), VectorX<double>(cnk));
 
-    // Compute Residual and Jacobian.
-    CalcFischerBurmeisterSolverJacobian(v0, M0, tau0, Nstar, vk, cnk, &Rk, &Jk);
+      // Compute Residual and Jacobian.
+      // CalcFischerBurmeisterSolverJacobian(v0, M0, tau0, Nstar, vk, cnk, &Rk, &Jk);
 
-    // Compute the complete orthogonal factorization of J.
-    Eigen::CompleteOrthogonalDecomposition<MatrixX<double>> Jk_QTZ(Jk);
+      Rk = CalcFischerBurmeisterSolverResidualOnConstraintsOnly(
+          vnstar, W, cnk, &Jk);
 
-    // Solve
-    DeltaXk = -Jk_QTZ.solve(Rk);
+      // Compute the complete orthogonal factorization of J.
+      Eigen::CompleteOrthogonalDecomposition<MatrixX<double>> Jk_QTZ(Jk);
 
-    // Update solution:
-    Xk = Xk + DeltaXk;
+      // Solve
+      DeltaXk = -Jk_QTZ.solve(Rk);
 
-    if (num_contacts > 0) {
-      PRINT_VAR(iter);
-      PRINT_VAR(num_contacts);
-      //PRINT_VARn(M0);
-      //PRINT_VAR(tau0.transpose());
-      PRINT_VARn(Nstar);
-      PRINT_VAR(Rk.transpose());
-      PRINT_VARn(Jk);
-      PRINT_VAR(vk.transpose());
-      PRINT_VAR(cnk.transpose());
-    }
+      // Update solution:
+      Xk = Xk + DeltaXk;
 
-    residual = DeltaXk.segment(0, nv).norm();
+      if (num_contacts > 0) {
+        PRINT_VAR(iter);
+        PRINT_VAR(num_contacts);
+        //PRINT_VARn(M0);
+        //PRINT_VAR(tau0.transpose());
+        PRINT_VARn(Nstar);
+        PRINT_VAR(Rk.transpose());
+        PRINT_VARn(Jk);
+        PRINT_VAR(cnk.transpose());
+      }
 
-    PRINT_VAR(context.get_time());
-    PRINT_VAR(residual);
+      residual = DeltaXk.norm();
+
+      PRINT_VAR(context.get_time());
+      PRINT_VAR(residual);
 
 #if 0
-    PRINT_VAR(residual);
-    PRINT_VAR(vk.transpose());
-    PRINT_VAR(Xk.transpose());
+      PRINT_VAR(residual);
+      PRINT_VAR(vk.transpose());
+      PRINT_VAR(Xk.transpose());
 #endif
 
-    if (residual < tolerance) {
-      break;
+      if (residual < tolerance) {
+        break;
+      }
     }
   }
 
@@ -767,10 +779,11 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   outfile << fmt::format("{0:14.6e} {1:d} {2:d} {3:14.6e}\n", context.get_time(), iter+1, num_contacts,residual);
   outfile.close();
 
-  // Output solution
-  vn = Xk.segment(0, nv);
-
-  //vn = v0 + dt * M0.ldlt().solve(-tau0);
+  // Compute solution
+  vn = v_star;
+  if (num_contacts > 0) {
+    vn += M0inv_times_Ntrans * cnk;
+  }
 
   VectorX<double> qdotn(this->num_positions());
   model_->MapVelocityToQDot(context0, vn, &qdotn);

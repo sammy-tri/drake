@@ -1019,6 +1019,16 @@ class MultibodyPlant : public systems::LeafSystem<T> {
     return y.array() / (sqrt(x.array() * x.array() + y.array() * y.array()) + 1e-14) - 1;
   }
 
+  static VectorX<T> FischerBurmeisterFunctionAndGrad(
+      const VectorX<T>& x, const VectorX<T>& y,
+      VectorX<T>* dgdx, VectorX<T>* dgdy) {
+    using std::sqrt;
+    VectorX<T> norm = sqrt(x.array() * x.array() + y.array() * y.array());
+    *dgdx = x.array() / (norm.array() + 1e-14) - 1;
+    *dgdy = y.array() / (norm.array() + 1e-14) - 1;
+    return norm.array()  - x.array() - y.array();
+  }
+
   // The entire multibody model.
   std::unique_ptr<drake::multibody::MultibodyTree<T>> model_;
 

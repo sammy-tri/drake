@@ -80,8 +80,8 @@ int do_main() {
   const double mass = 0.1;      // kg
   const double g = 9.81;        // m/s^2
   const double z0 = 0.3;        // Initial height.
-  const int nballs = 3;
-  const int ncylinders = 3;
+  const int nballs = 5;
+  const int ncylinders = 5;
 
   const double time_step = 1e-3;
 

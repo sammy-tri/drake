@@ -41,6 +41,10 @@ MakeBouncingBallPlant(double radius, double mass,
         plant->world_body(),
         HalfSpace::MakePose(normal_W, point_W), HalfSpace(), surface_friction,
         geometry_system);
+    plant->RegisterVisualGeometry(
+        plant->world_body(),
+        HalfSpace::MakePose(normal_W, point_W), HalfSpace(),
+        geometry_system);
 
     // Add sphere geometry for the ball.
     //const double length = 4 * radius;
@@ -50,6 +54,12 @@ MakeBouncingBallPlant(double radius, double mass,
         Isometry3<double>::Identity(),
       //  geometry::Cylinder(radius, length), surface_friction, geometry_system);
         Sphere(radius), surface_friction, geometry_system);
+    plant->RegisterVisualGeometry(
+        ball,
+        /* Pose X_BG of the geometry frame G in the ball frame B. */
+        Isometry3<double>::Identity(),
+        //  geometry::Cylinder(radius, length), surface_friction, geometry_system);
+        Sphere(radius), geometry_system);
 
 #if 0
     // Add a bunch of little spheres to simulate "multi-contact".
@@ -91,6 +101,11 @@ MakeBouncingBallPlant(double radius, double mass,
         /* Pose X_BG of the geometry frame G in the ball frame B. */
         Isometry3<double>::Identity(),
         Sphere(radius), surface_friction, geometry_system);
+    plant->RegisterVisualGeometry(
+        ball2,
+        /* Pose X_BG of the geometry frame G in the ball frame B. */
+        Isometry3<double>::Identity(),
+        Sphere(radius), geometry_system);
 
 #if 0
     // Add a bunch of little spheres to simulate "multi-contact".

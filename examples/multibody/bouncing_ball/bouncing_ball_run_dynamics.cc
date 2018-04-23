@@ -155,7 +155,7 @@ int do_main() {
   model.SetFreeBodyPoseOrThrow(
       model.GetBodyByName("Ball"), X_WB, &plant_context);
 
-  X_WB.translation() = Vector3d(1.5 * radius, 0.0, z0+radius);
+  X_WB.translation() = Vector3d(2.5 * radius, 0.0, z0+radius);
   model.SetFreeBodyPoseOrThrow(
       model.GetBodyByName("Ball2"), X_WB, &plant_context);
 
