@@ -1007,6 +1007,16 @@ class MultibodyPlant : public systems::LeafSystem<T> {
     return sqrt(x * x + y * y) - x - y;
   }
 
+  static T FischerBurmeisterGradX(const T& x, const T& y) {
+    using std::sqrt;
+    return x / (sqrt(x * x + y * y) + 1e-14) - 1;
+  }
+
+  static T FischerBurmeisterGradY(const T& x, const T& y) {
+    using std::sqrt;
+    return y / (sqrt(x * x + y * y) + 1e-14) - 1;
+  }
+
   // Evaluate F-B component-wise.
   static VectorX<T> FischerBurmeisterFunction(
       const VectorX<T>& x, const VectorX<T>& y) {

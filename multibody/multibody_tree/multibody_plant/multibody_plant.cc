@@ -324,7 +324,7 @@ VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOn
 
   // Abbreviations
   const int nc = num_contacts;
-  const int nb = num_betas;
+  //const int nb = num_betas;
 
   DRAKE_DEMAND(vnstar.size() == num_contacts);
   DRAKE_DEMAND(Wnn.rows() == num_contacts && Wnn.cols() == num_contacts);
@@ -806,7 +806,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
 
     Dstar = ComputeTangentVelocityJacobianMatrix(
         context0, contact_penetrations_star);
-    vtstar = Nstar * v_star;
+    vtstar = Dstar * v_star;
 
     // M0^{-1} * N^{T}
     M0inv_times_Ntrans = M0_ldlt.solve(Nstar.transpose());
@@ -1097,12 +1097,11 @@ MatrixX<T> MultibodyPlant<T>::ComputeTangentVelocityJacobianMatrix(
     const Context<T>& context,
     std::vector<PenetrationAsPointPair<T>>& contact_penetrations) const {
   const int num_contacts = contact_penetrations.size();
-  // Per contact we have, in this order:
-  //   - beta1_plus
-  //   - beta1_minus
-  //   - beta2_plus
-  //   - beta2_minus
-  MatrixX<T> D(4 * num_contacts, num_velocities());
+  // Per contact we have two betas, one per each tangential direction.
+  // betas can be either positive or negative.
+
+  // D is defined such that vf = D * v, with vf of size 2nc.
+  MatrixX<T> D(2 * num_contacts, num_velocities());
 
   for (int icontact = 0; icontact < num_contacts; ++icontact) {
     const auto& point_pair = contact_penetrations[icontact];
@@ -1144,9 +1143,11 @@ MatrixX<T> MultibodyPlant<T>::ComputeTangentVelocityJacobianMatrix(
     // Compute the orientation of a contact frame C at the contact point such
     // that the z-axis is aligned to nhat_BA_W. The tangent vectors are
     // arbitrary.
-    const Matrix3<T> R_WC = math::ComputeBasisFromAxis(2, nhat_BA_W);
-    const Vector3<T> that1_W = R_WC.col(0);
-    const Vector3<T> that2_W = R_WC.col(1);
+    // nhat_BA_W points outwards from B. Therefore we define frame Bc at contac
+    // point C with z-axis pointing along nhat_BA_W.
+    const Matrix3<T> R_WBc = math::ComputeBasisFromAxis(2, nhat_BA_W);
+    const Vector3<T> that1_W = R_WBc.col(0);
+    const Vector3<T> that2_W = R_WBc.col(1);
 
     MatrixX<T> Jv_WAc(3, this->num_velocities());  // s.t.: v_WAc = Jv_WAc * v.
     model().CalcPointsGeometricJacobianExpressedInWorld(
@@ -1171,14 +1172,12 @@ MatrixX<T> MultibodyPlant<T>::ComputeTangentVelocityJacobianMatrix(
     PRINT_VARn(N.row(icontact));
 #endif
 
-    // beta1_plus
-    D.row(4 * icontact + 0) = that1_W.transpose() * (Jv_WAc - Jv_WBc);
-    // beta1_minus
-    D.row(4 * icontact + 1) = -D.row(4 * icontact + 0);
-    // beta2_plus
-    D.row(4 * icontact + 2) = that2_W.transpose() * (Jv_WAc - Jv_WBc);
-    // beta2_minus
-    D.row(4 * icontact + 3) = -D.row(4 * icontact + 2);
+    // We deinfe D such that it gives us v_AcBc projected on the tangent
+    // components of frame Bc on contact point C with z-axis outwards from B.
+    // beta0
+    D.row(2 * icontact + 0) = that1_W.transpose() * (Jv_WBc - Jv_WAc);
+    // beta1
+    D.row(2 * icontact + 1) = that2_W.transpose() * (Jv_WBc - Jv_WAc);
 
     //PRINT_VARn(N.row(icontact));
   }
