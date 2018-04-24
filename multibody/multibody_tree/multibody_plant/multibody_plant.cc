@@ -310,32 +310,115 @@ void MultibodyPlant<T>::DoCalcTimeDerivatives(
 template<typename T>
 VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOnly(
     const VectorX<T>& vnstar,
-    const MatrixX<T>& W,
-    const VectorX<T>& cn, MatrixX<T>* J) const {
+    const VectorX<T>& vfstar,
+    const MatrixX<T>& Wnn,
+    const MatrixX<T>& Wnt,
+    const MatrixX<T>& Wtt,
+    const VectorX<T>& mu,
+    const VectorX<T>& cn, const VectorX<T>& beta, const VectorX<T>& lambda,
+    MatrixX<T>* J_ptr) const {
   const int num_contacts = cn.size();
+  const int num_betas = 2 * num_contacts;
+  const int num_lambdas = num_contacts;
   const int num_unknowns = num_contacts;
 
   DRAKE_DEMAND(vnstar.size() == num_contacts);
-  DRAKE_DEMAND(W.rows() == num_contacts && W.cols() == num_contacts);
+  DRAKE_DEMAND(Wnn.rows() == num_contacts && Wnn.cols() == num_contacts);
+  DRAKE_DEMAND(Wnt.rows() == num_contacts && Wnt.cols() == num_betas);
+  DRAKE_DEMAND(beta.size() == num_betas);
+  DRAKE_DEMAND(vfstar.size() == num_betas);
+  DRAKE_DEMAND(Wtt.rows() == num_betas && Wtt.cols() == num_betas);
+  DRAKE_DEMAND(mu.size() == num_contacts);
+  DRAKE_DEMAND(lambda.size() == num_lambdas);
+
+  MatrixX<T>& J = *J_ptr;
 
   VectorX<T> R(num_unknowns);
 
+  J.setZero();
+
   if (num_contacts >0 ) {
-#if 0
-    const int num_betas = 4 * num_contacts;
-    const int num_lambda = 2 * num_contacts;
-    const int betas_start = nv + num_contacts;
+    const int betas_start = num_contacts;
     const int lambdas_start = betas_start + num_betas;
-#endif
 
     // Add Fischer-Burmeister terms to residual R.
-    VectorX<T> vn_plus = vnstar + W * cn;
-    R = FischerBurmeisterFunction(vn_plus, cn);
+    VectorX<T> vn_plus = vnstar + Wnn * cn + Wnt * beta;
+    R.segment(0, num_contacts) = FischerBurmeisterFunction(vn_plus, cn);
 
-    *J = FischerBurmeisterGradX(vn_plus, cn).asDiagonal() * W;
-    J->diagonal() += FischerBurmeisterGradY(vn_plus, cn);
-  }
+    // common term, find a better name.
+    VectorX<T> grad_x = FischerBurmeisterGradX(vn_plus, cn);
 
+    // dR_cn(1:nc)/dcn
+    J_ptr->block(0, 0, num_contacts, num_contacts) =
+        grad_x.asDiagonal() * Wnn +
+        FischerBurmeisterGradY(vn_plus, cn).asDiagonal();
+
+    // dR_cn(1:nc)/dbeta
+    J_ptr->block(0, num_contacts, num_contacts, num_betas) =
+        grad_x.asDiagonal() * Wnt;
+
+    // dR_cn(1:nc)/dlambda = 0
+
+    auto Wtn = Wnt.transpose();
+    // Add R_lambda has size num_betas
+    VectorX<T> vf = vfstar + Wnt.transpose() * cn + Wtt * beta;
+    for (int ic = 0; ic < num_contacts; ++ic) {
+      const int ibeta0 = 2 * ic + 0;
+      const int ibeta1 = ibeta0 + 1;
+      const int ik_cn = ic;
+      const int ik_beta0 = num_contacts + ibeta0;
+      const int ik_beta1 = num_contacts + ibeta1;
+      const int ik_lambda = lambdas_start + ic;
+
+      const T beta0 = beta(ibeta0);
+      const T beta1 = beta(ibeta1);
+
+      /////////////////////////////////////////////////////////////////////
+      // R_beta
+      /////////////////////////////////////////////////////////////////////
+      // R_beta
+      R(ik_beta0) = mu(ic) * cn(ic) * vf(ibeta0) + lambda(ic) * beta(ibeta0);
+      R(ik_beta1) = mu(ic) * cn(ic) * vf(ibeta1) + lambda(ic) * beta(ibeta1);
+
+      // dR_beta/dcn
+      for (int jc = 0; jc < num_contacts; ++jc) {
+        if (jc == ic) {
+          J_ptr->block(ik_beta0, jc, 2, 1) =
+              mu(ic) * vf.segment(ibeta0, 2);
+        }
+        J_ptr->block(ik_beta0, jc, 2, 1) +=
+            mu(ic) * cn(ic) * Wtn.block(ibeta0, jc, 2, 1);
+      }
+
+      // dR_beta/dbeta
+      J_ptr->block(ik_beta0, ik_beta0, 1, 1) += lambda(ic);
+      J_ptr->block(ik_beta1, ik_beta1, 1, 1) += lambda(ic);
+
+      // dR_beta/lambda
+      J_ptr->block(ik_beta0, ik_lambda, 1, 1) += beta(ibeta0);
+      J_ptr->block(ik_beta1, ik_lambda, 1, 1) += beta(ibeta1);
+
+      /////////////////////////////////////////////////////////////////////
+      // R_lambda
+      /////////////////////////////////////////////////////////////////////
+      const T mu_cn = mu(ic) * cn(ic);
+      const T gamma = (mu_cn * mu_cn) - (beta0 * beta0 + beta1 * beta1);
+      R.segment(ik_lambda) = FischerBurmeisterFunction(gamma, lambda(ic));
+
+      const T dglambda_dx = FischerBurmeisterGradX(gamma, lambda(ic));
+      const T dglambda_dy = FischerBurmeisterGradX(gamma, lambda(ic));
+
+      // dR_lambda/dcn
+      J(ik_lambda, ik_cn) = 2 * mu (ic) * cn(ic) * dglambda_dx;
+
+      // dR_lambda/dbeta
+      J(ik_lambda, ik_beta0) = -2 * beta0 * dglambda_dx;
+      J(ik_lambda, ik_beta1) = -2 * beta1 * dglambda_dx;
+
+      // dR_lambda/dlambda
+      J(ik_lambda, ik_lambda) = dglambda_dy;
+    }
+    
   return R;
 }
 
