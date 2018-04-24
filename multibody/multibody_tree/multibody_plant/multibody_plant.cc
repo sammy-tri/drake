@@ -341,6 +341,7 @@ VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOn
   MatrixX<T>& J = *J_ptr;
 
   VectorX<T> R(num_unknowns);
+  R.setZero();
 
   J.setZero();
 
@@ -462,8 +463,8 @@ VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOn
 
       // dR_lambda/dlambda
       J(ik_lambda, ik_lambda) = dglambda_dy;
-    }
-
+    } // ic
+  } // if (num_contacts >0 )
   return R;
 }
 
@@ -782,11 +783,16 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   context0.get_mutable_discrete_state(0).SetFromVector(x0);
 
   // Compute normal and tangential velocity Jacobians at tstar.
-  MatrixX<double> Nstar(num_contacts, nv);  // of size nc x nv]
+  MatrixX<double> Nstar(num_contacts, nv);  // of size nc x nv
+  MatrixX<double> Dstar(2*num_contacts, nv);  // of size (2nc) x nv
   //MatrixX<double> Dstar;
   MatrixX<double> M0inv_times_Ntrans(nv, num_contacts);  // of size nv x nc.
-  MatrixX<double> W(num_contacts, num_contacts);  // of size nc x nc
+  MatrixX<double> M0inv_times_Dtrans(nv, 2*num_contacts);  // of size nv x (2nc).
+  MatrixX<double> Wnn(num_contacts, num_contacts);  // of size nc x nc
+  MatrixX<double> Wnt(num_contacts, 2*num_contacts);  // of size nc x (2*nc)
+  MatrixX<double> Wtt(2*num_contacts, 2*num_contacts);  // of size (2nc) x (2*nc)
   VectorX<double> vnstar(num_contacts);
+  VectorX<double> vtstar(2*num_contacts);
   //Eigen::LDLT<MatrixX<double>> W_ldlt;
   if (num_contacts > 0) {
     // NOTE: The approximation here is to use the state at t0 and the contact
@@ -798,40 +804,74 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
         context0, contact_penetrations_star);
     vnstar = Nstar * v_star;
 
-    //Dstar = ComputeTangentVelocityJacobianMatrix(
-    //    context0, contact_penetrations_star);
+    Dstar = ComputeTangentVelocityJacobianMatrix(
+        context0, contact_penetrations_star);
+    vtstar = Nstar * v_star;
 
     // M0^{-1} * N^{T}
     M0inv_times_Ntrans = M0_ldlt.solve(Nstar.transpose());
-
     // Delasuss operator: N * M0^{-1} * N^{T}:
-    W = Nstar * M0inv_times_Ntrans;
+    Wnn = Nstar * M0inv_times_Ntrans;
+
+    // M0^{-1} * D^{T}
+    M0inv_times_Dtrans = M0_ldlt.solve(Dstar.transpose());
+    // Wnt = N * M0^{-1} * D^{T}:
+    Wnt = Nstar * M0inv_times_Dtrans;
+    // Wtt = D * M0^{-1} * D^{T}:
+    Wtt = Dstar * M0inv_times_Dtrans;
 
     PRINT_VARn(M0);
     PRINT_VARn(Nstar);
     PRINT_VARn(M0inv_times_Ntrans);
-    PRINT_VARn(W);
+    PRINT_VARn(Wnn);
+
+    PRINT_VARn(Dstar);
     //W_ldlt = W.ldlt();
   }
 
-  // Compute constant terms
-  //const VectorX<double> v0_double = v0.template cast<double>();
-  //const MatrixX<double> M0_double = M0.template cast<double>();
-  //(void) M0;
+  // Compute friction coefficients at each contact point.
+  VectorX<double> mu(num_contacts);
+  if (num_contacts > 0) {
+    for (int ic = 0; ic < num_contacts; ++ic) {
+      const auto& penetration = contact_penetrations_star[ic];
 
-  // Vector of unknowns, at k-th iteration.
-  // X = [v; cn]
-#if 0
-  const int num_betas = 4 * num_contacts;
-  const int num_lambdas = 2 * num_contacts;
-#endif
+      const GeometryId geometryA_id = penetration.id_A;
+      const GeometryId geometryB_id = penetration.id_B;
+
+      // TODO(amcastro-tri): Request GeometrySystem to do this filtering for us
+      // when that capability lands.
+      // TODO(amcastro-tri): consider allowing this id's to belong to a third
+      // external system when they correspond to anchored geometry.
+      if (!is_collision_geometry(geometryA_id) ||
+          !is_collision_geometry(geometryB_id))
+        continue;
+
+      const int collision_indexA =
+          geometry_id_to_collision_index_.at(geometryA_id);
+      const int collision_indexB =
+          geometry_id_to_collision_index_.at(geometryB_id);
+      const CoulombFriction<double> &geometryA_friction =
+          default_coulomb_friction_[collision_indexA];
+      const CoulombFriction<double> &geometryB_friction =
+          default_coulomb_friction_[collision_indexB];
+      const CoulombFriction<double> combined_friction_coefficients =
+          CalcContactFrictionFromSurfaceProperties(
+              geometryA_friction, geometryB_friction);
+      // Static friction is ignored.
+      mu[ic] = combined_friction_coefficients.dynamic_friction();
+    }
+  }
 
   int iter(0);
   double residual(0);
-  const int num_unknowns = num_contacts; // + num_betas + num_lambdas;
+  const int num_betas = 2 * num_contacts;
+  const int num_lambdas = num_contacts;
+  const int num_unknowns = num_contacts + num_betas + num_lambdas;
   VectorX<double> Xk = VectorX<double>::Zero(num_unknowns);
   // Aliases to different portions in Xk
   auto cnk = Xk.segment(0, num_contacts);
+  auto betak = Xk.segment(num_contacts, num_betas);
+  auto lambdak = Xk.segment(num_contacts + num_betas, num_lambdas);
 
   if (num_contacts > 0) {
     //auto betak = Xk.segment(nv + num_contacts, num_betas);
@@ -863,7 +903,10 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
       // CalcFischerBurmeisterSolverJacobian(v0, M0, tau0, Nstar, vk, cnk, &Rk, &Jk);
 
       Rk = CalcFischerBurmeisterSolverResidualOnConstraintsOnly(
-          vnstar, W, cnk, &Jk);
+          vnstar, vtstar,
+          Wnn, Wnt, Wtt, mu,
+          cnk, betak, lambdak,
+          &Jk);
 
       // Compute the complete orthogonal factorization of J.
       Eigen::CompleteOrthogonalDecomposition<MatrixX<double>> Jk_QTZ(Jk);
@@ -910,7 +953,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   // Compute solution
   vn = v_star;
   if (num_contacts > 0) {
-    vn += M0inv_times_Ntrans * cnk;
+    vn += M0inv_times_Ntrans * cnk + M0inv_times_Dtrans * betak;
   }
 
   VectorX<double> qdotn(this->num_positions());
