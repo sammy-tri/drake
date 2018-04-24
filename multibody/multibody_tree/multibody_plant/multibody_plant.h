@@ -981,9 +981,14 @@ class MultibodyPlant : public systems::LeafSystem<T> {
       const VectorX<U>& v, const VectorX<U>& cn) const;
 
   VectorX<T> CalcFischerBurmeisterSolverResidualOnConstraintsOnly(
-      const VectorX<T>& vstar,
-      const MatrixX<T>& W,
-      const VectorX<T>& cn, MatrixX<T>* J) const;
+      const VectorX<T>& vnstar,
+      const VectorX<T>& vfstar,
+      const MatrixX<T>& Wnn,
+      const MatrixX<T>& Wnt,
+      const MatrixX<T>& Wtt,
+      const VectorX<T>& mu,
+      const VectorX<T>& cn, const VectorX<T>& beta, const VectorX<T>& lambda,
+      MatrixX<T>* J_ptr) const;
 
   MatrixX<double> CalcFischerBurmeisterSolverJacobian(
       // state at t0
