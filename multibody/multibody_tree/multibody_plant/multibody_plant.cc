@@ -1042,7 +1042,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
 
         // Update solution:
         Xk.segment(0, num_contacts) = Xk.segment(0, num_contacts) + DeltaXk.segment(0, num_contacts);
-        Xk.segment(num_contacts, num_unknowns).setZero();
+        Xk.tail(num_betas + num_lambdas).setZero();
 
         VectorX<double> vtk = vtstar + Wnt.transpose() * cnk;
         for (int ic=0; ic< num_contacts; ++ic) {

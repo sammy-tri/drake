@@ -26,7 +26,7 @@ namespace objects_falling {
 ///   If this argument is omitted, no geometry will be registered.
 std::unique_ptr<drake::multibody::multibody_plant::MultibodyPlant<double>>
 MakeObjectsFallingPlant(
-    double radius, double mass,const Vector3<double>& gravity,
+    double radius, double mass,const Vector3<double>& gravity, double friction,
     int nballs, int ncylinders,
     double time_step,
     geometry::GeometrySystem<double>* geometry_system = nullptr);

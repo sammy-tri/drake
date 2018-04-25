@@ -80,6 +80,7 @@ int do_main() {
   const double mass = 0.1;      // kg
   const double g = 9.81;        // m/s^2
   const double z0 = 0.3;        // Initial height.
+  const double friction = 0.3;
   const int nballs = 5;
   const int ncylinders = 5;
 
@@ -91,7 +92,7 @@ int do_main() {
 
   MultibodyPlant<double>& plant =
       *builder.AddSystem(MakeObjectsFallingPlant(
-          radius, mass, -g * Vector3d::UnitZ(),
+          radius, mass, -g * Vector3d::UnitZ(), friction,
           nballs, ncylinders, time_step,
           &geometry_system));
   const MultibodyTree<double>& model = plant.model();

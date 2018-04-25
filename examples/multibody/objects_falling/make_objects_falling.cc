@@ -126,7 +126,7 @@ void AddSphereWithSpokes(
 
 std::unique_ptr<drake::multibody::multibody_plant::MultibodyPlant<double>>
 MakeObjectsFallingPlant(
-    double radius, double mass, const Vector3<double>& gravity,
+    double radius, double mass, const Vector3<double>& gravity, double friction,
     int nballs, int ncylinders,
     double time_step,
     geometry::GeometrySystem<double>* geometry_system) {
@@ -137,7 +137,7 @@ MakeObjectsFallingPlant(
 
   auto plant = std::make_unique<MultibodyPlant<double>>(time_step);
 
-  CoulombFriction<double> friction(1.0, 0.3);
+  CoulombFriction<double> coulomb_friction(friction, friction);
 
   plant->RegisterAsSourceForGeometrySystem(geometry_system);
 
@@ -150,14 +150,14 @@ MakeObjectsFallingPlant(
     Vector3<double> point_W(0, 0, -0.2);
     plant->RegisterCollisionGeometry(
         plant->world_body(),
-        HalfSpace::MakePose(ni, point_W), HalfSpace(), friction,
+        HalfSpace::MakePose(ni, point_W), HalfSpace(), coulomb_friction,
         geometry_system);
     ni = R * ni;
   }
   plant->RegisterCollisionGeometry(
       plant->world_body(),
       HalfSpace::MakePose(Vector3<double>::UnitZ(), Vector3<double>::Zero()),
-      HalfSpace(), friction, geometry_system);
+      HalfSpace(), coulomb_friction, geometry_system);
 #if 0
   Vector3d n2 = R * n1;
   Vector3d n3 = R * n2;
@@ -182,11 +182,11 @@ MakeObjectsFallingPlant(
         ball,
         /* Pose X_BG of the geometry frame G in the ball frame B. */
         Isometry3d::Identity(),
-        Sphere(radius), friction, geometry_system);
+        Sphere(radius), coulomb_friction, geometry_system);
 #endif
 
     AddSphereWithSpokes(
-        plant.get(), geometry_system, ball, radius, friction);
+        plant.get(), geometry_system, ball, radius, coulomb_friction);
   }
 
   for (int i = 0; i < ncylinders; ++i) {
@@ -195,7 +195,7 @@ MakeObjectsFallingPlant(
 
     AddCylinderWithMultiContact(
         plant.get(), geometry_system, ball,
-        radius/2, 4 * radius, friction,
+        radius/2, 4 * radius, coulomb_friction,
         radius / 50, 8);
   }
   
