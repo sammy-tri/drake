@@ -934,8 +934,8 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
 
     const int max_iterations = 500;
     const double tolerance = 1.0e-8;
-    //const double alpha = 0.5;
-    //const int max_line_search = 20;
+    const double alpha = 0.5;
+    const int max_line_search = 20;
 
     //const bool update_geometry_every_iteration = false;
 
@@ -1044,6 +1044,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
 #endif
 
       if (with_friction) {
+#if 0
         // Compute the complete orthogonal factorization of J.
         Eigen::CompleteOrthogonalDecomposition<MatrixX<double>> Jk_QTZ(Jk);
 
@@ -1052,11 +1053,25 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
 
         // Update solution:
         Xk = Xk + DeltaXk;
+#endif
+
+        // Minimize cost f = |Xk|^2/2
+        MatrixX<double> A = Jk * Jk.transpose();
+        Eigen::CompleteOrthogonalDecomposition<MatrixX<double>> A_QTZ(A);
+
+        // RHS for lagrange multipliers
+        VectorX<double> Rlambda = Jk * Xk - Rk;
+
+        VectorX<double> lagrange_multipliers = A_QTZ.solve(Rlambda);
+
+        VectorX<double> Xk0 = Xk;  // for residual computation.
+        Xk = Jk.transpose() * lagrange_multipliers;
+
+        DeltaXk = Xk - Xk0;
 
         // Prototype Line Search
-#if 0
         // Save previous
-        VectorX<double> Xk0 = Xk;
+        //VectorX<double> Xk0 = Xk;
         VectorX<double> Xkp = Xk;
 
         PRINT_VAR("Line search");
@@ -1090,7 +1105,6 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
           omega *= alpha;
           Xkp = Xk;
         }
-#endif
 
       } else {
         // Compute the complete orthogonal factorization of J. Only the cn block.
@@ -1130,7 +1144,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
 
           Xk(ik_beta0) = 0.0;
           Xk(ik_beta1) = 0.0;
-          Xk(ik_lambda) = vt_norm;
+          Xk(ik_lambda) = 0.0;//vt_norm;
         }
 
       }
