@@ -79,15 +79,16 @@ int do_main() {
   const double mass = 0.1;      // kg
   const double g = 9.81;        // m/s^2
   const double z0 = radius + 0.02;        // Initial height.
-  const double v0 = -0.3;
-  const double mu = 0.005;
+  const double v0 = 0.3;
+  const double mu = 0.05;
+  const int nspheres = 2;
   const CoulombFriction<double> coulomb_friction(
       mu /* static friction */, mu /* dynamic friction */);
 
   const double time_step = FLAGS_is_time_stepping ? 0.001 : 0;
 
   MultibodyPlant<double>& plant =
-      *builder.AddSystem(MakeBouncingBallPlant(
+      *builder.AddSystem(MakeBouncingBallPlant(nspheres,
           radius, mass, coulomb_friction, -g * Vector3d::UnitZ(),
           time_step, &geometry_system));
   const MultibodyTree<double>& model = plant.model();
@@ -157,14 +158,19 @@ int do_main() {
   X_WB.translation() = Vector3d(0.0, 0.0, z0);
   model.SetFreeBodyPoseOrThrow(
       model.GetBodyByName("Ball"), X_WB, &plant_context);
-
   model.SetFreeBodySpatialVelocityOrThrow(
       model.GetBodyByName("Ball"),
-      SpatialVelocity<double>(Vector3d{0.0, 0, 0},Vector3d{v0, v0, 0}), &plant_context);
+      SpatialVelocity<double>(Vector3d{0.0, 0, 0},Vector3d{v0, 0, 0}), &plant_context);
 
-  X_WB.translation() = Vector3d(2.5 * radius, 0.0, z0+radius);
-  //model.SetFreeBodyPoseOrThrow(
-    //  model.GetBodyByName("Ball2"), X_WB, &plant_context);
+  if( nspheres==2) {
+    X_WB.translation() = Vector3d(5.0 * radius, 0.0, z0);
+    model.SetFreeBodyPoseOrThrow(
+        model.GetBodyByName("Ball2"), X_WB, &plant_context);
+    model.SetFreeBodySpatialVelocityOrThrow(
+        model.GetBodyByName("Ball2"),
+        SpatialVelocity<double>(Vector3d{0.0, 0, 0}, Vector3d{-v0, 0, 0}),
+        &plant_context);
+  }
 
   systems::Simulator<double> simulator(*diagram, std::move(diagram_context));
 
