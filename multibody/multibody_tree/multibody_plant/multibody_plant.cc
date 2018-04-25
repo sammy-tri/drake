@@ -404,16 +404,16 @@ VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOn
       /////////////////////////////////////////////////////////////////////
       // R_cn
       /////////////////////////////////////////////////////////////////////
-      R(ik_cn) = FischerBurmeisterFunction(vn_i, cn_i);
-      const T dgcn_dx = FischerBurmeisterGradX(vn_i, cn_i);
-      const T dgcn_dy = FischerBurmeisterGradY(vn_i, cn_i);
+      R(ik_cn) = FischerBurmeisterFunction(vn_i, cn_i * W2);
+      const T dgcn_dx = FischerBurmeisterGradX(vn_i, cn_i * W2);
+      const T dgcn_dy = FischerBurmeisterGradY(vn_i, cn_i * W2);
 
       // dR_cn/dcn
       for (int jc = 0; jc < nc; ++jc) {
         int jk_cn = jc;
         J(ik_cn, jk_cn) = dgcn_dx * Wnn(ic, jc);
         if (ic == jc) {
-          J(ik_cn, jk_cn) += dgcn_dy;
+          J(ik_cn, jk_cn) += dgcn_dy * W2;
         }
       }
 
