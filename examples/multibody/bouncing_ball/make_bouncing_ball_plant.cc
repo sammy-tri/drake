@@ -25,11 +25,13 @@ void AddCylinderWithMultiContact(
     double radius, double length, const CoulombFriction<double>& friction,
     double contact_radius, int num_contacts) {
   // Add sphere geometry for the ball.
+#if 0
   plant->RegisterCollisionGeometry(
       body,
       /* Pose X_BG of the geometry frame G in the ball frame B. */
       Isometry3d::Identity(), Cylinder(radius - 1.05 * contact_radius, length),
       friction, geometry_system);
+#endif
 
   // Visual for the Cylinder
   plant->RegisterVisualGeometry(
@@ -52,6 +54,11 @@ void AddCylinderWithMultiContact(
         /* Pose X_BG of the geometry frame G in the ball frame B. */
         X_BG,
         Sphere(contact_spheres_radius), friction, geometry_system);
+    plant->RegisterVisualGeometry(
+        body,
+        /* Pose X_BG of the geometry frame G in the ball frame B. */
+        X_BG,
+        Sphere(contact_spheres_radius), geometry_system);
 
     // Bottom spheres:
     X_BG.translation() << x, y, -length / 2;
@@ -60,6 +67,11 @@ void AddCylinderWithMultiContact(
         /* Pose X_BG of the geometry frame G in the ball frame B. */
         X_BG,
         Sphere(contact_spheres_radius), friction, geometry_system);
+    plant->RegisterVisualGeometry(
+        body,
+        /* Pose X_BG of the geometry frame G in the ball frame B. */
+        X_BG,
+        Sphere(contact_spheres_radius), geometry_system);
   }
 }
 
@@ -147,8 +159,12 @@ MakeBouncingBallPlant(int nspheres, double radius, double mass,
         geometry_system);
 
     // Add sphere geometry for the ball.
-    AddSphereWithSpokes(plant.get(), geometry_system,
-                        ball, radius, surface_friction);
+    //AddSphereWithSpokes(plant.get(), geometry_system,
+    //                    ball, radius, surface_friction);
+
+    AddCylinderWithMultiContact(
+        plant.get(), geometry_system,
+        ball, radius, 4 * radius, surface_friction, radius / 20.0, 10);
 
 #if 0
     // Add a bunch of little spheres to simulate "multi-contact".
