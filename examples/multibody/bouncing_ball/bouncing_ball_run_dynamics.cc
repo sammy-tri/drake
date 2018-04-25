@@ -79,7 +79,8 @@ int do_main() {
   const double mass = 0.1;      // kg
   const double g = 9.81;        // m/s^2
   const double z0 = radius + 0.02;        // Initial height.
-  const double mu = 0.025;
+  const double v0 = -0.3;
+  const double mu = 0.005;
   const CoulombFriction<double> coulomb_friction(
       mu /* static friction */, mu /* dynamic friction */);
 
@@ -159,7 +160,7 @@ int do_main() {
 
   model.SetFreeBodySpatialVelocityOrThrow(
       model.GetBodyByName("Ball"),
-      SpatialVelocity<double>(Vector3d{0.0, 0, 0},Vector3d{0.1, 0, 0}), &plant_context);
+      SpatialVelocity<double>(Vector3d{0.0, 0, 0},Vector3d{v0, v0, 0}), &plant_context);
 
   X_WB.translation() = Vector3d(2.5 * radius, 0.0, z0+radius);
   //model.SetFreeBodyPoseOrThrow(

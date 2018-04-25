@@ -16,10 +16,10 @@
 
 #include <fstream>
 #include <iostream>
-#define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
-#define PRINT_VARn(a) std::cout << #a":\n" << a << std::endl;
-//#define PRINT_VAR(a) (void) a;
-//#define PRINT_VARn(a) (void) a;
+//#define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
+//#define PRINT_VARn(a) std::cout << #a":\n" << a << std::endl;
+#define PRINT_VAR(a) (void) a;
+#define PRINT_VARn(a) (void) a;
 
 namespace drake {
 namespace multibody {
@@ -348,6 +348,9 @@ VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOn
 
   J.setZero();
 
+  // Scaling factor
+  const T W2 = Wnn.squaredNorm() + Wnt.squaredNorm() + Wtt.squaredNorm();
+
   if (num_contacts >0 ) {
     const int betas_start = num_contacts;
     const int lambdas_start = betas_start + num_betas;
@@ -479,17 +482,17 @@ VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOn
       const T beta_mod = sqrt(beta0_i * beta0_i + beta1_i * beta1_i);
       const T beta_mod_reg = beta_mod + 1.0e-14;
       const T gamma = mu_cn - beta_mod;
-      R(ik_lambda) = FischerBurmeisterFunction(gamma, lambda_i);
+      R(ik_lambda) = FischerBurmeisterFunction(W2 * gamma, lambda_i);
 
-      const T dglambda_dx = FischerBurmeisterGradX(gamma, lambda_i);
-      const T dglambda_dy = FischerBurmeisterGradY(gamma, lambda_i);
+      const T dglambda_dx = FischerBurmeisterGradX(W2 * gamma, lambda_i);
+      const T dglambda_dy = FischerBurmeisterGradY(W2 * gamma, lambda_i);
 
       // dR_lambda/dcn
-      J(ik_lambda, ik_cn) = mu_i * dglambda_dx;
+      J(ik_lambda, ik_cn) = mu_i * dglambda_dx * W2;
 
       // dR_lambda/dbeta
-      J(ik_lambda, ik_beta0) = - beta0_i / beta_mod_reg * dglambda_dx;
-      J(ik_lambda, ik_beta1) = - beta1_i / beta_mod_reg * dglambda_dx;
+      J(ik_lambda, ik_beta0) = - beta0_i / beta_mod_reg * dglambda_dx * W2;
+      J(ik_lambda, ik_beta1) = - beta1_i / beta_mod_reg * dglambda_dx * W2;
 
       // dR_lambda/dlambda
       J(ik_lambda, ik_lambda) = dglambda_dy;
@@ -919,7 +922,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
     lambdak.setConstant(0);
 
     const int max_iterations = 40;
-    const double tolerance = 1.0e-4;
+    const double tolerance = 1.0e-8;
     //const bool update_geometry_every_iteration = false;
 
     VectorX<double> Rk(Xk.size());
@@ -945,6 +948,8 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
           with_friction,
           &Jk);
 
+      // Debugging code to compute Jacobian by finite differences.
+#if 0
       double delta = 1.0e-12;
       MatrixX<double> Jnum(num_unknowns, num_unknowns);
       VectorX<double> dcn = cnk;
@@ -1015,6 +1020,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
 
       PRINT_VARn(Jk);
       PRINT_VARn(Jnum);
+#endif
 
       if (with_friction) {
         // Compute the complete orthogonal factorization of J.
@@ -1105,7 +1111,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
 
   std::ofstream outfile;
   outfile.open("nr_iteration.dat", std::ios_base::app);
-  outfile << fmt::format("{0:14.6e} {1:d} {2:d} {3:14.6e}\n", context.get_time(), iter+1, num_contacts,residual);
+  outfile << fmt::format("{0:14.6e} {1:d} {2:d} {3:14.6e}\n", context.get_time(), iter, num_contacts,residual);
   outfile.close();
 
   // Compute solution
