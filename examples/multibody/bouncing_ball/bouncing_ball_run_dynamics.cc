@@ -54,6 +54,7 @@ using drake::multibody::multibody_plant::CoulombFriction;
 using drake::multibody::multibody_plant::MultibodyPlant;
 using drake::multibody::MultibodyTree;
 using drake::multibody::QuaternionFloatingMobilizer;
+using drake::multibody::SpatialVelocity;
 using drake::systems::ImplicitEulerIntegrator;
 using drake::systems::lcm::LcmPublisherSystem;
 using drake::systems::lcm::Serializer;
@@ -77,9 +78,10 @@ int do_main() {
   const double radius = 0.05;   // m
   const double mass = 0.1;      // kg
   const double g = 9.81;        // m/s^2
-  const double z0 = 0.3;        // Initial height.
+  const double z0 = radius + 0.02;        // Initial height.
+  const double mu = 0.025;
   const CoulombFriction<double> coulomb_friction(
-      0.8 /* static friction */, 0.3 /* dynamic friction */);
+      mu /* static friction */, mu /* dynamic friction */);
 
   const double time_step = FLAGS_is_time_stepping ? 0.001 : 0;
 
@@ -150,14 +152,18 @@ int do_main() {
   Matrix3d R_WB = math::UniformlyRandomRotationMatrix(&generator).matrix();
   Isometry3d X_WB = Isometry3d::Identity();
   //X_WB.linear() = R_WB;
-  X_WB.linear() = AngleAxis<double>(M_PI_2 / 3, Vector3<double>::UnitY()).toRotationMatrix();
+  //X_WB.linear() = AngleAxis<double>(M_PI_2 / 3, Vector3<double>::UnitY()).toRotationMatrix();
   X_WB.translation() = Vector3d(0.0, 0.0, z0);
   model.SetFreeBodyPoseOrThrow(
       model.GetBodyByName("Ball"), X_WB, &plant_context);
 
+  model.SetFreeBodySpatialVelocityOrThrow(
+      model.GetBodyByName("Ball"),
+      SpatialVelocity<double>(Vector3d{0.0, 0, 0},Vector3d{0.1, 0, 0}), &plant_context);
+
   X_WB.translation() = Vector3d(2.5 * radius, 0.0, z0+radius);
-  model.SetFreeBodyPoseOrThrow(
-      model.GetBodyByName("Ball2"), X_WB, &plant_context);
+  //model.SetFreeBodyPoseOrThrow(
+    //  model.GetBodyByName("Ball2"), X_WB, &plant_context);
 
   systems::Simulator<double> simulator(*diagram, std::move(diagram_context));
 

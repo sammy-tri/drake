@@ -16,10 +16,10 @@
 
 #include <fstream>
 #include <iostream>
-//#define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
-//#define PRINT_VARn(a) std::cout << #a":\n" << a << std::endl;
-#define PRINT_VAR(a) (void) a;
-#define PRINT_VARn(a) (void) a;
+#define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
+#define PRINT_VARn(a) std::cout << #a":\n" << a << std::endl;
+//#define PRINT_VAR(a) (void) a;
+//#define PRINT_VARn(a) (void) a;
 
 namespace drake {
 namespace multibody {
@@ -316,11 +316,14 @@ VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOn
     const MatrixX<T>& Wtt,
     const VectorX<T>& mu,
     const VectorX<T>& cn, const VectorX<T>& beta, const VectorX<T>& lambda,
+    bool with_friction,
     MatrixX<T>* J_ptr) const {
   const int num_contacts = cn.size();
   const int num_betas = 2 * num_contacts;
   const int num_lambdas = num_contacts;
   const int num_unknowns = num_contacts + num_betas + num_lambdas;
+
+  using std::sqrt;
 
   // Abbreviations
   const int nc = num_contacts;
@@ -369,8 +372,14 @@ VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOn
 
     auto Wtn = Wnt.transpose();
 
-    VectorX<T> vn = vnstar + Wnn * cn + Wnt * beta;  // of size nc
-    VectorX<T> vf = vfstar + Wtn * cn + Wtt * beta;  // of size 2 * nc
+    VectorX<T> vn = vnstar + Wnn * cn;  // of size nc
+    VectorX<T> vf = vfstar + Wtn * cn;  // of size 2 * nc
+
+    if (with_friction) {
+      vn += Wnt * beta;  // of size nc
+      vf += Wtt * beta;  // of size 2 * nc
+    }
+
     for (int ic = 0; ic < num_contacts; ++ic) {
       const int ibeta0 = 2 * ic + 0;
       const int ibeta1 = ibeta0 + 1;
@@ -406,17 +415,23 @@ VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOn
       }
 
       // dR_cn/dbeta
-      for (int jc = 0; jc < nc; ++jc) {
-        const int jbeta0 = 2 * jc + 0;
-        const int jbeta1 = jbeta0 + 1;
-        const int jk_beta0 = nc + jbeta0;
-        const int jk_beta1 = nc + jbeta1;
+      if (with_friction) {
+        for (int jc = 0; jc < nc; ++jc) {
+          const int jbeta0 = 2 * jc + 0;
+          const int jbeta1 = jbeta0 + 1;
+          const int jk_beta0 = nc + jbeta0;
+          const int jk_beta1 = nc + jbeta1;
 
-        J(ik_cn, jk_beta0) = dgcn_dx * Wnt(ic, jbeta0);
-        J(ik_cn, jk_beta1) = dgcn_dx * Wnt(ic, jbeta1);
+          J(ik_cn, jk_beta0) = dgcn_dx * Wnt(ic, jbeta0);
+          J(ik_cn, jk_beta1) = dgcn_dx * Wnt(ic, jbeta1);
+        }
       }
 
       // dR_cn/dlambda = 0. Thus we add nothing.
+
+
+      // If there is no friction skip the rest.
+      if (!with_friction) continue;
 
       /////////////////////////////////////////////////////////////////////
       // R_beta
@@ -437,8 +452,21 @@ VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOn
       }
 
       // dR_beta/dbeta
-      J(ik_beta0, ik_beta0) = lambda_i;
-      J(ik_beta1, ik_beta1) = lambda_i;
+      for (int jc = 0; jc < nc; ++jc) {
+        const int jbeta0 = 2 * jc + 0;
+        const int jbeta1 = jbeta0 + 1;
+        const int jk_beta0 = nc + jbeta0;
+        const int jk_beta1 = nc + jbeta1;
+        if (ic == jc) {
+          J(ik_beta0, jk_beta0) = lambda_i;
+          J(ik_beta1, jk_beta1) = lambda_i;
+        }
+        J(ik_beta0, jk_beta0) += mu_i * cn_i * Wtt(ibeta0, jbeta0);
+        J(ik_beta0, jk_beta1) += mu_i * cn_i * Wtt(ibeta0, jbeta1);
+
+        J(ik_beta1, jk_beta0) += mu_i * cn_i * Wtt(ibeta1, jbeta0);
+        J(ik_beta1, jk_beta1) += mu_i * cn_i * Wtt(ibeta1, jbeta1);
+      }
 
       // dR_beta/lambda
       J(ik_beta0, ik_lambda) = beta0_i;
@@ -448,18 +476,20 @@ VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOn
       // R_lambda
       /////////////////////////////////////////////////////////////////////
       const T mu_cn = mu_i * cn_i;
-      const T gamma = (mu_cn * mu_cn) - (beta0_i * beta0_i + beta1_i * beta1_i);
+      const T beta_mod = sqrt(beta0_i * beta0_i + beta1_i * beta1_i);
+      const T beta_mod_reg = beta_mod + 1.0e-14;
+      const T gamma = mu_cn - beta_mod;
       R(ik_lambda) = FischerBurmeisterFunction(gamma, lambda_i);
 
       const T dglambda_dx = FischerBurmeisterGradX(gamma, lambda_i);
-      const T dglambda_dy = FischerBurmeisterGradX(gamma, lambda_i);
+      const T dglambda_dy = FischerBurmeisterGradY(gamma, lambda_i);
 
       // dR_lambda/dcn
-      J(ik_lambda, ik_cn) = 2 * mu_cn * dglambda_dx;
+      J(ik_lambda, ik_cn) = mu_i * dglambda_dx;
 
       // dR_lambda/dbeta
-      J(ik_lambda, ik_beta0) = -2 * beta0_i * dglambda_dx;
-      J(ik_lambda, ik_beta1) = -2 * beta1_i * dglambda_dx;
+      J(ik_lambda, ik_beta0) = - beta0_i / beta_mod_reg * dglambda_dx;
+      J(ik_lambda, ik_beta1) = - beta1_i / beta_mod_reg * dglambda_dx;
 
       // dR_lambda/dlambda
       J(ik_lambda, ik_lambda) = dglambda_dy;
@@ -671,6 +701,8 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
     const drake::systems::Context<double>& context,
     const std::vector<const drake::systems::DiscreteUpdateEvent<double>*>& events,
     drake::systems::DiscreteValues<double>* updates) const {
+  using std::sqrt;
+  using std::max;
   // If plant state is continuous, no discrete state to update.
   if (!is_state_discrete()) return;
 
@@ -882,7 +914,9 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
 
     // Initial guess for NR iteration.
     cnk.setConstant(1.0e-10);
-    //betak.setConstant(1.0e-10);
+    betak.setConstant(0);
+    betak(0) = 1.0e-10;
+    lambdak.setConstant(0);
 
     const int max_iterations = 40;
     const double tolerance = 1.0e-4;
@@ -902,20 +936,128 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
       // Compute Residual and Jacobian.
       // CalcFischerBurmeisterSolverJacobian(v0, M0, tau0, Nstar, vk, cnk, &Rk, &Jk);
 
+      bool with_friction = iter == 0 ? false : true;
+
       Rk = CalcFischerBurmeisterSolverResidualOnConstraintsOnly(
           vnstar, vtstar,
           Wnn, Wnt, Wtt, mu,
           cnk, betak, lambdak,
+          with_friction,
           &Jk);
 
-      // Compute the complete orthogonal factorization of J.
-      Eigen::CompleteOrthogonalDecomposition<MatrixX<double>> Jk_QTZ(Jk);
+      double delta = 1.0e-12;
+      MatrixX<double> Jnum(num_unknowns, num_unknowns);
+      VectorX<double> dcn = cnk;
+      VectorX<double> db = betak;
+      VectorX<double> dl = lambdak;
+      Jnum.setZero();
+      for (int jc = 0; jc < num_contacts; ++jc) {
+        //////////////////////////////////////////////////
+        // dR/dc
+        dcn(jc) += delta;
+        VectorX<double> col =
+            CalcFischerBurmeisterSolverResidualOnConstraintsOnly(
+                vnstar, vtstar,
+                Wnn, Wnt, Wtt, mu,
+                dcn, betak, lambdak,
+                with_friction,
+                &Jk);
+        Jnum.block(0, jc, num_unknowns, 1) = (col - Rk) / delta;
+        //PRINT_VAR(col.transpose());
+        //PRINT_VAR(Rk.transpose());
+        // revert
+        dcn(jc) = cnk(jc);
 
-      // Solve
-      DeltaXk = -Jk_QTZ.solve(Rk);
+        //////////////////////////////////////////////////
+        // dR/dbeta
+        db(2*jc) += delta;
+        col = CalcFischerBurmeisterSolverResidualOnConstraintsOnly(
+                vnstar, vtstar,
+                Wnn, Wnt, Wtt, mu,
+                cnk, db, lambdak,
+                with_friction,
+                &Jk);
+        Jnum.block(0, num_contacts+2*jc, num_unknowns, 1) = (col - Rk) / delta;
+        db(2*jc) = betak(2*jc);
 
-      // Update solution:
-      Xk = Xk + DeltaXk;
+        db(2*jc+1) += delta;
+        col = CalcFischerBurmeisterSolverResidualOnConstraintsOnly(
+            vnstar, vtstar,
+            Wnn, Wnt, Wtt, mu,
+            cnk, db, lambdak,
+            with_friction,
+            &Jk);
+        Jnum.block(0, num_contacts+2*jc+1, num_unknowns, 1) = (col - Rk) / delta;
+        db(2*jc+1) = betak(2*jc+1);
+
+        //////////////////////////////////////////////////
+        // dR/dlambda
+        dl(jc) += delta;
+        col =
+            CalcFischerBurmeisterSolverResidualOnConstraintsOnly(
+                vnstar, vtstar,
+                Wnn, Wnt, Wtt, mu,
+                cnk, betak, dl,
+                with_friction,
+                &Jk);
+        Jnum.block(0, num_contacts+num_betas+jc, num_unknowns, 1) = (col - Rk) / delta;
+        // revert
+        dl(jc) = lambdak(jc);
+      }
+
+      // Recompute Jk
+      Rk = CalcFischerBurmeisterSolverResidualOnConstraintsOnly(
+          vnstar, vtstar,
+          Wnn, Wnt, Wtt, mu,
+          cnk, betak, lambdak,
+          with_friction,
+          &Jk);
+
+      PRINT_VARn(Jk);
+      PRINT_VARn(Jnum);
+
+      if (with_friction) {
+        // Compute the complete orthogonal factorization of J.
+        Eigen::CompleteOrthogonalDecomposition<MatrixX<double>> Jk_QTZ(Jk);
+
+        // Solve
+        DeltaXk = -Jk_QTZ.solve(Rk);
+
+        // Update solution:
+        Xk = Xk + DeltaXk;
+      } else {
+        // Compute the complete orthogonal factorization of J. Only the cn block.
+        Eigen::CompleteOrthogonalDecomposition<MatrixX<double>> Jk_QTZ(
+            Jk.block(0, 0, num_contacts, num_contacts));
+
+        // Solve
+        DeltaXk.segment(0, num_contacts) =
+            -Jk_QTZ.solve(Rk.segment(0, num_contacts));
+
+        // Update solution:
+        Xk.segment(0, num_contacts) = Xk.segment(0, num_contacts) + DeltaXk.segment(0, num_contacts);
+        Xk.segment(num_contacts, num_unknowns).setZero();
+
+        VectorX<double> vtk = vtstar + Wnt.transpose() * cnk;
+        for (int ic=0; ic< num_contacts; ++ic) {
+          const int ik_beta0 = num_contacts + 2 * ic;
+          const int ik_beta1 = num_contacts + 2 * ic + 1;
+          const double vt0 = vtk(2 * ic);
+          const double vt1 = vtk(2 * ic + 1);
+          const double vt_norm = sqrt(vt0 * vt0 + vt1 * vt1) + 1.0e-10;
+          const double cn = max(0.0, cnk(ic));
+          Xk(ik_beta0) = -mu(ic) * cn * vt0 / vt_norm;
+          Xk(ik_beta1) = -mu(ic) * cn * vt1 / vt_norm;
+          const int ik_lambda = num_contacts + num_betas + ic;
+          Xk(ik_lambda) = vt_norm;
+          PRINT_VAR("First iter");
+          PRINT_VAR(ic);
+          PRINT_VAR(vt0);
+          PRINT_VAR(vt1);
+          PRINT_VAR(cn);
+        }
+
+      }
 
       if (num_contacts > 0) {
         PRINT_VAR(iter);
@@ -923,9 +1065,25 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
         //PRINT_VARn(M0);
         //PRINT_VAR(tau0.transpose());
         PRINT_VARn(Nstar);
+        PRINT_VAR(Xk.transpose());
         PRINT_VAR(Rk.transpose());
         PRINT_VARn(Jk);
         PRINT_VAR(cnk.transpose());
+
+        VectorX<double> vk = v_star + M0inv_times_Ntrans * cnk + M0inv_times_Dtrans * betak;
+        PRINT_VAR(v_star.transpose());
+        PRINT_VAR(cnk.transpose());
+        PRINT_VAR(betak.transpose());
+        PRINT_VAR(lambdak.transpose());
+        PRINT_VAR(vk.transpose());
+
+        VectorX<double> vtk = Dstar * vk;
+        PRINT_VAR(vtk.transpose());
+
+        PRINT_VARn(Wnn);
+        PRINT_VARn(Wnt);
+        PRINT_VARn(Wtt);
+
       }
 
       residual = DeltaXk.norm();

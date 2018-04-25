@@ -988,6 +988,7 @@ class MultibodyPlant : public systems::LeafSystem<T> {
       const MatrixX<T>& Wtt,
       const VectorX<T>& mu,
       const VectorX<T>& cn, const VectorX<T>& beta, const VectorX<T>& lambda,
+      bool with_friction,
       MatrixX<T>* J_ptr) const;
 
   MatrixX<double> CalcFischerBurmeisterSolverJacobian(

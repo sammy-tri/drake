@@ -61,6 +61,39 @@ MakeBouncingBallPlant(double radius, double mass,
         //  geometry::Cylinder(radius, length), surface_friction, geometry_system);
         Sphere(radius), geometry_system);
 
+    // Adds little spherical spokes highlight the sphere's rotation.
+    const double spoke_radius = radius / 10;
+    plant->RegisterVisualGeometry(
+        ball,
+        /* Pose X_BG of the geometry frame G in the ball frame B. */
+        Isometry3<double>(Translation3<double>(0, 0, radius)), Sphere(spoke_radius),
+        geometry_system);
+    plant->RegisterVisualGeometry(
+        ball,
+        /* Pose X_BG of the geometry frame G in the ball frame B. */
+        Isometry3<double>(Translation3<double>(0, 0, -radius)),
+        Sphere(spoke_radius), geometry_system);
+    plant->RegisterVisualGeometry(
+        ball,
+        /* Pose X_BG of the geometry frame G in the ball frame B. */
+        Isometry3<double>(Translation3<double>(radius, 0, 0)), Sphere(spoke_radius),
+        geometry_system);
+    plant->RegisterVisualGeometry(
+        ball,
+        /* Pose X_BG of the geometry frame G in the ball frame B. */
+        Isometry3<double>(Translation3<double>(-radius, 0, 0)),
+        Sphere(spoke_radius), geometry_system);
+    plant->RegisterVisualGeometry(
+        ball,
+        /* Pose X_BG of the geometry frame G in the ball frame B. */
+        Isometry3<double>(Translation3<double>(0, radius, 0)), Sphere(spoke_radius),
+        geometry_system);
+    plant->RegisterVisualGeometry(
+        ball,
+        /* Pose X_BG of the geometry frame G in the ball frame B. */
+        Isometry3<double>(Translation3<double>(0, -radius, 0)),
+        Sphere(spoke_radius), geometry_system);
+
 #if 0
     // Add a bunch of little spheres to simulate "multi-contact".
     const int nspheres = 13;
@@ -89,11 +122,11 @@ MakeBouncingBallPlant(double radius, double mass,
 #endif
   }
 
-
   // A second geometry
-  const RigidBody<double>& ball2 = plant->AddRigidBody("Ball2", M_Bcm);
+ // const RigidBody<double>& ball2 = plant->AddRigidBody("Ball2", M_Bcm);
 
   if (geometry_system != nullptr) {
+#if 0
     // Add sphere geometry for the ball.
     //const double length = 4 * radius;
     plant->RegisterCollisionGeometry(
@@ -106,6 +139,7 @@ MakeBouncingBallPlant(double radius, double mass,
         /* Pose X_BG of the geometry frame G in the ball frame B. */
         Isometry3<double>::Identity(),
         Sphere(radius), geometry_system);
+#endif
 
 #if 0
     // Add a bunch of little spheres to simulate "multi-contact".
