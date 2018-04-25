@@ -350,10 +350,13 @@ VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOn
   J.setZero();
 
   // Scaling factor
-  const T Wnorm = sqrt(Wnn.squaredNorm() + Wnt.squaredNorm() + Wtt.squaredNorm());
+  //const T Wnorm = sqrt(Wnn.squaredNorm() + Wnt.squaredNorm() + Wtt.squaredNorm());
+
+  const T Wnorm = Wnn.diagonal().maxCoeff() + Wtt.diagonal().maxCoeff();
+
   const T dt = time_step_;
 
-  if (istep == 71){
+  if (istep == 64){
     PRINT_VAR(Wnorm);
   }
 
@@ -1164,7 +1167,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
 
       PRINT_VAR(context.get_time());
 
-      if (istep == 71) {
+      if (istep == 64) {
         PRINT_VAR("***********************************************************");
         PRINT_VAR(iter);
         PRINT_VAR(residual);
@@ -1371,6 +1374,8 @@ MatrixX<T> MultibodyPlant<T>::ComputeTangentVelocityJacobianMatrix(
   // D is defined such that vf = D * v, with vf of size 2nc.
   MatrixX<T> D(2 * num_contacts, num_velocities());
 
+  const PositionKinematicsCache<T>& pc = EvalPositionKinematics(context);
+
   for (int icontact = 0; icontact < num_contacts; ++icontact) {
     const auto& point_pair = contact_penetrations[icontact];
 
@@ -1397,9 +1402,15 @@ MatrixX<T> MultibodyPlant<T>::ComputeTangentVelocityJacobianMatrix(
     const Vector3<T>& p_WCa = point_pair.p_WCa;
     const Vector3<T>& p_WCb = point_pair.p_WCb;
 
+    const Isometry3<T>& X_WA = pc.get_X_WB(bodyA.node_index());
+    const Isometry3<T>& X_WB = pc.get_X_WB(bodyB.node_index());
+
+    const Vector3<T>& p_ACa = X_WA.inverse() * p_WCa;
+    const Vector3<T>& p_BCb = X_WB.inverse() * p_WCb;
+
     // Approximate the position of the contact point as:
     // In theory p_WC = p_WCa = p_WCb.
-    const Vector3<T> p_WC = 0.5 * (p_WCa + p_WCb);  // notice this is at t_star.
+    //const Vector3<T> p_WC = 0.5 * (p_WCa + p_WCb);  // notice this is at t_star.
     // TODO(amcastro-tri): for each contact point, consider computing
     // dtc = phi / phidot and then estimate the contact point as:
     //  p_WCa = p_WCa_star + dtc * v0_WCa
@@ -1416,14 +1427,15 @@ MatrixX<T> MultibodyPlant<T>::ComputeTangentVelocityJacobianMatrix(
     const Matrix3<T> R_WBc = math::ComputeBasisFromAxis(2, nhat_BA_W);
     const Vector3<T> that1_W = R_WBc.col(0);
     const Vector3<T> that2_W = R_WBc.col(1);
+    Vector3<T> dummy;
 
     MatrixX<T> Jv_WAc(3, this->num_velocities());  // s.t.: v_WAc = Jv_WAc * v.
     model().CalcPointsGeometricJacobianExpressedInWorld(
-        context, bodyA.body_frame(), p_WC, &Jv_WAc);
+        context, bodyA.body_frame(), p_ACa, &dummy, &Jv_WAc);
 
     MatrixX<T> Jv_WBc(3, this->num_velocities());  // s.t.: v_WBc = Jv_WBc * v.
     model().CalcPointsGeometricJacobianExpressedInWorld(
-        context, bodyB.body_frame(), p_WC, &Jv_WBc);
+        context, bodyB.body_frame(), p_BCb, &dummy, &Jv_WBc);
 
     // Therefore v_AcBc_W = v_WBc - v_WAc.
     // if xdot = vn > 0 ==> they are getting closer.
