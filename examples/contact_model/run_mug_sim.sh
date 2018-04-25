@@ -3,9 +3,7 @@
 # Working parameters
 # ** rk2: rk_dt=6e-6 (based on 8 sphere pad), gripper_force=150, finger_width=-0.084
 # ** rk3 rk_dt=1e-3, accuracy=1e-3
-# ** timestepping: ts_dt=1e-3, gripper_force=42e3
-#				   ts_dt=1e-4, gripper_force=85e4
-#
+# simulation_type can be "compliant" or "timestepping"
 ${DRAKE_WORKSPACE}/bazel-bin/examples/contact_model/rigid_mug_gripper \
 --simulation_type=compliant --ts_dt=1e-4 --gripper_force=150 \
 --rk_type=rk2 --rk_dt=6e-6 --accuracy=1e-3 --v_stiction_tolerance=1e-3 \

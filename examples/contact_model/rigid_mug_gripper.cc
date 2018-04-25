@@ -185,7 +185,7 @@ void AddPads(RigidBodyTree<double>* tree, RigidBody<double>* parent_body,
   const double d_theta = 2 * M_PI / sample_count;
   double x_coordinate, y_coordinate, z_coordinate;
   for (int i = 0; i < sample_count; ++i) {
-    if (FLAGS_gripper_force > 0) {
+    if (FLAGS_gripper_force != 0) {
       x_coordinate = pad_offset;
       y_coordinate =
           std::cos(d_theta * i + sample_rotation) * kPadMajorRadius + 0.0265;
@@ -381,7 +381,7 @@ int main() {
   builder.Connect(contact_viz.get_output_port(0),
                   contact_results_publisher.get_input_port());
 
-  if (FLAGS_gripper_force > 0) {
+  if (FLAGS_gripper_force != 0) {
     // Create the wsg status publisher.
     auto wsg_status_pub =
         builder.AddSystem(
@@ -426,12 +426,23 @@ int main() {
 
   systems::Context<double>& context = simulator.get_mutable_context();
 
-  if (FLAGS_gripper_force > 0) {
-    // Open the gripper.
-    plant->SetModelInstancePositions(
-        &model->GetMutableSubsystemContext(
-            *plant, &context), gripper_instance_id,
-        (VectorX<double>(1) << FLAGS_finger_width).finished());
+  // Set the gripper initial condition.
+  // TODO(edrumwri) Need to debug this part for discrete system version.
+  if (FLAGS_gripper_force != 0) {
+    if (FLAGS_simulation_type == "compliant") {
+      // Open the gripper.
+      plant->SetModelInstancePositions(
+          &model->GetMutableSubsystemContext(
+              *plant, &context), gripper_instance_id,
+          (VectorX<double>(1) << FLAGS_finger_width).finished());
+    } else {
+      Eigen::VectorXd vec(15);
+      vec.setZero();
+      vec(0) = FLAGS_finger_width; // Not sure if this is the right index??
+      plant->set_state_vector(
+          &model->GetMutableSubsystemContext(*plant, &context), vec);
+//    plant->set_position(&context, 0, FLAGS_finger_width);
+    }
   }
 
   if (FLAGS_rk_type == "rk2") {
