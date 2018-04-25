@@ -155,8 +155,8 @@ int do_main() {
   Isometry3d X_WB = Isometry3d::Identity();
   //X_WB.linear() = R_WB;
   X_WB.linear() =
-      AngleAxis<double>(-M_PI_2, Vector3<double>::UnitY()).toRotationMatrix() *
-      AngleAxis<double>(-M_PI_2, Vector3<double>::UnitZ()).toRotationMatrix();
+      AngleAxis<double>(-M_PI_2, Vector3<double>::UnitY()).toRotationMatrix();
+      //AngleAxis<double>(-M_PI_2, Vector3<double>::UnitZ()).toRotationMatrix();
   X_WB.translation() = Vector3d(0.0, 0.0, z0);
   model.SetFreeBodyPoseOrThrow(
       model.GetBodyByName("Ball"), X_WB, &plant_context);

@@ -354,7 +354,7 @@ VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOn
 
   const T Wnorm = Wnn.diagonal().maxCoeff() + Wtt.diagonal().maxCoeff();
 
-  const T dt = time_step_;
+  //const T dt = time_step_;
 
   if (istep == 64){
     PRINT_VAR(Wnorm);
@@ -413,16 +413,16 @@ VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOn
       /////////////////////////////////////////////////////////////////////
       // R_cn
       /////////////////////////////////////////////////////////////////////
-      R(ik_cn) = FischerBurmeisterFunction(vn_i, cn_i * Wnorm);
-      const T dgcn_dx = FischerBurmeisterGradX(vn_i, cn_i * Wnorm);
-      const T dgcn_dy = FischerBurmeisterGradY(vn_i, cn_i * Wnorm);
+      R(ik_cn) = FischerBurmeisterFunction(vn_i / Wnorm, cn_i);
+      const T dgcn_dx = FischerBurmeisterGradX(vn_i / Wnorm, cn_i);
+      const T dgcn_dy = FischerBurmeisterGradY(vn_i / Wnorm, cn_i);
 
       // dR_cn/dcn
       for (int jc = 0; jc < nc; ++jc) {
         int jk_cn = jc;
-        J(ik_cn, jk_cn) = dgcn_dx * Wnn(ic, jc);
+        J(ik_cn, jk_cn) = dgcn_dx * Wnn(ic, jc) / Wnorm;
         if (ic == jc) {
-          J(ik_cn, jk_cn) += dgcn_dy * Wnorm;
+          J(ik_cn, jk_cn) += dgcn_dy;
         }
       }
 
@@ -434,8 +434,8 @@ VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOn
           const int jk_beta0 = nc + jbeta0;
           const int jk_beta1 = nc + jbeta1;
 
-          J(ik_cn, jk_beta0) = dgcn_dx * Wnt(ic, jbeta0);
-          J(ik_cn, jk_beta1) = dgcn_dx * Wnt(ic, jbeta1);
+          J(ik_cn, jk_beta0) = dgcn_dx * Wnt(ic, jbeta0) / Wnorm;
+          J(ik_cn, jk_beta1) = dgcn_dx * Wnt(ic, jbeta1) / Wnorm;
         }
       }
 
@@ -449,8 +449,8 @@ VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOn
       // R_beta
       /////////////////////////////////////////////////////////////////////
       // R_beta
-      R(ik_beta0) = mu_i * cn_i * vf0_i + lambda_i * beta0_i;
-      R(ik_beta1) = mu_i * cn_i * vf1_i + lambda_i * beta1_i;
+      R(ik_beta0) = mu_i * cn_i * vf0_i + lambda_i * beta0_i * Wnorm;
+      R(ik_beta1) = mu_i * cn_i * vf1_i + lambda_i * beta1_i * Wnorm;
 
       // dR_beta/dcn
       for (int jc = 0; jc < num_contacts; ++jc) {
@@ -470,8 +470,8 @@ VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOn
         const int jk_beta0 = nc + jbeta0;
         const int jk_beta1 = nc + jbeta1;
         if (ic == jc) {
-          J(ik_beta0, jk_beta0) = lambda_i;
-          J(ik_beta1, jk_beta1) = lambda_i;
+          J(ik_beta0, jk_beta0) = lambda_i * Wnorm;
+          J(ik_beta1, jk_beta1) = lambda_i * Wnorm;
         }
         J(ik_beta0, jk_beta0) += mu_i * cn_i * Wtt(ibeta0, jbeta0);
         J(ik_beta0, jk_beta1) += mu_i * cn_i * Wtt(ibeta0, jbeta1);
@@ -481,8 +481,8 @@ VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOn
       }
 
       // dR_beta/lambda
-      J(ik_beta0, ik_lambda) = beta0_i;
-      J(ik_beta1, ik_lambda) = beta1_i;
+      J(ik_beta0, ik_lambda) = beta0_i * Wnorm;
+      J(ik_beta1, ik_lambda) = beta1_i * Wnorm;
 
       /////////////////////////////////////////////////////////////////////
       // R_lambda
@@ -491,20 +491,20 @@ VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOn
       const T beta_mod = sqrt(beta0_i * beta0_i + beta1_i * beta1_i);
       const T beta_mod_reg = beta_mod + 1.0e-14;
       const T gamma = mu_cn - beta_mod;
-      R(ik_lambda) = FischerBurmeisterFunction(Wnorm * gamma, lambda_i * dt);
+      R(ik_lambda) = FischerBurmeisterFunction(gamma, lambda_i);
 
-      const T dglambda_dx = FischerBurmeisterGradX(Wnorm * gamma, lambda_i * dt);
-      const T dglambda_dy = FischerBurmeisterGradY(Wnorm * gamma, lambda_i * dt);
+      const T dglambda_dx = FischerBurmeisterGradX(gamma, lambda_i);
+      const T dglambda_dy = FischerBurmeisterGradY(gamma, lambda_i);
 
       // dR_lambda/dcn
-      J(ik_lambda, ik_cn) = mu_i * dglambda_dx * Wnorm;
+      J(ik_lambda, ik_cn) = mu_i * dglambda_dx;
 
       // dR_lambda/dbeta
-      J(ik_lambda, ik_beta0) = - beta0_i / beta_mod_reg * dglambda_dx * Wnorm;
-      J(ik_lambda, ik_beta1) = - beta1_i / beta_mod_reg * dglambda_dx * Wnorm;
+      J(ik_lambda, ik_beta0) = - beta0_i / beta_mod_reg * dglambda_dx;
+      J(ik_lambda, ik_beta1) = - beta1_i / beta_mod_reg * dglambda_dx;
 
       // dR_lambda/dlambda
-      J(ik_lambda, ik_lambda) = dglambda_dy * dt;
+      J(ik_lambda, ik_lambda) = dglambda_dy;
     } // ic
   } // if (num_contacts >0 )
   return R;
@@ -1142,9 +1142,11 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
           }
 #endif
 
+          const double Wnorm = Wnn.diagonal().maxCoeff() + Wtt.diagonal().maxCoeff();
+
           Xk(ik_beta0) = 0.0;
           Xk(ik_beta1) = 0.0;
-          Xk(ik_lambda) = 0.0;//vt_norm;
+          Xk(ik_lambda) = vt_norm / Wnorm;
         }
 
       }
