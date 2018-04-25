@@ -105,6 +105,7 @@ DEFINE_double(rz, 0,
 DEFINE_double(gripper_force, 0, "The force to be applied by the gripper. A value"
               "of 0 indicates no gripper (uses pad_depth to determine"
               " penetration distance).");
+DEFINE_double(finger_width, 0.1, "The initial distance between fingers.");
 
 namespace drake {
 namespace examples {
@@ -239,9 +240,13 @@ std::unique_ptr<RigidBodyTreed> BuildTestTree(int* gripper_instance_id = nullptr
         &tree->world(), Eigen::Vector3d(0.055 + 5e-4, 0, kMugHeight / 2 + 5e-4),
         Eigen::Vector3d(0, 0, 1.57));
 
+//    auto gripper_id_table = parsers::sdf::AddModelInstancesFromSdfFile(
+//        FindResourceOrThrow("drake/examples/contact_model/"
+//                            "schunk_wsg_50_ball_contact_visual_collision.sdf"),
+//        multibody::joints::kFixed, gripper_frame, false, tree.get());
     auto gripper_id_table = parsers::sdf::AddModelInstancesFromSdfFile(
         FindResourceOrThrow("drake/examples/contact_model/"
-                            "schunk_wsg_50_ball_contact_visual_collision.sdf"),
+                                "schunk_wsg_50.sdf"),
         multibody::joints::kFixed, gripper_frame, false, tree.get());
     *gripper_instance_id = gripper_id_table.begin()->second;
 
@@ -426,7 +431,7 @@ int main() {
     plant->SetModelInstancePositions(
         &model->GetMutableSubsystemContext(
             *plant, &context), gripper_instance_id,
-        manipulation::schunk_wsg::GetSchunkWsgMugGraspPosition<double>());
+        (VectorX<double>(1) << FLAGS_finger_width).finished());
   }
 
   if (FLAGS_rk_type == "rk2") {

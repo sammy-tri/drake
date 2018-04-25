@@ -17,8 +17,8 @@ namespace manipulation {
 namespace schunk_wsg {
 
 constexpr int kSchunkWsgNumActuators = 1;
-constexpr int kSchunkWsgNumPositions = 5;
-constexpr int kSchunkWsgNumVelocities = 5;
+constexpr int kSchunkWsgNumPositions = 1;
+constexpr int kSchunkWsgNumVelocities = 1;
 
 constexpr int kSchunkWsgPositionIndex = 0;
 constexpr int kSchunkWsgVelocityIndex =
