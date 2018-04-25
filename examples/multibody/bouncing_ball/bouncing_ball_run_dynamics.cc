@@ -79,9 +79,9 @@ int do_main() {
   const double mass = 0.1;      // kg
   const double g = 9.81;        // m/s^2
   const double z0 = radius + 0.02;        // Initial height.
-  const double v0 = 0.3;
-  const double mu = 0.05;
-  const int nspheres = 2;
+  const double v0 = 0.3;   // Commented parameters for demo of spheres rolling into each other.
+  const double mu = 0.5;  // 0.05
+  const int nspheres = 1;  // 2
   const CoulombFriction<double> coulomb_friction(
       mu /* static friction */, mu /* dynamic friction */);
 

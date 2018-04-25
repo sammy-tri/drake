@@ -981,6 +981,7 @@ class MultibodyPlant : public systems::LeafSystem<T> {
       const VectorX<U>& v, const VectorX<U>& cn) const;
 
   VectorX<T> CalcFischerBurmeisterSolverResidualOnConstraintsOnly(
+      int istep,
       const VectorX<T>& vnstar,
       const VectorX<T>& vfstar,
       const MatrixX<T>& Wnn,
