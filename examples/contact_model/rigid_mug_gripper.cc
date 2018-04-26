@@ -59,18 +59,18 @@ DEFINE_double(contact_radius, 1e-4,
 DEFINE_double(sim_duration, 5, "Amount of time to simulate (s)");
 DEFINE_bool(playback, true,
             "If true, simulation begins looping playback when complete");
-DEFINE_string(simulation_type, "compliant", "The type of simulation to use: "
-    "'compliant' or 'timestepping'");
+DEFINE_string(system_type, "continuous", "The type of simulation to use: "
+    "'continuous' or 'discrete'");
 DEFINE_string(rk_type, "rk3", "The RK integrator order. Can be 'rk2' or 'rk3'."
-    "Used when simulation_time is 'compliant'");
+    "Used when simulation_time is 'continuous'");
 DEFINE_double(ts_dt, 1e-3, "The step size to use for "
-    "'simulation_type=timestepping' (ignored for "
-    "'simulation_type=compliant'");
+    "'system_type=discrete' (ignored for "
+    "'system_type=continuous'");
 DEFINE_double(rk_dt, 1e-4, "The step size to use for "
-    "'simulation_type=compliant' (ignored for "
-    "'simulation_type=timestepping'");
+    "'system_type=continuous' (ignored for "
+    "'system_type=discrete'");
 DEFINE_double(accuracy, 5e-5, "Sets the simulation accuracy for "
-    "'simulation_type=compliant'");
+    "'system_type=continuous'");
 DEFINE_bool(print_time, false, "Prints simulation timestamp every 1/10 s.");
 
 // Parameters for specifying the ring pad approximation.
@@ -295,19 +295,19 @@ std::unique_ptr<RigidBodyTreed> BuildTestTree(int* gripper_instance_id = nullptr
 int main() {
   systems::DiagramBuilder<double> builder;
 
-  if (FLAGS_simulation_type == "compliant") {
-    FLAGS_ts_dt = 0.0;  // Set the time-stepping dt to zero
+  if (FLAGS_system_type == "continuous") {
+    FLAGS_ts_dt = 0.0;  // Set the discrete dt to zero
     std::cout << "Simulation type:\n";
-    std::cout<<"\tcompliant: " << FLAGS_rk_type << "\n";
+    std::cout<<"\tcontinuous: " << FLAGS_rk_type << "\n";
     std::cout<<"\tdt:        " << FLAGS_rk_dt << "\n";
   }
-  else if (FLAGS_simulation_type == "timestepping") {
+  else if (FLAGS_system_type == "discrete") {
     std::cout << "Simulation type:\n";
-    std::cout << "\ttime-stepping  \n";
+    std::cout << "\tdiscrete  \n";
     std::cout << "\tdt:              " << FLAGS_ts_dt << "\n";
   } else {
     throw std::runtime_error(
-        "Simulation type" + FLAGS_simulation_type + "is not supported");
+        "Simulation type `" + FLAGS_system_type + "' is not supported");
   }
 
   // Set the gripper force source.
@@ -427,9 +427,8 @@ int main() {
   systems::Context<double>& context = simulator.get_mutable_context();
 
   // Set the gripper initial condition.
-  // TODO(edrumwri) Need to debug this part for discrete system version.
   if (FLAGS_gripper_force != 0) {
-    if (FLAGS_simulation_type == "compliant") {
+    if (FLAGS_system_type == "continuous") {
       // Open the gripper.
       plant->SetModelInstancePositions(
           &model->GetMutableSubsystemContext(
