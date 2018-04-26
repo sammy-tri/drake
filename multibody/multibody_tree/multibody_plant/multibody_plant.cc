@@ -355,6 +355,7 @@ VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOn
   const T Wnorm = Wnn.diagonal().maxCoeff() + Wtt.diagonal().maxCoeff();
 
   //const T dt = time_step_;
+  const double epsilon = 2e-5;  // WARNING: Now with units of momentum!!
 
   if (istep == 64){
     PRINT_VAR(Wnorm);
@@ -491,7 +492,7 @@ VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOn
       const T beta_mod = sqrt(beta0_i * beta0_i + beta1_i * beta1_i);
       const T beta_mod_reg = beta_mod + 1.0e-14;
       const T gamma = mu_cn - beta_mod;
-      R(ik_lambda) = FischerBurmeisterFunction(gamma, lambda_i);
+      R(ik_lambda) = FischerBurmeisterFunction(gamma, lambda_i) + epsilon;
 
       const T dglambda_dx = FischerBurmeisterGradX(gamma, lambda_i);
       const T dglambda_dy = FischerBurmeisterGradY(gamma, lambda_i);
