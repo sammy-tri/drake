@@ -436,12 +436,7 @@ int main() {
               *plant, &context), gripper_instance_id,
           (VectorX<double>(1) << FLAGS_finger_width).finished());
     } else {
-      Eigen::VectorXd vec(15);
-      vec.setZero();
-      vec(0) = FLAGS_finger_width; // Not sure if this is the right index??
-      plant->set_state_vector(
-          &model->GetMutableSubsystemContext(*plant, &context), vec);
-//    plant->set_position(&context, 0, FLAGS_finger_width);
+      plant->set_position(&context, 0, FLAGS_finger_width);
     }
   }
 
@@ -458,6 +453,7 @@ int main() {
     throw std::runtime_error("RK type not recognized.");
   }
 
+  simulator.set_target_realtime_rate(.01);
   simulator.Initialize();
 
   if (FLAGS_print_time) {

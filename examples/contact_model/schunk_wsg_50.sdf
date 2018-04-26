@@ -25,7 +25,7 @@
       </visual>
     </link>
     <link name='left_finger'>
-      <pose frame=''>0.037 0.029 0 0 -0 0</pose>
+      <pose frame=''>0.040 0.029 0 0 -0 0</pose>
       <inertial>
         <mass>0.05</mass>
         <inertia>
@@ -86,9 +86,9 @@
         <!-- Drake attaches an actuator to all and only joints with a nonzero
              effort limit. -->
         <limit>
-          <lower>-0.070</lower>
+          <lower>-0.1</lower> <!-- offset w.r.t. absolute zero -->
           <upper>0</upper>
-          <effort>80</effort>
+          <effort>90</effort>
         </limit>
       </axis>
     </joint>
