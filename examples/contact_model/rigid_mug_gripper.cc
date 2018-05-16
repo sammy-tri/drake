@@ -59,18 +59,16 @@ DEFINE_double(contact_radius, 1e-4,
 DEFINE_double(sim_duration, 5, "Amount of time to simulate (s)");
 DEFINE_bool(playback, true,
             "If true, simulation begins looping playback when complete");
-DEFINE_string(system_type, "continuous", "The type of simulation to use: "
+DEFINE_string(system_type, "continuous", "The type of simulation to simulate: "
     "'continuous' or 'discrete'");
 DEFINE_string(rk_type, "rk3", "The RK integrator order. Can be 'rk2' or 'rk3'."
     "Used when simulation_time is 'continuous'");
 DEFINE_double(ts_dt, 1e-3, "The step size to use for "
-    "'system_type=discrete' (ignored for "
-    "'system_type=continuous'");
+    "'system_type=discrete' (ignored for 'system_type=continuous'");
 DEFINE_double(rk_dt, 1e-4, "The step size to use for "
-    "'system_type=continuous' (ignored for "
-    "'system_type=discrete'");
+    "'system_type=continuous' (ignored for 'system_type=discrete'");
 DEFINE_double(accuracy, 5e-5, "Sets the simulation accuracy for "
-    "'system_type=continuous'");
+    "'system_type=continuous' and 'rk_type=rk3'");
 DEFINE_bool(print_time, false, "Prints simulation timestamp every 1/10 s.");
 
 // Parameters for specifying the ring pad approximation.
@@ -83,29 +81,27 @@ DEFINE_double(ring_youngs_modulus, -1, "The Young's modulus for the ring pad. "
     "Negative values use the global default");
 DEFINE_double(ring_dissipation, -1, "The dissipation for the ring pad. "
     "Negative values use the global default");
-DEFINE_double(ring_static_friction, -1, "The coefficient of static friction for the ring pad. "
-    "Negative values use the global default");
-DEFINE_double(ring_dynamic_friction, -1, "The coefficient of dynamic friction for the ring pad."
-    " Negative values use the global default");
+DEFINE_double(ring_static_friction, -1, "The coefficient of static friction "
+    "for the ring pad. Negative values use the global default");
+DEFINE_double(ring_dynamic_friction, -1, "The coefficient of dynamic friction "
+    "for the ring pad. Negative values use the global default");
 
 // Parameters for posing the mug.
 DEFINE_double(px, 0, "The x-position of the center, bottom of the mug");
 DEFINE_double(py, 0, "The y-position of the center, bottom of the mug");
 DEFINE_double(pz, 0, "The z-position of the center, bottom of the mug");
-DEFINE_double(rx, 0,
-              "The x-rotation of the mug around its origin - the center of its "
-                  "bottom (in degrees). Rotation order: X, Y, Z");
-DEFINE_double(ry, 0,
-              "The y-rotation of the mug around its origin - the center of its "
-                  "bottom (in degrees). Rotation order: X, Y, Z");
-DEFINE_double(rz, 0,
-              "The z-rotation of the mug around its origin - the center of its "
-                  "bottom (in degrees). Rotation order: X, Y, Z");
+DEFINE_double(rx, 0, "The x-rotation of the mug around its origin - the center "
+    "of its bottom (in degrees). Rotation order: X, Y, Z");
+DEFINE_double(ry, 0, "The y-rotation of the mug around its origin - the center "
+    "of its bottom (in degrees). Rotation order: X, Y, Z");
+DEFINE_double(rz, 0, "The z-rotation of the mug around its origin - the center "
+    "of its bottom (in degrees). Rotation order: X, Y, Z");
 
-DEFINE_double(gripper_force, 0, "The force to be applied by the gripper. A value"
-              "of 0 indicates no gripper (uses pad_depth to determine"
-              " penetration distance).");
-DEFINE_double(finger_width, 0.1, "The initial distance between fingers.");
+DEFINE_double(gripper_force, 0, "The force to be applied by the gripper. A "
+    "value of 0 indicates no gripper (uses pad_depth to determine penetration "
+    "distance).");
+DEFINE_double(finger_width, 0.1, "The initial distance between the gripper "
+    "fingers, when gripper_force > 0.");
 
 namespace drake {
 namespace examples {
