@@ -1,0 +1,53 @@
+# -*- python -*-
+
+load(
+    "//tools:drake.bzl",
+    "drake_cc_binary",
+)
+load("//tools/install:install_data.bzl", "install_data")
+load("//tools/lint:lint.bzl", "add_lint_tests")
+
+package(default_visibility = ["//visibility:public"])
+
+drake_cc_binary(
+    name = "rigid_mug_gripper_mbp",
+    srcs = ["rigid_mug_gripper_mbp.cc"],
+    add_test_rule = 1,
+    data = [
+        "cylinder_mug.sdf",
+        "rigid_mug_gripper.sdf",
+        "schunk_wsg_50_ball_contact_visual_collision.sdf",
+        "//multibody:models",
+    ],
+    test_rule_args = [
+        " --sim_duration=0.01",
+        " --playback=false",
+    ],
+    deps = [
+        "//common:find_resource",
+        "//lcm",
+        "//manipulation/schunk_wsg:schunk_wsg_constants",
+        "//multibody/multibody_tree/multibody_plant",
+        "//multibody/multibody_tree/parsi
+        "//multibody/rigid_body_plant:drake_visualizer",
+        "//systems/analysis",
+        "//systems/primitives:trajectory_source",
+        "//util",
+        "@drake//lcmtypes:schunk",
+        "@drake//manipulation/schunk_wsg:schunk_wsg_lcm",
+        "@gflags",
+    ],
+)
+#
+#filegroup(
+#    name = "bowling_models",
+#    srcs = [
+#        "bowling_ball.urdf",
+#        "pin.obj",
+#        "pin.urdf",
+#    ],
+#)
+
+install_data()
+
+add_lint_tests()
