@@ -15,12 +15,20 @@
 #include "drake/multibody/multibody_tree/parsing/multibody_plant_sdf_parser.h"
 #include "drake/multibody/multibody_tree/uniform_gravity_field_element.h"
 #include "drake/systems/analysis/simulator.h"
+#include "drake/systems/analysis/implicit_euler_integrator.h"
+#include "drake/systems/analysis/runge_kutta2_integrator.h"
+#include "drake/systems/analysis/runge_kutta3_integrator.h"
+#include "drake/systems/analysis/semi_explicit_euler_integrator.h"
+#include "drake/systems/analysis/simulator.h"
 #include "drake/systems/framework/diagram_builder.h"
 #include "drake/systems/lcm/lcm_publisher_system.h"
 #include "drake/systems/lcm/serializer.h"
 #include "drake/systems/rendering/pose_bundle_to_draw_message.h"
 #include "drake/math/roll_pitch_yaw.h"
 #include "drake/math/rotation_matrix.h"
+
+#include <iostream>
+#define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
 
 namespace drake {
 namespace examples {
@@ -44,6 +52,10 @@ using drake::multibody::UniformGravityFieldElement;
 using drake::systems::lcm::LcmPublisherSystem;
 using drake::systems::lcm::Serializer;
 using drake::systems::rendering::PoseBundleToDrawMessage;
+using drake::systems::ImplicitEulerIntegrator;
+using drake::systems::RungeKutta2Integrator;
+using drake::systems::RungeKutta3Integrator;
+using drake::systems::SemiExplicitEulerIntegrator;
 
 DEFINE_double(target_realtime_rate, 1.0,
               "Desired rate relative to real time.  See documentation for "
@@ -54,6 +66,15 @@ DEFINE_double(simulation_time, 10.0,
 
 DEFINE_double(finger_width, 0.1, "The initial distance between the gripper "
     "fingers, when gripper_force > 0.");
+
+// Integration paramters:
+DEFINE_string(integration_scheme, "runge_kutta2",
+              "Integration scheme to be used. Available options are: "
+              "'semi_explicit_euler','runge_kutta2','runge_kutta3',"
+              "'implicit_euler'");
+
+// Contact parameters
+DEFINE_double(penetration_allowance, 1.0e-3, "Penetration allowance, in meters");
 
 // Parameters for posing the mug.
 DEFINE_double(px, 0, "The x-position of the center, bottom of the mug");
@@ -87,6 +108,17 @@ int do_main() {
 
   // Now the model is complete.
   plant.Finalize();
+
+  // Set how much penetration (in meters) we are willing to accept.
+  plant.set_penetration_allowance(FLAGS_penetration_allowance);
+
+  // Hint the integrator's time step based on the contact time scale.
+  // A fraction of this time scale is used which is chosen so that the fixed
+  // time step integrators are stable.
+  const double max_time_step =
+      plant.get_contact_penalty_method_time_scale() / 30;
+
+  PRINT_VAR(max_time_step);
 
   DRAKE_DEMAND(plant.num_actuators() == 1);
   DRAKE_DEMAND(plant.num_actuated_dofs() == 1);
@@ -151,7 +183,31 @@ int do_main() {
   // Set initial state.
   finger_slider.set_translation(&plant_context, -FLAGS_finger_width);
 
+  // Set up simulator.
   systems::Simulator<double> simulator(*diagram, std::move(diagram_context));
+  systems::IntegratorBase<double>* integrator{nullptr};
+  if (FLAGS_integration_scheme == "implicit_euler") {
+    integrator =
+        simulator.reset_integrator<ImplicitEulerIntegrator<double>>(
+            *diagram, &simulator.get_mutable_context());
+  } else if (FLAGS_integration_scheme == "runge_kutta2") {
+    integrator =
+        simulator.reset_integrator<RungeKutta2Integrator<double>>(
+            *diagram, max_time_step, &simulator.get_mutable_context());
+  } else if (FLAGS_integration_scheme == "runge_kutta3") {
+    integrator =
+        simulator.reset_integrator<RungeKutta3Integrator<double>>(
+            *diagram, &simulator.get_mutable_context());
+  } else if (FLAGS_integration_scheme == "semi_explicit_euler") {
+    integrator =
+        simulator.reset_integrator<SemiExplicitEulerIntegrator<double>>(
+            *diagram, max_time_step, &simulator.get_mutable_context());
+  } else {
+    throw std::runtime_error(
+        "Integration scheme '" + FLAGS_integration_scheme +
+            "' not supported for this example.");
+  }
+  integrator->set_maximum_step_size(max_time_step);
 
   simulator.set_publish_every_time_step(false);
   simulator.set_target_realtime_rate(FLAGS_target_realtime_rate);
