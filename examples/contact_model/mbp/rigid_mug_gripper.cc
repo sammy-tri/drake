@@ -45,25 +45,29 @@ DEFINE_double(target_realtime_rate, 1.0,
 DEFINE_double(simulation_time, 10.0,
               "Desired duration of the simulation in seconds.");
 
+DEFINE_double(finger_width, 0.1, "The initial distance between the gripper "
+    "fingers, when gripper_force > 0.");
+
 int do_main() {
   systems::DiagramBuilder<double> builder;
 
   SceneGraph<double>& scene_graph = *builder.AddSystem<SceneGraph>();
   scene_graph.set_name("scene_graph");
 
-  // Make and add the cart_pole model.
-  const std::string full_name =
-      FindResourceOrThrow(
-          "drake/examples/contact_model/mbp/rigid_mug_gripper.sdf");
-  MultibodyPlant<double>& cart_pole = *builder.AddSystem<MultibodyPlant>();
-  AddModelFromSdfFile(full_name, &cart_pole, &scene_graph);
+  MultibodyPlant<double>& plant = *builder.AddSystem<MultibodyPlant>();
+  std::string full_name =
+      FindResourceOrThrow("drake/examples/contact_model/mbp/schunk_wsg_50.sdf");
+  AddModelFromSdfFile(full_name, &plant, &scene_graph);
 
   // Add gravity to the model.
-  cart_pole.AddForceElement<UniformGravityFieldElement>(
+  plant.AddForceElement<UniformGravityFieldElement>(
       -9.81 * Vector3<double>::UnitZ());
 
   // Now the model is complete.
-  cart_pole.Finalize();
+  plant.Finalize();
+
+  DRAKE_DEMAND(plant.num_actuators() == 1);
+  DRAKE_DEMAND(plant.num_actuated_dofs() == 1);
 
   // Boilerplate used to connect the plant to a SceneGraph for
   // visualization.
@@ -77,11 +81,11 @@ int do_main() {
   publisher.set_publish_period(1 / 60.0);
 
   // Sanity check on the availability of the optional source id before using it.
-  DRAKE_DEMAND(!!cart_pole.get_source_id());
+  DRAKE_DEMAND(!!plant.get_source_id());
 
   builder.Connect(
-      cart_pole.get_geometry_poses_output_port(),
-      scene_graph.get_source_pose_port(cart_pole.get_source_id().value()));
+      plant.get_geometry_poses_output_port(),
+      scene_graph.get_source_pose_port(plant.get_source_id().value()));
 
   builder.Connect(scene_graph.get_pose_bundle_output_port(),
                   converter.get_input_port(0));
@@ -99,21 +103,18 @@ int do_main() {
       diagram->CreateDefaultContext();
   diagram->SetDefaultContext(diagram_context.get());
   systems::Context<double>& cart_pole_context =
-      diagram->GetMutableSubsystemContext(cart_pole, diagram_context.get());
+      diagram->GetMutableSubsystemContext(plant, diagram_context.get());
 
   // There is no input actuation in this example for the passive dynamics.
   cart_pole_context.FixInputPort(
-      cart_pole.get_actuation_input_port().get_index(), Vector1d(0));
+      plant.get_actuation_input_port().get_index(), Vector1d(0));
 
   // Get joints so that we can set initial conditions.
-  const PrismaticJoint<double>& cart_slider =
-      cart_pole.GetJointByName<PrismaticJoint>("CartSlider");
-  const RevoluteJoint<double>& pole_pin =
-      cart_pole.GetJointByName<RevoluteJoint>("PolePin");
+  const PrismaticJoint<double>& finger_slider =
+      plant.GetJointByName<PrismaticJoint>("finger_sliding_joint");
 
   // Set initial state.
-  cart_slider.set_translation(&cart_pole_context, 0.0);
-  pole_pin.set_angle(&cart_pole_context, 2.0);
+  finger_slider.set_translation(&cart_pole_context, -FLAGS_finger_width);
 
   systems::Simulator<double> simulator(*diagram, std::move(diagram_context));
 

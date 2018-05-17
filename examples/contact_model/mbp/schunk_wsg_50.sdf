@@ -1,6 +1,7 @@
 <?xml version='1.0'?>
 <sdf version='1.6'>
   <model name='Schunk_Gripper'>
+    <pose>0.0555 0 0.1 0 0 1.57</pose>
     <link name='body'>
       <pose frame=''>0 -0.049133 0 0 -0 0</pose>
       <inertial>
@@ -24,6 +25,13 @@
         </geometry>
       </visual>
     </link>
+
+    <joint name='weld_base' type='fixed'>
+      <parent>world</parent>
+      <child>body</child>
+      <pose>0 0 0 0 0 0</pose>
+    </joint>
+
     <link name='left_finger'>
       <pose frame=''>0.040 0.029 0 0 -0 0</pose>
       <inertial>
@@ -70,6 +78,13 @@
         </geometry>
       </visual>
     </link>
+
+    <joint name='weld_right_finger' type='fixed'>
+      <parent>body</parent>
+      <child>right_finger</child>
+      <pose>0 0 0 0 0 0</pose>
+    </joint>
+
     <!-- Collision filter groups-->
     <collision_filter_group name="finger_filter">
       <member link="left_finger"/>
