@@ -1,6 +1,6 @@
 <sdf version='1.6'>
   <model name='cylinder'>
-    <link name='base'>
+    <link name='Mug'>
       <pose frame=''>0 0 0 0 -0 0</pose>
       <inertial>
         <pose frame=''>0.01 0 0.05 0 -0 0</pose>

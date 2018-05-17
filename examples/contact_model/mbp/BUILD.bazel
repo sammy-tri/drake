@@ -14,7 +14,10 @@ drake_cc_binary(
     name = "rigid_mug_gripper",
     srcs = ["rigid_mug_gripper.cc"],
     add_test_rule = 1,
-    data = ["schunk_wsg_50.sdf"],
+    data = [
+        "cylinder_mug.sdf",
+        "schunk_wsg_50.sdf",
+    ],
     test_rule_args = [
         "--simulation_time=0.1",
         "--target_realtime_rate=0.0",
@@ -23,6 +26,7 @@ drake_cc_binary(
         "//common:find_resource",
         "//common:text_logging_gflags",
         "//geometry:geometry_visualization",
+        "//math:geometric_transform",
         "//multibody/multibody_tree/multibody_plant",
         "//multibody/multibody_tree/parsing:multibody_plant_sdf_parser",
         "//systems/analysis:simulator",
