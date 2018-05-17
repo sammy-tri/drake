@@ -17,8 +17,6 @@
 namespace drake {
 namespace math {
 
-template <typename T> class RollPitchYaw;
-
 /// This class represents a 3x3 rotation matrix between two arbitrary frames
 /// A and B and helps ensure users create valid rotation matrices.  This class
 /// relates right-handed orthogonal unit vectors Ax, Ay, Az fixed in frame A
@@ -36,7 +34,7 @@ template <typename T> class RollPitchYaw;
 /// - double
 /// - AutoDiffXd
 ///
-// TODO(Mitiguy) Ensure this class handles RotationMatrix<symbolic::Expression>.
+// TODO(Mitiguy) Ensure class handles RotationMatrix<symbolic::Expression>.
 template <typename T>
 class RotationMatrix {
  public:
@@ -680,7 +678,7 @@ class RotationMatrix {
   Matrix3<T> R_AB_{Matrix3<T>::Identity()};
 };
 
-// TODO(mitiguy) Delete this code after all:
+// TODO(mitiguy) Delete this code after:
 // * All call sites removed, and
 // * code has subsequently been marked deprecated in favor of
 //   RotationMatrix(RollPitchYaw(rpy)). as per issue #8323.

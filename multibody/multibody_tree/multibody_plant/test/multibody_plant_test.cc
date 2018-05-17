@@ -245,7 +245,7 @@ class AcrobotPlantTests : public ::testing::Test {
   const RevoluteJoint<double>* shoulder_{nullptr};
   const RevoluteJoint<double>* elbow_{nullptr};
   // Input port for the actuation:
-  systems::FreestandingInputPortValue* input_port_{nullptr};
+  systems::FixedInputPortValue* input_port_{nullptr};
 
   // Reference benchmark for verification.
   Acrobot<double> acrobot_benchmark_{
@@ -283,7 +283,7 @@ TEST_F(AcrobotPlantTests, CalcTimeDerivatives) {
 // Verifies the process of visual geometry registration with a SceneGraph
 // for the acrobot model.
 TEST_F(AcrobotPlantTests, VisualGeometryRegistration) {
-  EXPECT_EQ(plant_->get_num_visual_geometries(), 3);
+  EXPECT_EQ(plant_->num_visual_geometries(), 3);
   EXPECT_TRUE(plant_->geometry_source_is_registered());
   EXPECT_TRUE(plant_->get_source_id());
 
@@ -368,7 +368,7 @@ GTEST_TEST(MultibodyPlantTest, CollisionGeometryRegistration) {
   // We are done defining the model.
   plant.Finalize();
 
-  EXPECT_EQ(plant.get_num_visual_geometries(), 0);
+  EXPECT_EQ(plant.num_visual_geometries(), 0);
   EXPECT_EQ(plant.get_num_collision_geometries(), 3);
   EXPECT_TRUE(plant.geometry_source_is_registered());
   EXPECT_TRUE(plant.get_source_id());
@@ -463,7 +463,7 @@ GTEST_TEST(MultibodyPlantTest, LinearizePendulum) {
 }
 
 TEST_F(AcrobotPlantTests, EvalContinuousStateOutputPort) {
-  EXPECT_EQ(plant_->get_num_visual_geometries(), 3);
+  EXPECT_EQ(plant_->num_visual_geometries(), 3);
   EXPECT_TRUE(plant_->geometry_source_is_registered());
   EXPECT_TRUE(plant_->get_source_id());
 
