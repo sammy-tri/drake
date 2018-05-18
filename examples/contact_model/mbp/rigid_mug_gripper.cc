@@ -67,7 +67,7 @@ DEFINE_double(target_realtime_rate, 1.0,
 DEFINE_double(simulation_time, 10.0,
               "Desired duration of the simulation in seconds.");
 
-DEFINE_double(finger_width, -0.1, "The initial distance between the gripper "
+DEFINE_double(finger_width, 0.1, "The initial distance between the gripper "
     "fingers, when gripper_force > 0.");
 
 // Integration paramters:
@@ -126,25 +126,21 @@ void AddGripperPads(MultibodyPlant<double>* plant,
                     const double pad_offset, const Body<double>& finger) {
   const int sample_count = FLAGS_ring_samples;
   const double sample_rotation = FLAGS_ring_orient * M_PI / 180.0; // in radians
-
   const double d_theta = 2 * M_PI / sample_count;
-  double x_coordinate, y_coordinate, z_coordinate;
+
+  Vector3d p_FSo;  // Position of the sphere frame S in the finger frame F.
+  // The gripper frame is defined as:
+  //  - x axis pointing to the right of the gripper.
+  //  - y axis pointing forward in the direction of the fingers.
+  //  - z axis points up.
   for (int i = 0; i < sample_count; ++i) {
-    if (FLAGS_gripper_force != 0) {
-      x_coordinate = pad_offset;
-      y_coordinate =
-          std::cos(d_theta * i + sample_rotation) * kPadMajorRadius + 0.0265;
-    } else {
-      y_coordinate = pad_offset;
-      x_coordinate =
-          -std::cos(d_theta * i + sample_rotation) * kPadMajorRadius;
-    }
-    z_coordinate =
-        std::sin(d_theta * i + sample_rotation) * kPadMajorRadius;
+    p_FSo(0) = pad_offset;  // Offset from the center of the gripper.
+    p_FSo(1) = std::cos(d_theta * i + sample_rotation) * kPadMajorRadius + 0.0265;
+    p_FSo(2) = std::sin(d_theta * i + sample_rotation) * kPadMajorRadius;
 
     // Pose of the sphere frame S in the gripper frame G.
     const Isometry3d X_GS =
-        Isometry3d(Translation3d(x_coordinate, y_coordinate, z_coordinate));
+        Isometry3d(Translation3d(p_FSo));
         //AngleAxisd(-M_PI_2, Vector3d::UnitZ()) *
         //Translation3d(x_coordinate, y_coordinate, z_coordinate);
 
@@ -178,8 +174,18 @@ int do_main() {
   // Add the pads.
   const Body<double>& left_finger = plant.GetBodyByName("left_finger");
   const Body<double>& right_finger = plant.GetBodyByName("right_finger");
-  AddGripperPads(&plant, &scene_graph, -0.0046, right_finger);
-  AddGripperPads(&plant, &scene_graph, +0.0046, left_finger);
+
+  if (FLAGS_gripper_force == 0) {
+    // We then fix everything to the right finger and leave the left finger
+    // "free" with no applied forces (thus we see it not moving).
+    const double finger_width = 0.007;  // From the visual in the SDF file.
+    AddGripperPads(&plant, &scene_graph, -0.0046, right_finger);
+    AddGripperPads(&plant, &scene_graph,
+                   -(FLAGS_finger_width + finger_width) + 0.0046, right_finger);
+  } else {
+    AddGripperPads(&plant, &scene_graph, -0.0046, right_finger);
+    AddGripperPads(&plant, &scene_graph, +0.0046, left_finger);
+  }
 
   // Now the model is complete.
   plant.Finalize();
@@ -238,9 +244,10 @@ int do_main() {
   systems::Context<double>& plant_context =
       diagram->GetMutableSubsystemContext(plant, diagram_context.get());
 
-  // There is no input actuation in this example for the passive dynamics.
+  // Gripper force.
   plant_context.FixInputPort(
-      plant.get_actuation_input_port().get_index(), Vector1d(0));
+      plant.get_actuation_input_port().get_index(),
+      Vector1d(FLAGS_gripper_force));
 
   // Get joints so that we can set initial conditions.
   const PrismaticJoint<double>& finger_slider =
@@ -258,7 +265,7 @@ int do_main() {
   plant.model().SetFreeBodyPoseOrThrow(mug, X_WM, &plant_context);
 
   // Set initial state.
-  finger_slider.set_translation(&plant_context, FLAGS_finger_width);
+  finger_slider.set_translation(&plant_context, -FLAGS_finger_width);
 
   // Set up simulator.
   systems::Simulator<double> simulator(*diagram, std::move(diagram_context));
