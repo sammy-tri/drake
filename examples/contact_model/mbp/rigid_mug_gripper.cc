@@ -75,8 +75,8 @@ DEFINE_string(integration_scheme, "runge_kutta2",
               "Integration scheme to be used. Available options are: "
               "'semi_explicit_euler','runge_kutta2','runge_kutta3',"
               "'implicit_euler'");
-DEFINE_double(time_step, -1.0,
-              "Time step used for fixed step size integrators."
+DEFINE_double(max_time_step, -1.0,
+              "Time maximum step used for the integrators."
               "If negative, a value based on penetration_allowance is used.");
 DEFINE_double(accuracy, 5e-5, "Sets the simulation accuracy for variable step"
     "size integrators with error control.");
@@ -198,7 +198,7 @@ int do_main() {
   // A fraction of this time scale is used which is chosen so that the fixed
   // time step integrators are stable.
   const double max_time_step =
-      FLAGS_time_step > 0 ? FLAGS_time_step :
+      FLAGS_max_time_step > 0 ? FLAGS_max_time_step :
       plant.get_contact_penalty_method_time_scale() / 30;
 
   PRINT_VAR(max_time_step);
@@ -253,19 +253,26 @@ int do_main() {
   const PrismaticJoint<double>& finger_slider =
       plant.GetJointByName<PrismaticJoint>("finger_sliding_joint");
 
+  // Set initial position of the left finger.
+  finger_slider.set_translation(&plant_context, -FLAGS_finger_width);
+
   // Get mug body so we can set its initial pose.
   const Body<double>& mug = plant.GetBodyByName("Mug");
+
+  // Initialize the mug pose to be right in the middle between the fingers.
+  std::vector<Isometry3d> X_WB_all;
+  plant.model().CalcAllBodyPosesInWorld(plant_context, &X_WB_all);
+  const Vector3d& p_WBr = X_WB_all[right_finger.index()].translation();
+  const Vector3d& p_WBl = X_WB_all[left_finger.index()].translation();
+  const double mug_y_W = (p_WBr(1) + p_WBl(1)) / 2.0;
 
   Isometry3d X_WM;
   Vector3d rpy(FLAGS_rx * M_PI / 180,
                FLAGS_ry * M_PI / 180,
                (FLAGS_rz * M_PI / 180) + M_PI);
   X_WM.linear() = RotationMatrix<double>(RollPitchYaw<double>(rpy)).matrix();
-  X_WM.translation() = Vector3d(FLAGS_px, FLAGS_py, FLAGS_pz);
+  X_WM.translation() = Vector3d(FLAGS_px, mug_y_W, FLAGS_pz);
   plant.model().SetFreeBodyPoseOrThrow(mug, X_WM, &plant_context);
-
-  // Set initial state.
-  finger_slider.set_translation(&plant_context, -FLAGS_finger_width);
 
   // Set up simulator.
   systems::Simulator<double> simulator(*diagram, std::move(diagram_context));
@@ -299,6 +306,26 @@ int do_main() {
   simulator.set_target_realtime_rate(FLAGS_target_realtime_rate);
   simulator.Initialize();
   simulator.StepTo(FLAGS_simulation_time);
+
+  // Print some time stepping stats.
+  PRINT_VAR(FLAGS_simulation_time);
+  PRINT_VAR(max_time_step);
+
+  // Checks for variable time step integrators.
+  if (!integrator->get_fixed_step_mode()) {
+    // From IntegratorBase::set_maximum_step_size():
+    // "The integrator may stretch the maximum step size by as much as 1% to
+    // reach discrete event."
+    PRINT_VAR(integrator->get_actual_initial_step_size_taken());
+    PRINT_VAR(integrator->get_largest_step_size_taken());
+    PRINT_VAR(integrator->get_smallest_adapted_step_size_taken());
+    PRINT_VAR(integrator->get_num_steps_taken());
+  }
+
+  // Checks for fixed time step integrators.
+  if (integrator->get_fixed_step_mode()) {
+    PRINT_VAR(integrator->get_num_steps_taken());
+  }
 
   return 0;
 }

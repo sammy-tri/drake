@@ -11,8 +11,10 @@
 #include "drake/geometry/geometry_instance.h"
 
 #include <iostream>
-#define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
-#define PRINT_VARn(a) std::cout << #a":\n" << a << std::endl;
+//#define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
+//#define PRINT_VARn(a) std::cout << #a":\n" << a << std::endl;
+#define PRINT_VAR(a) (void)a;
+#define PRINT_VARn(a) (void)a;
 
 namespace drake {
 namespace multibody {
@@ -523,12 +525,19 @@ void MultibodyPlant<double>::CalcAndAddContactForcesByPenaltyMethod(
           // Spatial force on body A at Ao, expressed in W.
           const SpatialForce<double> F_AAo_W = F_AC_W.Shift(p_CoAo_W);
           F_BBo_W_array->at(bodyA_node_index) += F_AAo_W;
+
+          PRINT_VAR(model().get_body(bodyA_index).name());
+          PRINT_VAR(F_AAo_W);
+
         }
 
         if (bodyB_index != world_index()) {
           // Spatial force on body B at Bo, expressed in W.
           const SpatialForce<double> F_BBo_W = -F_AC_W.Shift(p_CoBo_W);
           F_BBo_W_array->at(bodyB_node_index) += F_BBo_W;
+
+          PRINT_VAR(model().get_body(bodyB_index).name());
+          PRINT_VAR(F_BBo_W);
         }
       }
     }

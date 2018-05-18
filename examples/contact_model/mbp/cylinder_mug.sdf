@@ -22,6 +22,16 @@
             <radius>0.04</radius>
           </cylinder>
         </geometry>
+
+        <surface>
+          <friction>
+            <ode>
+              <mu>0.9</mu>
+              <mu2>0.5</mu2>
+            </ode>
+          </friction>
+        </surface>
+
       </collision>
       <visual name='base_visual'>
         <pose frame=''>0 0 0.05 0 -0 0</pose>
