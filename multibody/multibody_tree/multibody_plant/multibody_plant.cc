@@ -430,19 +430,8 @@ void MultibodyPlant<double>::CalcAndAddContactForcesByPenaltyMethod(
     const GeometryId geometryA_id = penetration.id_A;
     const GeometryId geometryB_id = penetration.id_B;
 
-    // TODO(amcastro-tri): Request SceneGraph to do this filtering for us
-    // when that capability lands.
-    // TODO(amcastro-tri): consider allowing this id's to belong to a third
-    // external system when they correspond to anchored geometry.
-    if (!is_collision_geometry(geometryA_id) ||
-        !is_collision_geometry(geometryB_id))
-      continue;
-
     BodyIndex bodyA_index = geometry_id_to_body_index_.at(geometryA_id);
     BodyIndex bodyB_index = geometry_id_to_body_index_.at(geometryB_id);
-
-    // Filter out same body collisions.
-    if (bodyA_index == bodyB_index) continue;
 
     BodyNodeIndex bodyA_node_index =
         model().get_body(bodyA_index).node_index();
@@ -533,13 +522,13 @@ void MultibodyPlant<double>::CalcAndAddContactForcesByPenaltyMethod(
         if (bodyA_index != world_index()) {
           // Spatial force on body A at Ao, expressed in W.
           const SpatialForce<double> F_AAo_W = F_AC_W.Shift(p_CoAo_W);
-          F_BBo_W_array->at(bodyA_index) += F_AAo_W;
+          F_BBo_W_array->at(bodyA_node_index) += F_AAo_W;
         }
 
         if (bodyB_index != world_index()) {
           // Spatial force on body B at Bo, expressed in W.
           const SpatialForce<double> F_BBo_W = -F_AC_W.Shift(p_CoBo_W);
-          F_BBo_W_array->at(bodyB_index) += F_BBo_W;
+          F_BBo_W_array->at(bodyB_node_index) += F_BBo_W;
         }
       }
     }
