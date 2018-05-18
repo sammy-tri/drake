@@ -2,7 +2,7 @@
 <sdf version='1.6'>
   <model name='Schunk_Gripper'>
     <!-- From contact_model/rigid_mug_gripper: Eigen::Vector3d(0.055 + 5e-4, 0, kMugHeight / 2 + 5e-4) -->
-    <pose>0.0555 0 0.1 0 0 1.57</pose>
+    <pose>0.0555 0 0.0505 0 0 1.57</pose>
     <link name='body'>
       <pose frame=''>0 -0.049133 0 0 -0 0</pose>
       <inertial>

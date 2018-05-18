@@ -37,13 +37,16 @@ namespace cart_pole {
 namespace {
 
 using Eigen::Isometry3d;
+using Eigen::Translation3d;
 using Eigen::Vector3d;
 using Eigen::AngleAxisd;
 using drake::geometry::SceneGraph;
+using drake::geometry::Sphere;
 using drake::lcm::DrakeLcm;
 using drake::math::RollPitchYaw;
 using drake::math::RotationMatrix;
 using drake::multibody::Body;
+using drake::multibody::multibody_plant::CoulombFriction;
 using drake::multibody::multibody_plant::MultibodyPlant;
 using drake::multibody::parsing::AddModelFromSdfFile;
 using drake::multibody::PrismaticJoint;
@@ -64,7 +67,7 @@ DEFINE_double(target_realtime_rate, 1.0,
 DEFINE_double(simulation_time, 10.0,
               "Desired duration of the simulation in seconds.");
 
-DEFINE_double(finger_width, 0.1, "The initial distance between the gripper "
+DEFINE_double(finger_width, -0.1, "The initial distance between the gripper "
     "fingers, when gripper_force > 0.");
 
 // Integration paramters:
@@ -72,9 +75,27 @@ DEFINE_string(integration_scheme, "runge_kutta2",
               "Integration scheme to be used. Available options are: "
               "'semi_explicit_euler','runge_kutta2','runge_kutta3',"
               "'implicit_euler'");
+DEFINE_double(time_step, -1.0,
+              "Time step used for fixed step size integrators."
+              "If negative, a value based on penetration_allowance is used.");
+DEFINE_double(accuracy, 5e-5, "Sets the simulation accuracy for variable step"
+    "size integrators with error control.");
 
 // Contact parameters
 DEFINE_double(penetration_allowance, 1.0e-3, "Penetration allowance, in meters");
+DEFINE_double(v_stiction_tolerance, 0.01,
+              "The maximum slipping speed allowed during stiction (m/s)");
+
+// Pads parameters
+DEFINE_int32(ring_samples, 4,
+             "The number of spheres used to sample the pad ring");
+DEFINE_double(pad_depth, 4e-3, "The depth the foremost pads penetrate the mug. "
+    "Deeper penetration implies stronger contact forces");
+DEFINE_double(ring_orient, 0, "Rotation of pads around x-axis (in degrees)");
+DEFINE_double(ring_static_friction, 0.9, "The coefficient of static friction "
+    "for the ring pad. Defaults to 0.9.");
+DEFINE_double(ring_dynamic_friction, 0.5, "The coefficient of dynamic friction "
+    "for the ring pad. Defaults to 0.5.");
 
 // Parameters for posing the mug.
 DEFINE_double(px, 0, "The x-position of the center, bottom of the mug");
@@ -86,6 +107,54 @@ DEFINE_double(ry, 0, "The y-rotation of the mug around its origin - the center "
     "of its bottom (in degrees). Rotation order: X, Y, Z");
 DEFINE_double(rz, 0, "The z-rotation of the mug around its origin - the center "
     "of its bottom (in degrees). Rotation order: X, Y, Z");
+
+// Gripping force.
+DEFINE_double(gripper_force, 0, "The force to be applied by the gripper. A "
+    "value of 0 indicates no gripper (uses pad_depth to determine penetration "
+    "distance).");
+
+// These values should match the cylinder defined in:
+// drake/examples/contact_model/cylinder_mug.sdf
+//const double kMugHeight = 0.1;
+//const double kMugRadius = 0.04;
+// The pad was measured as a torus with the following major and minor radii.
+const double kPadMajorRadius = 14e-3; // 14 mm.
+const double kPadMinorRadius = 6e-3;  // 6 mm.
+
+void AddGripperPads(MultibodyPlant<double>* plant,
+                    SceneGraph<double>* scene_graph,
+                    const double pad_offset, const Body<double>& finger) {
+  const int sample_count = FLAGS_ring_samples;
+  const double sample_rotation = FLAGS_ring_orient * M_PI / 180.0; // in radians
+
+  const double d_theta = 2 * M_PI / sample_count;
+  double x_coordinate, y_coordinate, z_coordinate;
+  for (int i = 0; i < sample_count; ++i) {
+    if (FLAGS_gripper_force != 0) {
+      x_coordinate = pad_offset;
+      y_coordinate =
+          std::cos(d_theta * i + sample_rotation) * kPadMajorRadius + 0.0265;
+    } else {
+      y_coordinate = pad_offset;
+      x_coordinate =
+          -std::cos(d_theta * i + sample_rotation) * kPadMajorRadius;
+    }
+    z_coordinate =
+        std::sin(d_theta * i + sample_rotation) * kPadMajorRadius;
+
+    // Pose of the sphere frame S in the gripper frame G.
+    const Isometry3d X_GS =
+        Isometry3d(Translation3d(x_coordinate, y_coordinate, z_coordinate));
+        //AngleAxisd(-M_PI_2, Vector3d::UnitZ()) *
+        //Translation3d(x_coordinate, y_coordinate, z_coordinate);
+
+    CoulombFriction<double> friction(
+        FLAGS_ring_static_friction, FLAGS_ring_static_friction);
+
+    plant->RegisterCollisionGeometry(
+        finger, X_GS, Sphere(kPadMinorRadius), friction, scene_graph);
+  }
+}
 
 int do_main() {
   systems::DiagramBuilder<double> builder;
@@ -106,16 +175,24 @@ int do_main() {
   plant.AddForceElement<UniformGravityFieldElement>(
       -9.81 * Vector3<double>::UnitZ());
 
+  // Add the pads.
+  const Body<double>& left_finger = plant.GetBodyByName("left_finger");
+  const Body<double>& right_finger = plant.GetBodyByName("right_finger");
+  AddGripperPads(&plant, &scene_graph, -0.0046, right_finger);
+  AddGripperPads(&plant, &scene_graph, +0.0046, left_finger);
+
   // Now the model is complete.
   plant.Finalize();
 
   // Set how much penetration (in meters) we are willing to accept.
   plant.set_penetration_allowance(FLAGS_penetration_allowance);
+  plant.set_stiction_tolerance(FLAGS_v_stiction_tolerance);
 
   // Hint the integrator's time step based on the contact time scale.
   // A fraction of this time scale is used which is chosen so that the fixed
   // time step integrators are stable.
   const double max_time_step =
+      FLAGS_time_step > 0 ? FLAGS_time_step :
       plant.get_contact_penalty_method_time_scale() / 30;
 
   PRINT_VAR(max_time_step);
@@ -181,7 +258,7 @@ int do_main() {
   plant.model().SetFreeBodyPoseOrThrow(mug, X_WM, &plant_context);
 
   // Set initial state.
-  finger_slider.set_translation(&plant_context, -FLAGS_finger_width);
+  finger_slider.set_translation(&plant_context, FLAGS_finger_width);
 
   // Set up simulator.
   systems::Simulator<double> simulator(*diagram, std::move(diagram_context));
@@ -208,6 +285,8 @@ int do_main() {
             "' not supported for this example.");
   }
   integrator->set_maximum_step_size(max_time_step);
+  if (!integrator->get_fixed_step_mode())
+    integrator->set_target_accuracy(FLAGS_accuracy);
 
   simulator.set_publish_every_time_step(false);
   simulator.set_target_realtime_rate(FLAGS_target_realtime_rate);
