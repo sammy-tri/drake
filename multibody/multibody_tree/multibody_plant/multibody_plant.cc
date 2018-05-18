@@ -10,6 +10,10 @@
 #include "drake/geometry/geometry_frame.h"
 #include "drake/geometry/geometry_instance.h"
 
+#include <iostream>
+#define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
+#define PRINT_VARn(a) std::cout << #a":\n" << a << std::endl;
+
 namespace drake {
 namespace multibody {
 namespace multibody_plant {
@@ -362,6 +366,53 @@ void MultibodyPlant<T>::set_penetration_allowance(
   penalty_method_contact_parameters_.time_scale = time_scale;
 }
 
+template<typename T>
+void MultibodyPlant<T>::DoPublish(const systems::Context<T>& context,
+               const std::vector<const systems::PublishEvent<T>*>&) const {
+  PRINT_VAR(context.get_time());
+}
+
+template <>
+std::vector<PenetrationAsPointPair<double>>
+MultibodyPlant<double>::CalcPointPairPenetrations(
+    const systems::Context<double>& context) const {
+  const geometry::QueryObject<double>& query_object =
+      this->EvalAbstractInput(context, geometry_query_port_)
+          ->template GetValue<geometry::QueryObject<double>>();
+  std::vector<PenetrationAsPointPair<double>> penetrations =
+      query_object.ComputePointPairPenetration();
+
+  // TODO(amcastro-tri): Request SceneGraph to do this filtering for us
+  // when that capability lands.
+  // TODO(amcastro-tri): consider allowing this id's to belong to a third
+  // external system when they correspond to anchored geometry.
+  std::vector<PenetrationAsPointPair<double>> filtered_penetrations;
+  for (const auto& penetration : penetrations) {
+    const GeometryId geometryA_id = penetration.id_A;
+    const GeometryId geometryB_id = penetration.id_B;
+
+    // Filter visuals.
+    if (!is_collision_geometry(geometryA_id) ||
+        !is_collision_geometry(geometryB_id))
+      continue;
+
+    BodyIndex bodyA_index = geometry_id_to_body_index_.at(geometryA_id);
+    BodyIndex bodyB_index = geometry_id_to_body_index_.at(geometryB_id);
+
+    // Filter out same body collisions.
+    if (bodyA_index == bodyB_index) continue;
+
+    filtered_penetrations.push_back(penetration);
+  }
+  return filtered_penetrations;
+}
+
+template<typename T>
+std::vector<PenetrationAsPointPair<T>> MultibodyPlant<T>::CalcPointPairPenetrations(
+    const systems::Context<T>&) const {
+  DRAKE_ABORT_MSG("Only <double> is supported.");
+}
+
 template<>
 void MultibodyPlant<double>::CalcAndAddContactForcesByPenaltyMethod(
     const systems::Context<double>& context,
@@ -370,12 +421,11 @@ void MultibodyPlant<double>::CalcAndAddContactForcesByPenaltyMethod(
     std::vector<SpatialForce<double>>* F_BBo_W_array) const {
   if (num_collision_geometries() == 0) return;
 
-  const geometry::QueryObject<double>& query_object =
-      this->EvalAbstractInput(context, geometry_query_port_)
-          ->template GetValue<geometry::QueryObject<double>>();
-
   std::vector<PenetrationAsPointPair<double>> penetrations =
-      query_object.ComputePointPairPenetration();
+      CalcPointPairPenetrations(context);
+
+  PRINT_VAR(penetrations.size());
+
   for (const auto& penetration : penetrations) {
     const GeometryId geometryA_id = penetration.id_A;
     const GeometryId geometryB_id = penetration.id_B;
@@ -390,6 +440,9 @@ void MultibodyPlant<double>::CalcAndAddContactForcesByPenaltyMethod(
 
     BodyIndex bodyA_index = geometry_id_to_body_index_.at(geometryA_id);
     BodyIndex bodyB_index = geometry_id_to_body_index_.at(geometryB_id);
+
+    // Filter out same body collisions.
+    if (bodyA_index == bodyB_index) continue;
 
     BodyNodeIndex bodyA_node_index =
         model().get_body(bodyA_index).node_index();
