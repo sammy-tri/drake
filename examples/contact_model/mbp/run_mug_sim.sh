@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 
-# With implicit integrator and the parameters chosen, this simulation runs at
-# 2X (twice as fast as real time).
+# Case 1, gripper_force=0:
+# With implicit integrator and the parameters chosen and
+# v_stiction_tolerance=1e-5, this simulation runs at 26X.
+
+# Case 2, gripper_force = 10 N (~ 1 kg):
+# With implicit integrator and the parameters chosen and
+# v_stiction_tolerance=2e-4 this simulation runs at X / 1.5 (50% slower than
+# real time).
 # Number of time steps and consequently the simulation wall time roughly scale
 # with the inverse of v_stiction_tolerance. That is, to reduce the observed
 # sliding to a fifth will imply a simulation that runs five times slower than
@@ -12,7 +18,7 @@ cd bazel-bin/examples/contact_model/mbp/rigid_mug_gripper_mbp.runfiles/drake
 
 ./examples/contact_model/mbp/rigid_mug_gripper_mbp \
                   --simulation_time=40.0 --target_realtime_rate=0\
-                  --gripper_force=0.0 \
+                  --gripper_force=10.0 \
                   --integration_scheme=implicit_euler --max_time_step=1e-1 --accuracy=1e-2 \
                   --penetration_allowance=0.01 --v_stiction_tolerance=2e-4 \
                   --ring_static_friction=1.0 --ring_dynamic_friction=0.5 \
