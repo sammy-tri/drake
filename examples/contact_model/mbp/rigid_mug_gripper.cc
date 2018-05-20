@@ -95,10 +95,7 @@ DEFINE_double(ring_static_friction, 0.9, "The coefficient of static friction "
 DEFINE_double(ring_dynamic_friction, 0.5, "The coefficient of dynamic friction "
     "for the ring pad. Defaults to 0.5.");
 
-// Parameters for posing the mug.
-DEFINE_double(px, 0, "The x-position of the center, bottom of the mug");
-DEFINE_double(py, 0, "The y-position of the center, bottom of the mug");
-DEFINE_double(pz, 0, "The z-position of the center, bottom of the mug");
+// Parameters for rotating the mug.
 DEFINE_double(rx, 0, "The x-rotation of the mug around its origin - the center "
     "of its bottom (in degrees). Rotation order: X, Y, Z");
 DEFINE_double(ry, 0, "The y-rotation of the mug around its origin - the center "
@@ -271,7 +268,7 @@ int do_main() {
                FLAGS_ry * M_PI / 180,
                (FLAGS_rz * M_PI / 180) + M_PI);
   X_WM.linear() = RotationMatrix<double>(RollPitchYaw<double>(rpy)).matrix();
-  X_WM.translation() = Vector3d(FLAGS_px, mug_y_W, FLAGS_pz);
+  X_WM.translation() = Vector3d(0.0, mug_y_W, 0.0);
   plant.model().SetFreeBodyPoseOrThrow(mug, X_WM, &plant_context);
 
   // Set up simulator.
