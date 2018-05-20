@@ -67,7 +67,7 @@ DEFINE_double(target_realtime_rate, 1.0,
 DEFINE_double(simulation_time, 10.0,
               "Desired duration of the simulation in seconds.");
 
-DEFINE_double(finger_width, 0.1, "The initial distance between the gripper "
+DEFINE_double(grip_width, 0.1, "The initial distance between the gripper "
     "fingers, when gripper_force > 0.");
 
 // Integration paramters:
@@ -89,8 +89,6 @@ DEFINE_double(v_stiction_tolerance, 0.01,
 // Pads parameters
 DEFINE_int32(ring_samples, 4,
              "The number of spheres used to sample the pad ring");
-DEFINE_double(pad_depth, 4e-3, "The depth the foremost pads penetrate the mug. "
-    "Deeper penetration implies stronger contact forces");
 DEFINE_double(ring_orient, 0, "Rotation of pads around x-axis (in degrees)");
 DEFINE_double(ring_static_friction, 0.9, "The coefficient of static friction "
     "for the ring pad. Defaults to 0.9.");
@@ -110,8 +108,7 @@ DEFINE_double(rz, 0, "The z-rotation of the mug around its origin - the center "
 
 // Gripping force.
 DEFINE_double(gripper_force, 0, "The force to be applied by the gripper. A "
-    "value of 0 indicates no gripper (uses pad_depth to determine penetration "
-    "distance).");
+    "value of 0 indicates a fixed grip width as set with grip_width.");
 
 // These values should match the cylinder defined in:
 // drake/examples/contact_model/cylinder_mug.sdf
@@ -175,16 +172,19 @@ int do_main() {
   const Body<double>& left_finger = plant.GetBodyByName("left_finger");
   const Body<double>& right_finger = plant.GetBodyByName("right_finger");
 
+  // Pads offset from the center of a finger. pad_offset = 0 means the center of
+  // the spheres is located right at the center of the finger.
+  const double pad_offset = 0.0046;
   if (FLAGS_gripper_force == 0) {
     // We then fix everything to the right finger and leave the left finger
     // "free" with no applied forces (thus we see it not moving).
     const double finger_width = 0.007;  // From the visual in the SDF file.
-    AddGripperPads(&plant, &scene_graph, -0.0046, right_finger);
+    AddGripperPads(&plant, &scene_graph, -pad_offset, right_finger);
     AddGripperPads(&plant, &scene_graph,
-                   -(FLAGS_finger_width + finger_width) + 0.0046, right_finger);
+                   -(FLAGS_grip_width + finger_width) + pad_offset, right_finger);
   } else {
-    AddGripperPads(&plant, &scene_graph, -0.0046, right_finger);
-    AddGripperPads(&plant, &scene_graph, +0.0046, left_finger);
+    AddGripperPads(&plant, &scene_graph, -pad_offset, right_finger);
+    AddGripperPads(&plant, &scene_graph, +pad_offset, left_finger);
   }
 
   // Now the model is complete.
@@ -254,7 +254,7 @@ int do_main() {
       plant.GetJointByName<PrismaticJoint>("finger_sliding_joint");
 
   // Set initial position of the left finger.
-  finger_slider.set_translation(&plant_context, -FLAGS_finger_width);
+  finger_slider.set_translation(&plant_context, -FLAGS_grip_width);
 
   // Get mug body so we can set its initial pose.
   const Body<double>& mug = plant.GetBodyByName("Mug");
