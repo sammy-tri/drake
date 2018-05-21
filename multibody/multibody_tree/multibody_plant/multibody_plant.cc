@@ -150,7 +150,7 @@ geometry::GeometryId MultibodyPlant<T>::RegisterCollisionGeometry(
         "RegisterAsSourceForSceneGraph()");
   }
   GeometryId id;
-  geometry::VisualMaterial color(Vector4<double>(0, 0, 0, 0));
+  geometry::VisualMaterial color(Vector4<double>(0.99609, 0.26953, 0.00000, 0.5));
   // TODO(amcastro-tri): Consider doing this after finalize so that we can
   // register anchored geometry on ANY body welded to the world.
   if (body.index() == world_index()) {
