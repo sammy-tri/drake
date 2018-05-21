@@ -52,8 +52,9 @@ int do_main() {
   scene_graph.set_name("scene_graph");
 
   // Make and add the cart_pole model.
-  const std::string full_name = FindResourceOrThrow(
-      "drake/examples/multibody/cart_pole/cart_pole.sdf");
+  const std::string full_name =
+      FindResourceOrThrow(
+          "drake/examples/contact_model/mbp/rigid_mug_gripper.sdf");
   MultibodyPlant<double>& cart_pole = *builder.AddSystem<MultibodyPlant>();
   AddModelFromSdfFile(full_name, &cart_pole, &scene_graph);
 

@@ -21,6 +21,12 @@
 //#define PRINT_VAR(a) (void) (a);
 //#define PRINT_VARn(a) (void) (a);
 
+#include <iostream>
+//#define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
+//#define PRINT_VARn(a) std::cout << #a":\n" << a << std::endl;
+#define PRINT_VAR(a) (void)a;
+#define PRINT_VARn(a) (void)a;
+
 namespace drake {
 namespace multibody {
 namespace multibody_plant {
@@ -62,7 +68,8 @@ MultibodyPlant<T>::MultibodyPlant(double time_step) :
         drake::multibody::multibody_plant::MultibodyPlant>()),
     time_step_(time_step) {
   model_ = std::make_unique<MultibodyTree<T>>();
-  visual_geometries_.emplace_back();  // Entry for the "world" body.
+  visual_geometries_.emplace_back();  // Entries for the "world" body.
+  collision_geometries_.emplace_back();
 }
 
 template<typename T>
@@ -76,6 +83,7 @@ MultibodyPlant<T>::MultibodyPlant(const MultibodyPlant<U>& other) {
   geometry_id_to_body_index_ = other.geometry_id_to_body_index_;
   geometry_id_to_visual_index_ = other.geometry_id_to_visual_index_;
   visual_geometries_ = other.visual_geometries_;
+  collision_geometries_ = other.collision_geometries_;
   // MultibodyTree::CloneToScalar() already called MultibodyTree::Finalize() on
   // the new MultibodyTree on U. Therefore we only Finalize the plant's
   // internals (and not the MultibodyTree).
@@ -161,7 +169,15 @@ geometry::GeometryId MultibodyPlant<T>::RegisterCollisionGeometry(
   DRAKE_ASSERT(
       static_cast<int>(default_coulomb_friction_.size()) == collision_index);
   default_coulomb_friction_.push_back(coulomb_friction);
+  DRAKE_ASSERT(num_bodies() == static_cast<int>(collision_geometries_.size()));
+  collision_geometries_[body.index()].push_back(id);
   return id;
+}
+
+template <typename T>
+const std::vector<geometry::GeometryId>&
+MultibodyPlant<T>::GetCollisionGeometriesForBody(const Body<T>& body) const {
+  return collision_geometries_[body.index()];
 }
 
 template <typename T>
@@ -219,10 +235,10 @@ void MultibodyPlant<T>::FinalizePlantOnly() {
   if (source_id_) DeclareSceneGraphPorts();
   DeclareCacheEntries();
   scene_graph_ = nullptr;  // must not be used after Finalize().
-  if (get_num_collision_geometries() > 0 &&
+  if (num_collision_geometries() > 0 &&
       penalty_method_contact_parameters_.time_scale < 0)
     set_penetration_allowance();
-  if (get_num_collision_geometries() > 0 &&
+  if (num_collision_geometries() > 0 &&
       stribeck_model_.stiction_tolerance() < 0)
     set_stiction_tolerance();
 }
@@ -295,7 +311,7 @@ void MultibodyPlant<T>::DoCalcTimeDerivatives(
   VectorX<T>& tau_array = forces.mutable_generalized_forces();
 
   // Compute contact forces on each body by penalty method.
-  if (get_num_collision_geometries() > 0) {
+  if (num_collision_geometries() > 0) {
     CalcAndAddContactForcesByPenaltyMethod(context, pc, vc, &F_BBo_W_array);
   }
 
@@ -1549,31 +1565,69 @@ void MultibodyPlant<T>::set_penetration_allowance(
   penalty_method_contact_parameters_.time_scale = time_scale;
 }
 
+template<typename T>
+void MultibodyPlant<T>::DoPublish(const systems::Context<T>& context,
+               const std::vector<const systems::PublishEvent<T>*>&) const {
+  PRINT_VAR(context.get_time());
+}
+
+template <>
+std::vector<PenetrationAsPointPair<double>>
+MultibodyPlant<double>::CalcPointPairPenetrations(
+    const systems::Context<double>& context) const {
+  const geometry::QueryObject<double>& query_object =
+      this->EvalAbstractInput(context, geometry_query_port_)
+          ->template GetValue<geometry::QueryObject<double>>();
+  std::vector<PenetrationAsPointPair<double>> penetrations =
+      query_object.ComputePointPairPenetration();
+
+  // TODO(amcastro-tri): Request SceneGraph to do this filtering for us
+  // when that capability lands.
+  // TODO(amcastro-tri): consider allowing this id's to belong to a third
+  // external system when they correspond to anchored geometry.
+  std::vector<PenetrationAsPointPair<double>> filtered_penetrations;
+  for (const auto& penetration : penetrations) {
+    const GeometryId geometryA_id = penetration.id_A;
+    const GeometryId geometryB_id = penetration.id_B;
+
+    // Filter visuals.
+    if (!is_collision_geometry(geometryA_id) ||
+        !is_collision_geometry(geometryB_id))
+      continue;
+
+    BodyIndex bodyA_index = geometry_id_to_body_index_.at(geometryA_id);
+    BodyIndex bodyB_index = geometry_id_to_body_index_.at(geometryB_id);
+
+    // Filter out same body collisions.
+    if (bodyA_index == bodyB_index) continue;
+
+    filtered_penetrations.push_back(penetration);
+  }
+  return filtered_penetrations;
+}
+
+template<typename T>
+std::vector<PenetrationAsPointPair<T>> MultibodyPlant<T>::CalcPointPairPenetrations(
+    const systems::Context<T>&) const {
+  DRAKE_ABORT_MSG("Only <double> is supported.");
+}
+
 template<>
 void MultibodyPlant<double>::CalcAndAddContactForcesByPenaltyMethod(
     const systems::Context<double>& context,
     const PositionKinematicsCache<double>& pc,
     const VelocityKinematicsCache<double>& vc,
     std::vector<SpatialForce<double>>* F_BBo_W_array) const {
-  if (get_num_collision_geometries() == 0) return;
-
-  const geometry::QueryObject<double>& query_object =
-      this->EvalAbstractInput(context, geometry_query_port_)
-          ->template GetValue<geometry::QueryObject<double>>();
+  if (num_collision_geometries() == 0) return;
 
   std::vector<PenetrationAsPointPair<double>> penetrations =
-      query_object.ComputePointPairPenetration();
+      CalcPointPairPenetrations(context);
+
+  PRINT_VAR(penetrations.size());
+
   for (const auto& penetration : penetrations) {
     const GeometryId geometryA_id = penetration.id_A;
     const GeometryId geometryB_id = penetration.id_B;
-
-    // TODO(amcastro-tri): Request SceneGraph to do this filtering for us
-    // when that capability lands.
-    // TODO(amcastro-tri): consider allowing this id's to belong to a third
-    // external system when they correspond to anchored geometry.
-    if (!is_collision_geometry(geometryA_id) ||
-        !is_collision_geometry(geometryB_id))
-      continue;
 
     BodyIndex bodyA_index = geometry_id_to_body_index_.at(geometryA_id);
     BodyIndex bodyB_index = geometry_id_to_body_index_.at(geometryB_id);
@@ -1667,13 +1721,20 @@ void MultibodyPlant<double>::CalcAndAddContactForcesByPenaltyMethod(
         if (bodyA_index != world_index()) {
           // Spatial force on body A at Ao, expressed in W.
           const SpatialForce<double> F_AAo_W = F_AC_W.Shift(p_CoAo_W);
-          F_BBo_W_array->at(bodyA_index) += F_AAo_W;
+          F_BBo_W_array->at(bodyA_node_index) += F_AAo_W;
+
+          PRINT_VAR(model().get_body(bodyA_index).name());
+          PRINT_VAR(F_AAo_W);
+
         }
 
         if (bodyB_index != world_index()) {
           // Spatial force on body B at Bo, expressed in W.
           const SpatialForce<double> F_BBo_W = -F_AC_W.Shift(p_CoBo_W);
-          F_BBo_W_array->at(bodyB_index) += F_BBo_W;
+          F_BBo_W_array->at(bodyB_node_index) += F_BBo_W;
+
+          PRINT_VAR(model().get_body(bodyB_index).name());
+          PRINT_VAR(F_BBo_W);
         }
       }
     }

@@ -198,8 +198,14 @@ void SchunkWsgStatusSender::OutputStatus(const Context<double>& context,
   // The position and speed reported in this message are between the
   // two fingers rather than the position/speed of a single finger
   // (so effectively doubled).
-  status.actual_position_mm = -2 * state->GetAtIndex(position_index_) * 1e3;
-  status.actual_speed_mm_per_s = -2 * state->GetAtIndex(velocity_index_) * 1e3;
+  status.actual_position_mm = state->GetAtIndex(position_index_) * 1e3;
+  status.actual_speed_mm_per_s = state->GetAtIndex(velocity_index_) * 1e3;
+
+//  status.link_positions[0] = state->GetAtIndex(0);
+//  status.link_positions[1] = state->GetAtIndex(1);
+//  status.link_positions[2] = state->GetAtIndex(2);
+//  status.link_positions[3] = state->GetAtIndex(3);
+//  status.link_positions[4] = state->GetAtIndex(4);
 
   if (force) {
     status.actual_force = -force->GetAtIndex(0);

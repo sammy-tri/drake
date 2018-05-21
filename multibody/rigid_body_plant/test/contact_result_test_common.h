@@ -26,15 +26,24 @@ template <typename DerivedA, typename DerivedB>
                          MatrixCompareType::absolute);
 }
 
+template <typename DerivedA, typename DerivedB>
+::testing::AssertionResult CompareMatrices(
+    const Eigen::MatrixBase<DerivedA>& m1,
+    const Eigen::MatrixBase<DerivedB>& m2, double precision) {
+  return CompareMatrices(m1, m2, precision,
+                         MatrixCompareType::absolute);
+}
+
 // Base class for testing the CompliantContactModel class as well as the
 // RigidBodyPlant's logic for populating its output port for collision response
 // data.
 template <typename T>
-class ContactResultTestCommon : public ::testing::Test {
+class ContactResultTestCommon {
  public:
   DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(ContactResultTestCommon)
 
   ContactResultTestCommon() {}
+  virtual ~ContactResultTestCommon() {}
 
   /// Computes the default material properties for derived classes to set.
   CompliantMaterial MakeDefaultMaterial() {
@@ -50,7 +59,7 @@ class ContactResultTestCommon : public ::testing::Test {
   // to make sure they are not confused as contact parameters in derived tests
   // (see below).
   const double kYoungsModulus = 150;  // Pa
-  const double kDissipation = 2.0;  // s/m
+  const double kDissipation = 0.0;  // s/m
   const double kStaticFriction = 0.9;
   const double kDynamicFriction = 0.5;
 

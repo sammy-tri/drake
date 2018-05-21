@@ -1,0 +1,18 @@
+# This command assumes drake_visualizer was built using: `bazel build //tools:drake_visualizer`
+cmd "0.drake_visualizer" {
+    exec = "${DRAKE_WORKSPACE}/bazel-bin/tools/drake_visualizer \
+	    --script ${DRAKE_WORKSPACE}/multibody/rigid_body_plant/visualization/contact_viz.py \
+	    --script ${DRAKE_WORKSPACE}/multibody/rigid_body_plant/visualization/show_time.py";
+    host = "localhost";
+}
+
+cmd "1.sim" {
+        exec = "${DRAKE_WORKSPACE}/examples/contact_model/run_mug_sim.sh";
+        host = "localhost";
+}
+
+# This command assumes lcm spy was built using: `bazel build //lcmtypes:drake-lcm-spy`
+cmd "2.lcm-spy" {
+    exec = "${DRAKE_WORKSPACE}/bazel-bin/lcmtypes/drake-lcm-spy";
+    host = "localhost";
+}
