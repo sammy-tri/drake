@@ -734,11 +734,7 @@ void MultibodyTree<T>::CalcPointsGeometricJacobianExpressedInWorld(
 
   // Do nothing for the world body and return a zero Jacobian.
   // That is, Jv_WQi * v = 0, always, for the world body.
-  if (body_B.index() == world_index()) {
-    // Since B = W, we must set p_WQi_set = p_BQi_set.
-    *p_WQi_set = p_BQi_set;
-    return;
-  }
+  if (body_B.index() == world_index()) return;
 
   // Compute kinematic path from body B to the world:
   std::vector<BodyNodeIndex> path_to_world;
@@ -801,6 +797,14 @@ void MultibodyTree<T>::CalcPointsGeometricJacobianExpressedInWorld(
   DRAKE_THROW_UNLESS(Jv_WQi != nullptr);
   DRAKE_THROW_UNLESS(Jv_WQi->rows() == 3 * num_points);
   DRAKE_THROW_UNLESS(Jv_WQi->cols() == num_velocities());
+  // Do nothing for the world body and return a zero Jacobian.
+  // That is, Jv_WQi * v = 0, always, for the world body.
+  if (frame_B.body().index() == world_index()) {
+    // Since B = W, we must set p_WQi_set = p_BQi_set.
+    *p_WQi_set = p_BQi_set;
+    Jv_WQi->setZero();
+    return;
+  }
   CalcPointsPositions(context,
                       frame_B, p_BQi_set,        /* From frame B */
                       world_frame(), p_WQi_set); /* To world frame W */

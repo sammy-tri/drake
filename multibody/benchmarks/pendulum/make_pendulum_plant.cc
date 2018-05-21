@@ -35,7 +35,7 @@ std::unique_ptr<drake::multibody::multibody_plant::MultibodyPlant<double>>
 MakePendulumPlant(
     const PendulumParameters& params,
     double dt,
-    geometry::SceneGraph<double>* geometry_system) {
+    geometry::SceneGraph<double>* scene_graph) {
   auto plant = std::make_unique<MultibodyPlant<double>>(dt);
 
   // Position of the com of the pendulum's body (in this case a point mass) in
