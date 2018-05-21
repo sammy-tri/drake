@@ -58,6 +58,7 @@ drake_pybind_library(
 drake_pybind_library(
     name = "rigid_body_plant_py",
     cc_deps = [
+        "//bindings/pydrake/systems:systems_pybind",
         "//lcmtypes:viewer",
     ],
     cc_so_name = "rigid_body_plant",
@@ -132,7 +133,6 @@ install(
 
 drake_py_unittest(
     name = "rigid_body_plant_test",
-    size = "small",
     data = ["//examples/pendulum:models"],
     deps = [
         ":rigid_body_plant_py",
@@ -141,7 +141,6 @@ drake_py_unittest(
 
 drake_py_unittest(
     name = "shapes_test",
-    size = "small",
     data = ["//examples/quadrotor:models"],
     deps = [
         ":shapes_py",
@@ -150,7 +149,6 @@ drake_py_unittest(
 
 drake_py_unittest(
     name = "rigid_body_tree_test",
-    size = "small",
     data = [
         "//examples/atlas:models",
         "//examples/pendulum:models",
@@ -160,7 +158,6 @@ drake_py_unittest(
 
 drake_py_unittest(
     name = "parsers_test",
-    size = "small",
     data = [
         "//examples/acrobot:models",
         "//examples/atlas:models",
@@ -174,7 +171,6 @@ drake_py_unittest(
 
 drake_py_unittest(
     name = "multibody_tree_test",
-    size = "small",
     deps = [
         ":multibody_tree_py",
     ],

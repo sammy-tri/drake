@@ -20,10 +20,10 @@ drake_cc_binary(
     deps = [
         "//common:text_logging_gflags",
         "//geometry:geometry_visualization",
-        "//multibody/benchmarks/inclined_plane:make_inclined_plane_plant",
+        "//multibody/benchmarks/inclined_plane",
         "//systems/analysis:simulator",
         "//systems/framework:diagram",
-        "//systems/lcm",
+        "//systems/lcm:lcm_pubsub_system",
         "//systems/rendering:pose_bundle_to_draw_message",
         "@gflags",
     ],

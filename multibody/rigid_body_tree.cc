@@ -60,8 +60,6 @@ using drake::math::gradientMatrixToAutoDiff;
 using drake::math::Gradient;
 using drake::multibody::joints::FloatingBaseType;
 
-using drake::multibody::collision::CollisionFilterGroup;
-
 using std::allocator;
 using std::cerr;
 using std::cout;
@@ -81,6 +79,34 @@ using std::unique_ptr;
 using std::unordered_map;
 using std::vector;
 using std::endl;
+
+// We compile rigid_body_tree.cc in shards (only a portion of the source code
+// in the file is compiled at a time) in order to reduce build latency and
+// mitigate the memory footprint of any single compiler instance.
+//
+// The build system will compile this file multiple times, each with a
+// different numeric value for DRAKE_RBT_SHARD.
+//
+// Within this file, we guard various functions or instantiations with
+// preprocessor statements like "if DRAKE_RBT_SHARD == 0".
+//
+// In shard 0 we compile all class methods that are not also method templates,
+// as well as some method templates.  In shard 1 we compile the remainder of
+// the method templates.
+//
+// The shard assignments are chosen so that methods that might benefit from
+// inlining their calls are within the same shard.  (In other words, the shards
+// draw a partition through the call graph that crosses as few performance-
+// critical edges as practical.)  When assigning or updating new methods to a
+// shard, try to assign the new method to the same shard as the methods it
+// calls.  If it does not need to call anything else, assign it to the shard
+// that compiles most quickly currently.
+
+#ifndef DRAKE_RBT_SHARD
+#error Missing DRAKE_RBT_SHARD definition
+#endif
+
+#if DRAKE_RBT_SHARD == 0
 
 const char* const RigidBodyTreeConstants::kWorldName = "world";
 const int RigidBodyTreeConstants::kWorldBodyIndex = 0;
@@ -311,16 +337,9 @@ void RigidBodyTree<T>::AddCollisionFilterGroupMember(
     const std::string& group_name, const std::string& body_name, int model_id) {
   int body_index = FindBodyIndex(body_name, model_id);
   RigidBody<T>* body = bodies_[body_index].get();
-  if (body->get_num_collision_elements() > 0) {
-    throw std::runtime_error("Attempting to add a body, '" + body->get_name() +
-                             "', to a collision group, '" +
-                             group_name +
-                             "' that has already been compiled with "
-                             "collision elements.");
-  }
   if (!collision_group_manager_.AddCollisionFilterGroupMember(group_name,
                                                               *body)) {
-    throw std::runtime_error(
+    throw std::logic_error(
         "Attempting to add a link to an undefined collision filter group: "
         "Adding " +
         body->get_name() + " to " + group_name + ".");
@@ -332,13 +351,6 @@ void RigidBodyTree<T>::AddCollisionFilterIgnoreTarget(
     const std::string& group_name, const std::string& target_group_name) {
   collision_group_manager_.AddCollisionFilterIgnoreTarget(group_name,
                                                           target_group_name);
-}
-
-template <typename T>
-void RigidBodyTree<T>::SetBodyCollisionFilters(
-    const RigidBody<T>& body, const drake::multibody::collision::bitmask& group,
-    const drake::multibody::collision::bitmask& ignores) {
-  collision_group_manager_.SetBodyCollisionFilters(body, group, ignores);
 }
 
 template <typename T>
@@ -445,6 +457,9 @@ void RigidBodyTree<T>::compile() {
 
 template <typename T>
 void RigidBodyTree<T>::CompileCollisionState() {
+  using drake::multibody::collision::bitmask;
+  using drake::multibody::collision::Element;
+
   // Identifies and processes collision elements that should be marked
   // "anchored".
   for (const auto& pair : body_collision_map_) {
@@ -462,27 +477,63 @@ void RigidBodyTree<T>::CompileCollisionState() {
   // Process collision filter groups
   collision_group_manager_.CompileGroups();
 
-  // Set the collision filter data on the body's elements. Note: this does
-  // *not* update the collision elements that may have already been registered
-  // with the collision model. But attempts to add bodies with registered
-  // collision elements to a collision filter group, should have already thrown
-  // an exception.
+  std::unordered_set<RigidBody<T>*> needs_recompile;
+
+  // Update the collision filter groups for the *compiled* elements and mark
+  // those bodies for collision filter notification.
+  for (const std::pair<const RigidBody<T>* const, std::pair<bitmask, bitmask>>&
+           item : collision_group_manager_.body_groups()) {
+    RigidBody<T>& body = *get_mutable_body(item.first->get_body_index());
+    const bitmask& group = item.second.first;
+    const bitmask& ignore = item.second.second;
+    for (auto itr = body.collision_elements_begin();
+         itr != body.collision_elements_end(); ++itr) {
+      (*itr)->merge_collision_filter(group, ignore);
+    }
+    needs_recompile.insert(&body);
+  }
+
+  // Set the collision filter group data for the uncompiled collision elements
+  // based on the *current* state of the collision group manager and any
+  // previously-compiled collision elements on the same bodies.
   for (auto& pair : body_collision_map_) {
-    RigidBody<T>* body = pair.first;
-    drake::multibody::collision::bitmask group =
-        collision_group_manager_.get_group_mask(*body);
-    drake::multibody::collision::bitmask ignore =
-        collision_group_manager_.get_ignore_mask(*body);
+    RigidBody<T>& body = *pair.first;
+    bitmask group = collision_group_manager_.get_group_mask(body);
+    bitmask ignore = collision_group_manager_.get_ignore_mask(body);
+
+    // Set the collision filter groups for the *uncompiled* elements.
     BodyCollisions& elements = pair.second;
     for (const auto& collision_item : elements) {
-      element_order_[collision_item.element]->set_collision_filter(group,
-                                                                   ignore);
+      Element& element = *element_order_[collision_item.element];
+      DRAKE_DEMAND(element.get_body() == &body);
+      element.set_collision_filter(group, ignore);
+
+      if (body.get_num_collision_elements() > 0) {
+        // The body has already been compiled with collision elements. Include
+        // previous collision filter groups into the element. This assumes that
+        // all collision elements for a body must have *identical* collision
+        // filter group info.
+        const auto& compiled_element = *body.collision_elements_begin();
+        element.merge_collision_filter(
+            compiled_element->get_collision_filter_group(),
+            compiled_element->get_collision_filter_ignores());
+      }
     }
   }
+
   collision_group_manager_.Clear();
 
   // Builds cliques for collision filtering.
-  CreateCollisionCliques();
+  CreateCollisionCliques(&needs_recompile);
+
+  // Update all previously compiled bodies that have had their filters modified.
+  for (RigidBody<T>* body_ptr : needs_recompile) {
+    RigidBody<double>& body = *body_ptr;
+    for (auto itr = body.collision_elements_begin();
+         itr != body.collision_elements_end(); ++itr) {
+      collision_model_->NotifyFilterCriteriaChanged((*itr)->getId());
+    }
+  }
 
   // Computes the contact points for a body.
   for (auto& pair : body_collision_map_) {
@@ -527,43 +578,164 @@ void RigidBodyTree<T>::CompileCollisionState() {
 }
 
 template <typename T>
-void RigidBodyTree<T>::CreateCollisionCliques() {
-  int clique_id = get_next_clique_id();
-  // Marks collision elements in the same body to be in the same clique.
+void RigidBodyTree<T>::CreateCollisionCliques(
+    std::unordered_set<RigidBody<T>*>* recompile_set) {
+  using drake::multibody::collision::Element;
+  // If a body with collision geometry is adjacent to another such body, their
+  // collision geometries will *all* be added to a common clique. That means
+  // if either body has *multiple* geometries, they are already excluded from
+  // self-collision. Thus, process adjacency issues first and only add
+  // self-collision cliques as necessary.
+  //
+  // This assumes that any previously compiled bodies and collision elements
+  // are correctly configured. This merely updates to include the new data
+  // in the body_collision_map_. Part of "correctness" currently requires
+  // *every* collision element which belongs to a single body to have the *same*
+  // collision cliques.
+  //
+  // In this algorithm, for a particular body B, there are two types of
+  // collision elements: B_Q and B_C, the queued and compiled collision
+  // elements, respectively (where B_Q and B_C are *sets*, possibly empty).
+  // The process of updating the compiled state of the tree requires evaluating
+  // the combination of bodies and their compiled and queued collision elements.
+
   for (auto& pair : body_collision_map_) {
-    BodyCollisions& collision_items = pair.second;
-    if ( collision_items.size() > 1 ) {
-      for (auto& item : collision_items) {
-        element_order_[item.element]->AddToCollisionClique(clique_id);
+    RigidBody<T>& body = *pair.first;
+
+    // First, assign the elements B_Q to the same cliques as one of the elements
+    // in B_C. The choice is irrelevant because all elements in B_C should have
+    // the same cliques. NOTE: this *doesn't* address self-collisions!
+    if (body.get_num_collision_elements() > 0) {
+      BodyCollisions& collisions = pair.second;
+      const Element& compiled_element = **body.collision_elements_begin();
+      for (auto& item : collisions) {
+        element_order_[item.element]->AddCliquesFromElement(compiled_element);
       }
-      clique_id = get_next_clique_id();
+    }
+
+    const int num_B_C = body.get_num_collision_elements();
+    // We need the chance to process this body against all other bodies -- but
+    // we want to do it only once. Duplication is only a risk with bodies that
+    // are also in body_collision_map_. So, we'll detect which are in the map
+    // and skip those bodies with *smaller* indices guaranteeing that for
+    // body pair (B, O) we'll only process them if B.index < O.index.
+    for (int i = 1; i < static_cast<int>(bodies_.size()); ++i) {
+      if (body_collision_map_.count(bodies_[i].get()) > 0 &&
+          i <= body.get_body_index()) {
+        continue;
+      }
+
+      RigidBody<T>& test_body = *bodies_[i];
+      if (!test_body.CanCollideWith(body)) {
+        // The action that needs to be taken depends on the sizes of B_Q, B_C,
+        // O_Q, and O_C. Because we're in this loop, we know |B_Q| > 0. So, that
+        // leaves us with 8 cases:
+        // │ │|B_C|│|O_Q|│|O_C|│
+        // ├─┼─────┼─────┼─────┤
+        // │1│░░░0░│░░░0░│░░░0░│ Only new elements for B; no op.
+        // │2│   0 │   0 │ > 0 │ Queued elements adjacent; add clique B, O.
+        // │3│   0 │ > 0 │   0 │ Queued elements adjacent; add clique B, O.
+        // │4│   0 │ > 0 │ > 0 │ Queued elements adjacent; add clique B, O.
+        // │5│░>░0░│░░░0░│░░░0░│ Only new elements for B; no op.
+        // │6│░>░0░│░░░0░│░>░0░│ Compiled elements already adjacent; no op.
+        // │7│ > 0 │ > 0 │   0 │ Queued elements adjacent; add clique B, O.
+        // │8│░>░0░│░>░0░│░>░0░│ Compiled elements already adjacent; no op.
+        //
+        // Notes:
+        //  1. If I already had compiled collision elements on both bodies, then
+        //     I already have cliques to handle them and those cliques get
+        //     copied in the previous stage. No further action required.
+        //     (rows 6 & 8)
+        //  2. If there are no collision elements on O (queued or compiled),
+        //     there is no adjacency that actually needs to be filtered. (rows 1
+        //     & 5)
+        //  3. In all other cases, new adjacency is being *added* (i.e.,
+        //     previously there were no collision elements in one or both bodies
+        //     and elements are being added that give *both* adjacent bodies
+        //     collision elements.
+        //  4. If clique set on a body with compiled elements are changed, that
+        //     body needs to have its collision elements "recompiled".
+
+        const int num_O_C = test_body.get_num_collision_elements();
+        auto iter = body_collision_map_.find(&test_body);
+        const int num_O_Q =
+            iter == body_collision_map_.end()
+                ? 0
+                : static_cast<int>(body_collision_map_[&test_body].size());
+
+        // Detect criteria for the no-op rows.
+        if ((num_B_C == 0 && num_O_C == 0 && num_O_Q == 0) ||
+            (num_B_C > 0 && (num_O_Q == 0 || num_O_C > 0))) {
+          continue;
+        }
+
+        int clique_id = get_next_clique_id();
+
+        // Add elements in B_Q to clique.
+        for (const auto& item : body_collision_map_[&body]) {
+          element_order_[item.element]->AddToCollisionClique(clique_id);
+        }
+
+        // Add elements in O_Q to clique.
+        if (num_O_Q) {
+          for (const auto& item : body_collision_map_[&test_body]) {
+            element_order_[item.element]->AddToCollisionClique(clique_id);
+          }
+        }
+
+        // Add elements in O_C to clique.
+        if (num_O_C) {
+          for (auto e_iter = test_body.collision_elements_begin();
+              e_iter != test_body.collision_elements_end();
+              ++e_iter) {
+            (*e_iter)->AddToCollisionClique(clique_id);
+          }
+          recompile_set->insert(&test_body);
+        }
+
+        // Add elements in B_C to clique.
+        if (num_B_C) {
+          for (auto e_iter = body.collision_elements_begin();
+               e_iter != body.collision_elements_end();
+               ++e_iter) {
+            (*e_iter)->AddToCollisionClique(clique_id);
+          }
+          recompile_set->insert(&body);
+        }
+      }
     }
   }
 
-  // Collision elements on "adjacent" bodies belong in the same clique.
-  // This allows coarse link collision geometry. This coarse geometry might
-  // superficially collide, but not represent a *physical* collision.  Instead,
-  // it is assumed that constraints on the relative poses of adjacent links is
-  // determined by joint limits.
-  // This is an O(N^2) loop -- but only happens at initialization.
-  // If this proves to be too expensive, walking the tree would be O(N)
-  // and still capture all of the adjacency.
-  // TODO(SeanCurtis-TRI): If compile gets called multiple times this will end
-  // up encoding redundant cliques.
-  for (size_t i = 0; i < bodies_.size(); ++i) {
-    RigidBody<T>* body_i = bodies_[i].get();
-    for (size_t j = i + 1; j < bodies_.size(); ++j) {
-      RigidBody<T>* body_j = bodies_[j].get();
-      if (!body_i->CanCollideWith(*body_j)) {
-        BodyCollisions& elements_i =  body_collision_map_[body_i];
-        for (const auto& item : elements_i) {
+  // Now clean up self-collision. The queued collision elements (B_Q) have
+  // had the chance to be assigned to cliques due to adjacency (or previous
+  // cliques). We need self-collision cliques iff:
+  //  1. the total number of cliques > 1. i.e., |B_C| + |B_Q| > 1, and
+  //  2. the elements in B_Q haven't been assigned to any cliques yet
+  //     (determined by examining the "first" element in B_Q).
+  for (auto& pair : body_collision_map_) {
+    RigidBody<T>& body = *pair.first;
+    BodyCollisions& body_collisions = pair.second;
+    Element& element = *element_order_[body_collisions[0].element];
+    if (element.get_num_cliques() == 0) {
+      int num_B_Q = static_cast<int>(body_collisions.size());
+      int num_B_C = body.get_num_collision_elements();
+      if (num_B_Q + num_B_C > 1) {
+        // This element hasn't been assigned to *any* cliques but _now_ requires
+        // one.
+        int clique_id = get_next_clique_id();
+        for (const BodyCollisionItem& item : body_collisions) {
           element_order_[item.element]->AddToCollisionClique(clique_id);
         }
-        BodyCollisions& elements_j =  body_collision_map_[body_j];
-        for (const auto& item : elements_j) {
-          element_order_[item.element]->AddToCollisionClique(clique_id);
+        if (num_B_C) {
+          // If |B_C| > 1, then it should already have a clique.
+          DRAKE_DEMAND(num_B_C == 1);
+          for (auto e_iter = body.collision_elements_begin();
+               e_iter != body.collision_elements_end();
+               ++e_iter) {
+            (*e_iter)->AddToCollisionClique(clique_id);
+          }
+          recompile_set->insert(&body);
         }
-        clique_id = get_next_clique_id();
       }
     }
   }
@@ -724,15 +896,16 @@ void RigidBodyTree<T>::addCollisionElement(
 
     if (!success) {
       throw std::runtime_error(
-          "Unable to add the collision element to the "
-          "body: " +
-          body.get_name() + ".");
+          "Unable to add the collision element to the body: " +
+          body.get_name());
     }
   }
+
   BodyCollisions& body_collisions = itr->second;
   size_t id = element_order_.size();
   element_order_.emplace_back(
       std::unique_ptr<drake::multibody::collision::Element>(element.clone()));
+  element_order_.back()->set_body(&body);
   body_collisions.emplace_back(group_name, id);
 }
 
@@ -1190,6 +1363,9 @@ KinematicsCache<T> RigidBodyTree<T>::CreateKinematicsCache() const {
   return CreateKinematicsCacheWithType<T>();
 }
 
+#endif
+#if DRAKE_RBT_SHARD == 1
+
 template <typename T>
 template <typename DerivedQ>
 KinematicsCache<typename DerivedQ::Scalar> RigidBodyTree<T>::doKinematics(
@@ -1315,6 +1491,9 @@ void RigidBodyTree<T>::doKinematics(KinematicsCache<Scalar>& cache,
 
   cache.setJdotVCached(compute_JdotV && cache.hasV());
 }
+
+#endif
+#if DRAKE_RBT_SHARD == 0
 
 template <typename T>
 template <typename Scalar>
@@ -1901,6 +2080,9 @@ KinematicPath RigidBodyTree<T>::findKinematicPath(
   return path;
 }
 
+#endif
+#if DRAKE_RBT_SHARD == 1
+
 template <typename T>
 template <typename Scalar>
 TwistMatrix<Scalar> RigidBodyTree<T>::geometricJacobian(
@@ -2048,6 +2230,9 @@ TwistVector<Scalar> RigidBodyTree<T>::transformSpatialAcceleration(
   spatial_accel_temp += spatial_acceleration;
   return transformSpatialMotion(T_old_to_new, spatial_accel_temp);
 }
+
+#endif
+#if DRAKE_RBT_SHARD == 0
 
 template <typename T>
 template <typename Scalar>
@@ -2345,6 +2530,9 @@ Matrix<typename DerivedV::Scalar, Dynamic, 1> RigidBodyTree<T>::frictionTorques(
   return ret;
 }
 
+#endif
+#if DRAKE_RBT_SHARD == 1
+
 template <typename T>
 template <typename Scalar, typename PointScalar>
 Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>
@@ -2440,6 +2628,9 @@ RigidBodyTree<T>::relativeRollPitchYawJacobian(
                        in_terms_of_qdot);
 }
 
+#endif
+#if DRAKE_RBT_SHARD == 0
+
 template <typename T>
 template <typename Scalar>
 Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>
@@ -2461,6 +2652,9 @@ RigidBodyTree<T>::forwardKinPositionGradient(
   }
   return ret;
 }
+
+#endif
+#if DRAKE_RBT_SHARD == 1
 
 template <typename T>
 template <typename Scalar>
@@ -2597,6 +2791,9 @@ RigidBodyTree<T>::relativeRollPitchYawJacobianDotTimesV(
       Phi * J_geometric_dot_times_v.template topRows<kSpaceDimension>();
   return ret;
 }
+
+#endif
+#if DRAKE_RBT_SHARD == 0
 
 template <typename T>
 RigidBody<T>* RigidBodyTree<T>::FindBody(const std::string& body_name,
@@ -2967,6 +3164,9 @@ Matrix<Scalar, Eigen::Dynamic, 1> RigidBodyTree<T>::positionConstraints(
   return ret;
 }
 
+#endif
+#if DRAKE_RBT_SHARD == 1
+
 template <typename T>
 template <typename Scalar>
 Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>
@@ -3012,6 +3212,9 @@ RigidBodyTree<T>::positionConstraintsJacDotTimesV(
   }
   return ret;
 }
+
+#endif
+#if DRAKE_RBT_SHARD == 0
 
 template <typename T>
 template <typename DerivedA, typename DerivedB, typename DerivedC>
@@ -3318,6 +3521,9 @@ RigidBodyTree<T>::CalcFrameSpatialVelocityJacobianDotTimesVInWorldFrame(
 
 // clang-format off
 
+#endif
+#if DRAKE_RBT_SHARD == 0
+
 // Explicit template instantiations for massMatrix.
 template MatrixX<AutoDiffXd     > RigidBodyTree<double>::massMatrix<AutoDiffXd     >(KinematicsCache<AutoDiffXd     >&) const;  // NOLINT
 template MatrixXd                 RigidBodyTree<double>::massMatrix<double         >(KinematicsCache<double         >&) const;  // NOLINT
@@ -3346,9 +3552,15 @@ template MatrixX<double         > RigidBodyTree<double>::GetQDotToVelocityMappin
 template VectorX<AutoDiffXd     > RigidBodyTree<double>::dynamicsBiasTerm<AutoDiffXd     >(KinematicsCache<AutoDiffXd     >&, unordered_map<RigidBody<double> const*, WrenchVector<AutoDiffXd     >, hash<RigidBody<double> const*>, equal_to<RigidBody<double> const*>, Eigen::aligned_allocator<pair<RigidBody<double> const* const, WrenchVector<AutoDiffXd     >>>> const&, bool) const;  // NOLINT
 template VectorXd                 RigidBodyTree<double>::dynamicsBiasTerm<double         >(KinematicsCache<double         >&, unordered_map<RigidBody<double> const*, WrenchVector<double         >, hash<RigidBody<double> const*>, equal_to<RigidBody<double> const*>, Eigen::aligned_allocator<pair<RigidBody<double> const* const, WrenchVector<double         >>>> const&, bool) const;  // NOLINT
 
+#endif
+#if DRAKE_RBT_SHARD == 1
+
 // Explicit template instantiations for geometricJacobian.
 template TwistMatrix<AutoDiffXd     > RigidBodyTree<double>::geometricJacobian<AutoDiffXd     >(KinematicsCache<AutoDiffXd     > const&, int, int, int, bool, vector<int, allocator<int>>*) const;  // NOLINT
 template TwistMatrix<double         > RigidBodyTree<double>::geometricJacobian<double         >(KinematicsCache<double         > const&, int, int, int, bool, vector<int, allocator<int>>*) const;  // NOLINT
+
+#endif
+#if DRAKE_RBT_SHARD == 0
 
 // Explicit template instantiations for relativeTransform.
 template Eigen::Transform<AutoDiffXd     , 3, 1, 0> RigidBodyTree<double>::relativeTransform<AutoDiffXd     >(KinematicsCache<AutoDiffXd     > const&, int, int) const;  // NOLINT
@@ -3366,9 +3578,15 @@ template TwistMatrix<double         > RigidBodyTree<double>::centroidalMomentumM
 template MatrixX<AutoDiffXd     > RigidBodyTree<double>::forwardKinPositionGradient<AutoDiffXd     >(KinematicsCache<AutoDiffXd     > const&, int, int, int) const;  // NOLINT
 template MatrixXd                 RigidBodyTree<double>::forwardKinPositionGradient<double         >(KinematicsCache<double         > const&, int, int, int) const;  // NOLINT
 
+#endif
+#if DRAKE_RBT_SHARD == 1
+
 // Explicit template instantiations for geometricJacobianDotTimesV.
 template TwistVector<AutoDiffXd     > RigidBodyTree<double>::geometricJacobianDotTimesV<AutoDiffXd     >(KinematicsCache<AutoDiffXd     > const&, int, int, int) const;  // NOLINT
 template TwistVector<double         > RigidBodyTree<double>::geometricJacobianDotTimesV<double         >(KinematicsCache<double         > const&, int, int, int) const;  // NOLINT
+
+#endif
+#if DRAKE_RBT_SHARD == 0
 
 // Explicit template instantiations for centerOfMassJacobianDotTimesV.
 template Vector3<AutoDiffXd     > RigidBodyTree<double>::centerOfMassJacobianDotTimesV<AutoDiffXd     >(KinematicsCache<AutoDiffXd     >&, set<int, less<int>, allocator<int>> const&) const;  // NOLINT
@@ -3382,6 +3600,9 @@ template TwistVector<double         > RigidBodyTree<double>::centroidalMomentumM
 template VectorX<AutoDiffXd     > RigidBodyTree<double>::positionConstraints<AutoDiffXd     >(KinematicsCache<AutoDiffXd     > const&) const;  // NOLINT
 template VectorXd                 RigidBodyTree<double>::positionConstraints<double         >(KinematicsCache<double         > const&) const;  // NOLINT
 
+#endif
+#if DRAKE_RBT_SHARD == 1
+
 // Explicit template instantiations for positionConstraintsJacobian.
 template MatrixX<AutoDiffXd     > RigidBodyTree<double>::positionConstraintsJacobian<AutoDiffXd     >(KinematicsCache<AutoDiffXd     > const&, bool) const;  // NOLINT
 template MatrixXd                 RigidBodyTree<double>::positionConstraintsJacobian<double         >(KinematicsCache<double         > const&, bool) const;  // NOLINT
@@ -3390,13 +3611,22 @@ template MatrixXd                 RigidBodyTree<double>::positionConstraintsJaco
 template VectorX<AutoDiffXd     > RigidBodyTree<double>::positionConstraintsJacDotTimesV<AutoDiffXd     >(KinematicsCache<AutoDiffXd     > const&) const;  // NOLINT
 template VectorXd                 RigidBodyTree<double>::positionConstraintsJacDotTimesV<double         >(KinematicsCache<double         > const&) const;  // NOLINT
 
+#endif
+#if DRAKE_RBT_SHARD == 0
+
 // Explicit template instantiations for jointLimitConstriants.
 template void RigidBodyTree<double>::jointLimitConstraints<VectorXd            , VectorXd            , MatrixXd            >(Eigen::MatrixBase<VectorXd            > const&, Eigen::MatrixBase<VectorXd            >&, Eigen::MatrixBase<MatrixXd            >&) const;  // NOLINT
 template void RigidBodyTree<double>::jointLimitConstraints<Eigen::Map<VectorXd>, Eigen::Map<VectorXd>, Eigen::Map<MatrixXd>>(Eigen::MatrixBase<Eigen::Map<VectorXd>> const&, Eigen::MatrixBase<Eigen::Map<VectorXd>>&, Eigen::MatrixBase<Eigen::Map<MatrixXd>>&) const;  // NOLINT
 
+#endif
+#if DRAKE_RBT_SHARD == 1
+
 // Explicit template instantiations for relativeTwist.
 template TwistVector<AutoDiffXd     > RigidBodyTree<double>::relativeTwist<AutoDiffXd     >(KinematicsCache<AutoDiffXd     > const&, int, int, int) const;  // NOLINT
 template TwistVector<double         > RigidBodyTree<double>::relativeTwist<double         >(KinematicsCache<double         > const&, int, int, int) const;  // NOLINT
+
+#endif
+#if DRAKE_RBT_SHARD == 0
 
 // Explicit template instantiations for worldMomentumMatrix.
 template TwistMatrix<AutoDiffXd     > RigidBodyTree<double>::worldMomentumMatrix<AutoDiffXd     >(KinematicsCache<AutoDiffXd     >&, set<int, less<int>, allocator<int>> const&, bool) const;  // NOLINT
@@ -3405,8 +3635,14 @@ template TwistMatrix<double         > RigidBodyTree<double>::worldMomentumMatrix
 // Explicit template instantiations for worldMomentumMatrixDotTimesV.
 template TwistVector<double> RigidBodyTree<double>::worldMomentumMatrixDotTimesV<double>(KinematicsCache<double>&, set<int, less<int>, allocator<int>> const&) const;  // NOLINT
 
+#endif
+#if DRAKE_RBT_SHARD == 1
+
 // Explicit template instantiations for transformSpatialAcceleration.
 template TwistVector<double> RigidBodyTree<double>::transformSpatialAcceleration<double>(KinematicsCache<double> const&, TwistVector<double> const&, int, int, int, int) const;  // NOLINT
+
+#endif
+#if DRAKE_RBT_SHARD == 0
 
 // Explicit template instantiations for frictionTorques
 template VectorX<AutoDiffXd     > RigidBodyTree<double>::frictionTorques(Eigen::MatrixBase<VectorX<AutoDiffXd     >> const& v) const;  // NOLINT
@@ -3430,11 +3666,13 @@ template MatrixX<double> RigidBodyTree<double>::transformQDotMappingToVelocityMa
 template MatrixX<double> RigidBodyTree<double>::transformQDotMappingToVelocityMapping<Eigen::Map<MatrixXd const>>(const KinematicsCache<double>&, const Eigen::MatrixBase<Eigen::Map<MatrixXd const>>&);  // NOLINT
 template MatrixX<double> RigidBodyTree<double>::transformQDotMappingToVelocityMapping<Eigen::Map<MatrixXd      >>(const KinematicsCache<double>&, const Eigen::MatrixBase<Eigen::Map<MatrixXd      >>&);  // NOLINT
 
+#endif
+#if DRAKE_RBT_SHARD == 1
+
 // Explicit template instantiations for DoTransformPointsJacobian.
-template MatrixX<double    > RigidBodyTree<double    >::DoTransformPointsJacobian<double    , double    >(const KinematicsCache<double    >&, const Eigen::Ref<const Matrix3X<double    >>&, int, int, bool) const;  // NOLINT
-template MatrixX<AutoDiffXd> RigidBodyTree<double    >::DoTransformPointsJacobian<AutoDiffXd, double    >(const KinematicsCache<AutoDiffXd>&, const Eigen::Ref<const Matrix3X<double    >>&, int, int, bool) const;  // NOLINT
-template MatrixX<AutoDiffXd> RigidBodyTree<double    >::DoTransformPointsJacobian<AutoDiffXd, AutoDiffXd>(const KinematicsCache<AutoDiffXd>&, const Eigen::Ref<const Matrix3X<AutoDiffXd>>&, int, int, bool) const;  // NOLINT
-template MatrixX<AutoDiffXd> RigidBodyTree<AutoDiffXd>::DoTransformPointsJacobian<AutoDiffXd, AutoDiffXd>(const KinematicsCache<AutoDiffXd>&, const Eigen::Ref<const Matrix3X<AutoDiffXd>>&, int, int, bool) const;  // NOLINT
+template MatrixX<double    > RigidBodyTree<double>::DoTransformPointsJacobian<double    , double    >(const KinematicsCache<double    >&, const Eigen::Ref<const Matrix3X<double    >>&, int, int, bool) const;  // NOLINT
+template MatrixX<AutoDiffXd> RigidBodyTree<double>::DoTransformPointsJacobian<AutoDiffXd, double    >(const KinematicsCache<AutoDiffXd>&, const Eigen::Ref<const Matrix3X<double    >>&, int, int, bool) const;  // NOLINT
+template MatrixX<AutoDiffXd> RigidBodyTree<double>::DoTransformPointsJacobian<AutoDiffXd, AutoDiffXd>(const KinematicsCache<AutoDiffXd>&, const Eigen::Ref<const Matrix3X<AutoDiffXd>>&, int, int, bool) const;  // NOLINT
 
 // Explicit template instantiations for DoTransformPointsJacobianDotTimesV.
 template VectorX<AutoDiffXd>      RigidBodyTree<double>::DoTransformPointsJacobianDotTimesV<AutoDiffXd     >(const KinematicsCache<AutoDiffXd     >&, const Eigen::Ref<const Matrix3Xd>&, int, int) const;  // NOLINT
@@ -3456,9 +3694,15 @@ template VectorX<AutoDiffXd     > RigidBodyTree<double>::relativeRollPitchYawJac
 template VectorXd                 RigidBodyTree<double>::relativeQuaternionJacobianDotTimesV<double         >(KinematicsCache<double         > const&, int, int) const;  // NOLINT
 template VectorX<AutoDiffXd     > RigidBodyTree<double>::relativeQuaternionJacobianDotTimesV<AutoDiffXd     >(KinematicsCache<AutoDiffXd     > const&, int, int) const;  // NOLINT
 
+#endif
+#if DRAKE_RBT_SHARD == 0
+
 // Explicit template instantiations for CheckCacheValidity(cache).
 template void RigidBodyTree<double>::CheckCacheValidity(const KinematicsCache<double         >&) const;  // NOLINT
 template void RigidBodyTree<double>::CheckCacheValidity(const KinematicsCache<AutoDiffXd     >&) const;  // NOLINT
+
+#endif
+#if DRAKE_RBT_SHARD == 1
 
 // Explicit template instantiations for doKinematics(cache).
 template void RigidBodyTree<double>::doKinematics(KinematicsCache<double         >&, bool) const;  // NOLINT
@@ -3480,8 +3724,8 @@ template KinematicsCache<AutoDiffXd     > RigidBodyTree<double>::doKinematics(Ei
 template KinematicsCache<double>          RigidBodyTree<double>::doKinematics(Eigen::MatrixBase<Eigen::Map<VectorXd                      >> const&, Eigen::MatrixBase<Eigen::Map<VectorXd                      >> const&, bool) const;  // NOLINT
 template KinematicsCache<double>          RigidBodyTree<double>::doKinematics(Eigen::MatrixBase<Eigen::Map<VectorXd const                >> const&, Eigen::MatrixBase<Eigen::Map<VectorXd const                >> const&, bool) const;  // NOLINT
 
-// Explicit template instantiations for parseBodyOrFrameID.
-template int RigidBodyTree<double>::parseBodyOrFrameID(const int body_or_frame_id, Eigen::Transform<double, 3, Eigen::Isometry>* Tframe) const;  // NOLINT
+#endif
+#if DRAKE_RBT_SHARD == 0
 
 // Explicit template instantiations for CreateKinematicsCacheWithType.
 template KinematicsCache<AutoDiffXd     > RigidBodyTree<double>::CreateKinematicsCacheWithType<AutoDiffXd     >() const;  // NOLINT
@@ -3494,3 +3738,5 @@ template std::vector<drake::multibody::collision::PointPair<double         >> Ri
 
 // Explicitly instantiates on the most common scalar types.
 template class RigidBodyTree<double>;
+
+#endif

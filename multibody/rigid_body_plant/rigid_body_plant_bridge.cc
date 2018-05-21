@@ -13,31 +13,32 @@
 namespace drake {
 namespace systems {
 
+using geometry::Box;
 using geometry::Cylinder;
 using geometry::FrameId;
 using geometry::FramePoseVector;
 using geometry::GeometryFrame;
 using geometry::GeometryInstance;
-using geometry::GeometrySystem;
 using geometry::Mesh;
+using geometry::SceneGraph;
 using geometry::Shape;
 using geometry::Sphere;
 using geometry::VisualMaterial;
 
 template <typename T>
-RigidBodyPlantBridge<T>::RigidBodyPlantBridge(
-    const RigidBodyTree<T>* tree, GeometrySystem<T>* geometry_system)
+RigidBodyPlantBridge<T>::RigidBodyPlantBridge(const RigidBodyTree<T>* tree,
+                                              SceneGraph<T>* scene_graph)
     : tree_(tree) {
   DRAKE_THROW_UNLESS(tree_ != nullptr);
-  DRAKE_THROW_UNLESS(geometry_system != nullptr);
-  source_id_ = geometry_system->RegisterSource(this->get_name());
+  DRAKE_THROW_UNLESS(scene_graph != nullptr);
+  source_id_ = scene_graph->RegisterSource(this->get_name());
 
   // Declare the tree's pose input port -- don't need the index, it is always 0.
   const int vector_size =
       tree->get_num_positions() + tree->get_num_velocities();
   plant_state_port_ =
       this->DeclareInputPort(kVectorValued, vector_size).get_index();
-  RegisterTree(geometry_system);
+  RegisterTree(scene_graph);
 
   // Now that the frames have been registered, instantiate the output port.
   geometry_pose_port_ = this->DeclareAbstractOutputPort(
@@ -59,7 +60,7 @@ RigidBodyPlantBridge<T>::rigid_body_plant_state_input_port() const {
 }
 
 template <typename T>
-void RigidBodyPlantBridge<T>::RegisterTree(GeometrySystem<T>* geometry_system) {
+void RigidBodyPlantBridge<T>::RegisterTree(SceneGraph<T>* scene_graph) {
   // TODO(SeanCurtis-TRI): This treats all bodies in the tree as dynamic. Some
   // may be fixed to the world. In that case, the bodies should *not* be
   // registered, and the geometries should be registered as anchored.
@@ -67,6 +68,8 @@ void RigidBodyPlantBridge<T>::RegisterTree(GeometrySystem<T>* geometry_system) {
   // fixed, then their geometries should *implicitly* not be considered for
   // collision. However, if both are included as dynamic bodies, penetrations
   // will be reported.
+
+  using std::make_unique;
 
   // Load *dynamic* geometry
   const int body_count = static_cast<int>(tree_->get_bodies().size());
@@ -77,7 +80,7 @@ void RigidBodyPlantBridge<T>::RegisterTree(GeometrySystem<T>* geometry_system) {
       // TODO(SeanCurtis-TRI): Possibly account for the fact that some frames
       // may be rigidly affixed to other frames or frames without geometry
       // likewise wouldn't be registered.
-      FrameId body_id = geometry_system->RegisterFrame(
+      FrameId body_id = scene_graph->RegisterFrame(
           source_id_,
           GeometryFrame(body.get_name(), Isometry3<double>::Identity(),
                         body.get_model_instance_id()));
@@ -89,25 +92,29 @@ void RigidBodyPlantBridge<T>::RegisterTree(GeometrySystem<T>* geometry_system) {
         Isometry3<double> X_FG = visual_element.getLocalTransform();
         const DrakeShapes::Geometry& geometry = visual_element.getGeometry();
         switch (visual_element.getShape()) {
+          case DrakeShapes::BOX: {
+            const auto& box = dynamic_cast<const DrakeShapes::Box&>(geometry);
+            shape = make_unique<Box>(box.size(0), box.size(1), box.size(2));
+            break;
+          }
           case DrakeShapes::SPHERE: {
             const auto& sphere =
                 dynamic_cast<const DrakeShapes::Sphere&>(geometry);
-            shape = std::make_unique<Sphere>(sphere.radius);
+            shape = make_unique<Sphere>(sphere.radius);
             break;
           }
           case DrakeShapes::CYLINDER: {
             const auto& cylinder =
                 dynamic_cast<const DrakeShapes::Cylinder&>(geometry);
-            shape =
-                std::make_unique<Cylinder>(cylinder.radius, cylinder.length);
+            shape = make_unique<Cylinder>(cylinder.radius, cylinder.length);
             break;
           }
           case DrakeShapes::MESH: {
             const auto& mesh = dynamic_cast<const DrakeShapes::Mesh&>(geometry);
             if (mesh.uri_.find("package://") == 0) {
-              shape = std::make_unique<Mesh>(mesh.uri_);
+              shape = make_unique<Mesh>(mesh.uri_);
             } else {
-              shape = std::make_unique<Mesh>(mesh.resolved_filename_);
+              shape = make_unique<Mesh>(mesh.resolved_filename_);
             }
             break;
           }
@@ -118,11 +125,10 @@ void RigidBodyPlantBridge<T>::RegisterTree(GeometrySystem<T>* geometry_system) {
         if (shape) {
           // Visual element's "material" is simply the diffuse rgba values.
           const Vector4<double>& diffuse = visual_element.getMaterial();
-          geometry_system->RegisterGeometry(
+          scene_graph->RegisterGeometry(
               source_id_, body_id,
-              std::make_unique<GeometryInstance>(
-                  X_FG, std::move(shape),
-                  VisualMaterial(diffuse)));
+              std::make_unique<GeometryInstance>(X_FG, std::move(shape),
+                                                 VisualMaterial(diffuse)));
           DRAKE_DEMAND(shape == nullptr);
         }
       }

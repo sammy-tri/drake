@@ -6,13 +6,15 @@
 
 #include <gtest/gtest.h>
 
+#include "drake/common/find_resource.h"
 #include "drake/common/test_utilities/eigen_matrix_compare.h"
 #include "drake/common/test_utilities/expect_throws_message.h"
-#include "drake/geometry/geometry_system.h"
+#include "drake/geometry/scene_graph.h"
 #include "drake/multibody/benchmarks/acrobot/acrobot.h"
 #include "drake/multibody/benchmarks/acrobot/make_acrobot_plant.h"
 #include "drake/multibody/benchmarks/pendulum/make_pendulum_plant.h"
 #include "drake/multibody/multibody_tree/joints/revolute_joint.h"
+#include "drake/multibody/multibody_tree/parsing/multibody_plant_sdf_parser.h"
 #include "drake/multibody/multibody_tree/rigid_body.h"
 #include "drake/systems/framework/context.h"
 #include "drake/systems/framework/continuous_state.h"
@@ -31,12 +33,13 @@ using Eigen::VectorXd;
 using geometry::FrameId;
 using geometry::FramePoseVector;
 using geometry::GeometryId;
-using geometry::GeometrySystem;
+using geometry::SceneGraph;
 using multibody::benchmarks::Acrobot;
 using multibody::benchmarks::acrobot::AcrobotParameters;
 using multibody::benchmarks::acrobot::MakeAcrobotPlant;
 using multibody::benchmarks::pendulum::MakePendulumPlant;
 using multibody::benchmarks::pendulum::PendulumParameters;
+using multibody::parsing::AddModelFromSdfFile;
 using systems::AbstractValue;
 using systems::BasicVector;
 using systems::Context;
@@ -142,11 +145,11 @@ class AcrobotPlantTests : public ::testing::Test {
   // Creates MultibodyPlant for an acrobot model.
   void SetUp() override {
     systems::DiagramBuilder<double> builder;
-    geometry_system_ = builder.AddSystem<GeometrySystem>();
+    scene_graph_ = builder.AddSystem<SceneGraph>();
     // Make a non-finalized plant so that we can tests methods with pre/post
     // Finalize() conditions.
-    plant_ = builder.AddSystem(
-        MakeAcrobotPlant(parameters_, false, geometry_system_));
+    plant_ =
+        builder.AddSystem(MakeAcrobotPlant(parameters_, false, scene_graph_));
     // Sanity check on the availability of the optional source id before using
     // it.
     DRAKE_DEMAND(plant_->get_source_id() != nullopt);
@@ -167,13 +170,12 @@ class AcrobotPlantTests : public ::testing::Test {
         "you must call Finalize\\(\\) first.");
 
     // Finalize() the plant before accessing its ports for communicating with
-    // GeometrySystem.
+    // SceneGraph.
     plant_->Finalize();
 
     builder.Connect(
         plant_->get_geometry_poses_output_port(),
-        geometry_system_->get_source_pose_port(
-            plant_->get_source_id().value()));
+        scene_graph_->get_source_pose_port(plant_->get_source_id().value()));
     // And build the Diagram:
     diagram_ = builder.Build();
 
@@ -233,9 +235,9 @@ class AcrobotPlantTests : public ::testing::Test {
   const AcrobotParameters parameters_;
   // The model plant:
   MultibodyPlant<double>* plant_{nullptr};
-  // A GeometrySystem so that we can test geometry registration.
-  GeometrySystem<double>* geometry_system_{nullptr};
-  // The Diagram containing both the MultibodyPlant and the GeometrySystem.
+  // A SceneGraph so that we can test geometry registration.
+  SceneGraph<double>* scene_graph_{nullptr};
+  // The Diagram containing both the MultibodyPlant and the SceneGraph.
   std::unique_ptr<Diagram<double>> diagram_;
   // Workspace including context and derivatives vector:
   std::unique_ptr<Context<double>> context_;
@@ -246,7 +248,7 @@ class AcrobotPlantTests : public ::testing::Test {
   const RevoluteJoint<double>* shoulder_{nullptr};
   const RevoluteJoint<double>* elbow_{nullptr};
   // Input port for the actuation:
-  systems::FreestandingInputPortValue* input_port_{nullptr};
+  systems::FixedInputPortValue* input_port_{nullptr};
 
   // Reference benchmark for verification.
   Acrobot<double> acrobot_benchmark_{
@@ -281,10 +283,10 @@ TEST_F(AcrobotPlantTests, CalcTimeDerivatives) {
       2.0);                     /* Actuation torque */
 }
 
-// Verifies the process of visual geometry registration with a GeometrySystem
+// Verifies the process of visual geometry registration with a SceneGraph
 // for the acrobot model.
 TEST_F(AcrobotPlantTests, VisualGeometryRegistration) {
-  EXPECT_EQ(plant_->get_num_visual_geometries(), 3);
+  EXPECT_EQ(plant_->num_visual_geometries(), 3);
   EXPECT_TRUE(plant_->geometry_source_is_registered());
   EXPECT_TRUE(plant_->get_source_id());
 
@@ -318,7 +320,7 @@ TEST_F(AcrobotPlantTests, VisualGeometryRegistration) {
                                 kTolerance, MatrixCompareType::relative));
   }
 
-  // GeometrySystem does not register a FrameId for the world. We use this fact
+  // SceneGraph does not register a FrameId for the world. We use this fact
   // to test that GetBodyFrameIdOrThrow() throws an assertion for a body with no
   // FrameId, even though in this model we register an anchored geometry to the
   // world.
@@ -330,7 +332,7 @@ TEST_F(AcrobotPlantTests, VisualGeometryRegistration) {
 }
 
 // Verifies the process of collision geometry registration with a
-// GeometrySystem.
+// SceneGraph.
 // We build a model with two spheres and a ground plane. The ground plane is
 // located at y = 0 with normal in the y-axis direction.
 // For testing the output port computation we place the spheres on the ground
@@ -340,9 +342,9 @@ GTEST_TEST(MultibodyPlantTest, CollisionGeometryRegistration) {
   const double radius = 0.5;
   const double x_offset = 0.6;
 
-  GeometrySystem<double> geometry_system;
+  SceneGraph<double> scene_graph;
   MultibodyPlant<double> plant;
-  plant.RegisterAsSourceForGeometrySystem(&geometry_system);
+  plant.RegisterAsSourceForSceneGraph(&scene_graph);
 
   // A half-space for the ground geometry.
   CoulombFriction<double> ground_friction(0.5, 0.3);
@@ -350,8 +352,7 @@ GTEST_TEST(MultibodyPlantTest, CollisionGeometryRegistration) {
       plant.world_body(),
       // A half-space passing through the origin in the x-z plane.
       geometry::HalfSpace::MakePose(Vector3d::UnitY(), Vector3d::Zero()),
-      geometry::HalfSpace(),
-      ground_friction, &geometry_system);
+      geometry::HalfSpace(), ground_friction, &scene_graph);
 
   // Add two spherical bodies.
   const RigidBody<double>& sphere1 =
@@ -359,18 +360,18 @@ GTEST_TEST(MultibodyPlantTest, CollisionGeometryRegistration) {
   CoulombFriction<double> sphere1_friction(0.8, 0.5);
   GeometryId sphere1_id = plant.RegisterCollisionGeometry(
       sphere1, Isometry3d::Identity(), geometry::Sphere(radius),
-      sphere1_friction, &geometry_system);
+      sphere1_friction, &scene_graph);
   const RigidBody<double>& sphere2 =
       plant.AddRigidBody("Sphere2", SpatialInertia<double>());
   CoulombFriction<double> sphere2_friction(0.7, 0.6);
   GeometryId sphere2_id = plant.RegisterCollisionGeometry(
       sphere2, Isometry3d::Identity(), geometry::Sphere(radius),
-      sphere2_friction, &geometry_system);
+      sphere2_friction, &scene_graph);
 
   // We are done defining the model.
   plant.Finalize();
 
-  EXPECT_EQ(plant.get_num_visual_geometries(), 0);
+  EXPECT_EQ(plant.num_visual_geometries(), 0);
   EXPECT_EQ(plant.get_num_collision_geometries(), 3);
   EXPECT_TRUE(plant.geometry_source_is_registered());
   EXPECT_TRUE(plant.get_source_id());
@@ -465,7 +466,7 @@ GTEST_TEST(MultibodyPlantTest, LinearizePendulum) {
 }
 
 TEST_F(AcrobotPlantTests, EvalContinuousStateOutputPort) {
-  EXPECT_EQ(plant_->get_num_visual_geometries(), 3);
+  EXPECT_EQ(plant_->num_visual_geometries(), 3);
   EXPECT_TRUE(plant_->geometry_source_is_registered());
   EXPECT_TRUE(plant_->get_source_id());
 
@@ -540,6 +541,60 @@ GTEST_TEST(MultibodyPlantTest, MapVelocityToQdotAndBack) {
   const double kTolerance = 5 * std::numeric_limits<double>::epsilon();
   EXPECT_TRUE(
       CompareMatrices(v_back.CopyToVector(), v.CopyToVector(), kTolerance));
+}
+
+// Test to verify we can still do dynamics even when there are weld joints
+// within the model. This test builds a model from split_pendulum.sdf and
+// therefore it must be kept in sync with that file. The model consists of a
+// simple pendulum but built with two bodies and a WeldJoint joining them
+// together into a single body. For details, refer to split_pendulum.sdf.
+class SplitPendulum : public ::testing::Test {
+ public:
+  void SetUp() override {
+    // Make the cart_pole model.
+    const std::string full_name = FindResourceOrThrow(
+        "drake/multibody/multibody_tree/"
+        "multibody_plant/test/split_pendulum.sdf");
+    AddModelFromSdfFile(full_name, &plant_);
+    plant_.Finalize();
+
+    // Get pin joint so that we can set the state.
+    pin_ = &plant_.GetJointByName<RevoluteJoint>("pin");
+
+    // Create a context to store the state for this model:
+    context_ = plant_.CreateDefaultContext();
+  }
+
+ protected:
+  MultibodyPlant<double> plant_;
+  const RevoluteJoint<double>* pin_{nullptr};
+  std::unique_ptr<Context<double>> context_;
+};
+
+// Verify the computation of the mass matrix against the analytical solution.
+TEST_F(SplitPendulum, MassMatrix) {
+  EXPECT_EQ(plant_.num_bodies(), 3);
+  EXPECT_EQ(plant_.num_joints(), 2);
+  EXPECT_EQ(plant_.num_positions(), 1);
+  EXPECT_EQ(plant_.num_velocities(), 1);
+
+  // Problem parameters. These must be kept in sync with split_pendulum.sdf.
+  const double mass = 1.0;     // rod's mass.
+  const double length = 12.0;  // rod's length.
+
+  // Inertia of the entire rod of length 12.0 about the pivot point.
+  const double Io = mass * length * length / 3.0;
+
+  // We choose an arbitrary angle since the mass matrix is independent of the
+  // state.
+  const double theta = M_PI / 3;
+
+  MatrixX<double> M(1, 1);
+  pin_->set_angle(context_.get(), theta);
+  plant_.model().CalcMassMatrixViaInverseDynamics(*context_, &M);
+
+  // We can only expect values within the precision specified in the sdf file.
+  EXPECT_NEAR(M(0, 0), Io, 1.0e-6);
 }
 
 }  // namespace

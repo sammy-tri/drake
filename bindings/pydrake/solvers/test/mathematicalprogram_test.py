@@ -289,3 +289,66 @@ class TestMathematicalProgram(unittest.TestCase):
         prog.AddConstraint(constraint, [0.], [2.], x)
         prog.Solve()
         self.assertAlmostEquals(prog.GetSolution(x)[0], 1.)
+
+    def test_addcost_symbolic(self):
+        prog = mp.MathematicalProgram()
+        x = prog.NewContinuousVariables(1, 'x')
+        prog.AddCost((x[0]-1.)**2)
+        prog.AddConstraint(0 <= x[0])
+        prog.AddConstraint(x[0] <= 2)
+        prog.Solve()
+        self.assertAlmostEquals(prog.GetSolution(x)[0], 1.)
+
+    def test_initial_guess(self):
+        prog = mp.MathematicalProgram()
+        count = 6
+        shape = (2, 3)
+        x = prog.NewContinuousVariables(count, 'x')
+        x_matrix = x.reshape(shape)
+        x0 = np.arange(count)
+        x0_matrix = x0.reshape(shape)
+        all_nan = np.full(x.shape, np.nan)
+        self.assertTrue(np.isnan(prog.GetInitialGuess(x)).all())
+
+        def check_and_reset():
+            self.assertTrue((prog.GetInitialGuess(x) == x0).all())
+            self.assertTrue(
+                (prog.GetInitialGuess(x_matrix) == x0_matrix).all())
+            prog.SetInitialGuess(x, all_nan)
+            self.assertTrue(np.isnan(prog.GetInitialGuess(x)).all())
+
+        # Test setting individual variables
+        for i in xrange(count):
+            prog.SetInitialGuess(x[i], x0[i])
+            self.assertEqual(prog.GetInitialGuess(x[i]), x0[i])
+        check_and_reset()
+
+        # Test setting matrix values using both
+        # 1d and 2d np arrays.
+        prog.SetInitialGuess(x, x0)
+        check_and_reset()
+        prog.SetInitialGuess(x_matrix, x0_matrix)
+        check_and_reset()
+
+        # Test setting all values at once.
+        prog.SetInitialGuessForAllVariables(x0)
+        check_and_reset()
+
+    def test_lorentz_cone_constraint(self):
+        # Set Up Mathematical Program
+        prog = mp.MathematicalProgram()
+        x = prog.NewContinuousVariables(2, "x")
+        z = prog.NewContinuousVariables(1, "z")
+        prog.AddCost(z[0])
+
+        # Add LorentzConeConstraints
+        prog.AddLorentzConeConstraint(np.array([0*x[0]+1, x[0]-1, x[1]-1]))
+        prog.AddLorentzConeConstraint(np.array([z[0], x[0], x[1]]))
+
+        # Test result
+        result = prog.Solve()
+        self.assertEqual(result, mp.SolutionResult.kSolutionFound)
+
+        # Check answer
+        x_expected = np.array([1-2**(-0.5), 1-2**(-0.5)])
+        self.assertTrue(np.allclose(prog.GetSolution(x), x_expected))

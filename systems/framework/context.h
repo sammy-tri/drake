@@ -6,8 +6,7 @@
 #include "drake/common/drake_optional.h"
 #include "drake/common/drake_throw.h"
 #include "drake/systems/framework/context_base.h"
-#include "drake/systems/framework/input_port_evaluator_interface.h"
-#include "drake/systems/framework/input_port_value.h"
+#include "drake/systems/framework/fixed_input_port_value.h"
 #include "drake/systems/framework/parameters.h"
 #include "drake/systems/framework/state.h"
 #include "drake/systems/framework/value.h"
@@ -68,7 +67,7 @@ class Context : public ContextBase {
 
   /// Set the current time in seconds.
   virtual void set_time(const T& time_sec) {
-    get_mutable_step_info()->time_sec = time_sec;
+    step_info_.time_sec = time_sec;
   }
 
   // =========================================================================
@@ -155,7 +154,8 @@ class Context : public ContextBase {
   }
 
   /// Returns a reference to the _only_ discrete state vector. The vector may be
-  /// of size zero. Fails if there is more than one discrete state group.
+  /// of size zero.
+  /// @pre There is only one discrete state group.
   const BasicVector<T>& get_discrete_state_vector() const {
     return get_discrete_state().get_vector();
   }
@@ -164,6 +164,13 @@ class Context : public ContextBase {
   /// which may be of size zero.
   DiscreteValues<T>& get_mutable_discrete_state() {
     return get_mutable_state().get_mutable_discrete_state();
+  }
+
+  /// Returns a mutable reference to the _only_ discrete state vector.
+  /// @sa get_discrete_state_vector().
+  /// @pre There is only one discrete state group.
+  BasicVector<T>& get_mutable_discrete_state_vector() {
+    return get_mutable_discrete_state().get_mutable_vector();
   }
 
   /// Returns a mutable reference to group (vector) @p index of the discrete
@@ -229,122 +236,29 @@ class Context : public ContextBase {
   // =========================================================================
   // Accessors and Mutators for Input.
 
-  /// Returns the number of input ports.
-  virtual int get_num_input_ports() const = 0;
+  // Allow access to the base class method (takes an AbstractValue).
+  using ContextBase::FixInputPort;
 
-  /// Connects the input port at @p index to a FreestandingInputPortValue with
-  /// the given abstract @p value. Aborts if @p index is out of range.
-  /// Returns a reference to the allocated FreestandingInputPortValue. The
+  /// Connects the input port at @p index to a FixedInputPortValue with
+  /// the given vector @p vec. Aborts if @p index is out of range.
+  /// Returns a reference to the allocated FixedInputPortValue. The
   /// reference will remain valid until this input port's value source is
   /// replaced or the %Context is destroyed. You may use that reference to
   /// modify the input port's value using the appropriate
-  /// FreestandingInputPortValue method, which will ensure that invalidation
+  /// FixedInputPortValue method, which will ensure that invalidation
   /// notifications are delivered.
-  FreestandingInputPortValue& FixInputPort(
-      int index, std::unique_ptr<AbstractValue> value) {
-    auto free_value_ptr =
-        std::make_unique<FreestandingInputPortValue>(std::move(value));
-    FreestandingInputPortValue& free_value = *free_value_ptr;
-    SetInputPortValue(index, std::move(free_value_ptr));
-    return free_value;
-  }
-
-  /// Connects the input port at @p index to a FreestandingInputPortValue with
-  /// the given vector @p vec. Otherwise same as above method.
-  FreestandingInputPortValue& FixInputPort(
+  FixedInputPortValue& FixInputPort(
       int index, std::unique_ptr<BasicVector<T>> vec) {
-    return FixInputPort(
-        index, std::make_unique<Value<BasicVector<T>>>(std::move(vec)));
+    return ContextBase::FixInputPort(index,
+       std::make_unique<Value<BasicVector<T>>>(std::move(vec)));
   }
 
   /// Same as above method but starts with an Eigen vector whose contents are
-  /// used to initialize a BasicVector in the FreestandingInputPortValue.
-  FreestandingInputPortValue& FixInputPort(
+  /// used to initialize a BasicVector in the FixedInputPortValue.
+  FixedInputPortValue& FixInputPort(
       int index, const Eigen::Ref<const VectorX<T>>& data) {
     auto vec = std::make_unique<BasicVector<T>>(data);
     return FixInputPort(index, std::move(vec));
-  }
-
-  /// Evaluates and returns the value of the input port identified by
-  /// @p descriptor, using the given @p evaluator, which should be the Diagram
-  /// containing the System that allocated this Context. The evaluation will be
-  /// performed in this Context's parent. It is a recursive operation that may
-  /// invoke long chains of evaluation through all the Systems that are
-  /// prerequisites to the specified port.
-  ///
-  /// Returns nullptr if the port is not connected to a value source. Aborts if
-  /// the port does not exist.
-  ///
-  /// This is a framework implementation detail.  User code should not call it.
-  const InputPortValue* EvalInputPort(
-      const detail::InputPortEvaluatorInterface<T>* evaluator,
-      const InputPortDescriptor<T>& descriptor) const {
-    const InputPortValue* port_value =
-        GetInputPortValue(descriptor.get_index());
-    if (port_value == nullptr) return nullptr;
-    if (port_value->requires_evaluation()) {
-      DRAKE_DEMAND(evaluator != nullptr);
-      evaluator->EvaluateSubsystemInputPort(parent_, descriptor);
-    }
-    return port_value;
-  }
-
-  /// Evaluates and returns the vector value of the input port with the given
-  /// @p descriptor. This is a recursive operation that may invoke long chains
-  /// of evaluation through all the Systems that are prerequisite to the
-  /// specified port.
-  ///
-  /// Returns nullptr if the port is not connected.
-  /// Throws std::bad_cast if the port is not vector-valued.
-  /// Aborts if the port does not exist.
-  ///
-  /// This is a framework implementation detail.  User code should not call it;
-  /// consider calling System::EvalVectorInput instead.
-  const BasicVector<T>* EvalVectorInput(
-      const detail::InputPortEvaluatorInterface<T>* evaluator,
-      const InputPortDescriptor<T>& descriptor) const {
-    const InputPortValue* port_value = EvalInputPort(evaluator, descriptor);
-    if (port_value == nullptr) return nullptr;
-    return port_value->template get_vector_data<T>();
-  }
-
-  /// Evaluates and returns the abstract value of the input port with the given
-  /// @p descriptor. This is a recursive operation that may invoke long chains
-  /// of evaluation through all the Systems that are prerequisite to the
-  /// specified port.
-  ///
-  /// Returns nullptr if the port is not connected.
-  /// Aborts if the port does not exist.
-  ///
-  /// This is a framework implementation detail.  User code should not call it;
-  /// consider calling System::EvalAbstractInput instead.
-  const AbstractValue* EvalAbstractInput(
-      const detail::InputPortEvaluatorInterface<T>* evaluator,
-      const InputPortDescriptor<T>& descriptor) const {
-    const InputPortValue* port_value = EvalInputPort(evaluator, descriptor);
-    if (port_value == nullptr) return nullptr;
-    return port_value->get_abstract_data();
-  }
-
-  /// Evaluates and returns the data of the input port at @p index.
-  /// This is a recursive operation that may invoke long chains of evaluation
-  /// through all the Systems that are prerequisite to the specified port.
-  ///
-  /// Returns nullptr if the port is not connected.
-  /// Throws std::bad_cast if the port does not have type V.
-  /// Aborts if the port does not exist.
-  ///
-  /// This is a framework implementation detail.  User code should not call it;
-  /// consider calling System::EvalInputValue instead.
-  ///
-  /// @tparam V The type of data expected.
-  template <typename V>
-  const V* EvalInputValue(
-      const detail::InputPortEvaluatorInterface<T>* evaluator,
-      const InputPortDescriptor<T>& descriptor) const {
-    const AbstractValue* value = EvalAbstractInput(evaluator, descriptor);
-    if (value == nullptr) return nullptr;
-    return &(value->GetValue<V>());
   }
 
   // =========================================================================
@@ -437,47 +351,14 @@ class Context : public ContextBase {
   /// Initializes this context's time, state, and parameters from the real
   /// values in @p source, regardless of this context's scalar type.
   /// Requires a constructor T(double).
+  // TODO(sherm1) Should treat fixed input port values same as parameters.
   void SetTimeStateAndParametersFrom(const Context<double>& source) {
     set_time(T(source.get_time()));
     set_accuracy(source.get_accuracy());
     get_mutable_state().SetFrom(source.get_state());
     get_mutable_parameters().SetFrom(source.get_parameters());
-  }
 
-  /// Declares that @p parent is the context of the enclosing Diagram. The
-  /// enclosing Diagram context is needed to evaluate inputs recursively.
-  /// Aborts if the parent has already been set to something else.
-  ///
-  /// This is a dangerous implementation detail. Conceptually, a Context
-  /// ought to be completely ignorant of its parent Context. However, we
-  /// need this pointer so that we can cause our inputs to be evaluated in
-  /// EvalInputPort.  See https://github.com/RobotLocomotion/drake/pull/3455.
-  void set_parent(const Context<T>* parent) {
-    DRAKE_DEMAND(parent_ == nullptr || parent_ == parent);
-    parent_ = parent;
-  }
-
-  /// Throws an exception unless the given @p descriptor matches the inputs
-  /// actually connected to this context in shape.
-  /// Supports any scalar type of `descriptor`, but expects T by default.
-  ///
-  /// @tparam T1 the scalar type of the InputPortDescriptor to check.
-  template<typename T1 = T>
-  void VerifyInputPort(const InputPortDescriptor<T1>& descriptor) const {
-    const int i = descriptor.get_index();
-    const InputPortValue* port_value = GetInputPortValue(i);
-    // If the port isn't connected, we don't have anything else to check.
-    if (port_value == nullptr) { return; }
-    // TODO(david-german-tri, sherm1): Consider checking sampling here.
-
-    // In the vector-valued case, check the size.
-    if (descriptor.get_data_type() == kVectorValued) {
-      const BasicVector<T>* input_vector =
-          port_value->template get_vector_data<T>();
-      DRAKE_THROW_UNLESS(input_vector != nullptr);
-      DRAKE_THROW_UNLESS(input_vector->size() == descriptor.size());
-    }
-    // In the abstract-valued case, there is nothing else to check.
+    // TODO(sherm1) Fixed input copying goes here.
   }
 
  protected:
@@ -512,48 +393,12 @@ class Context : public ContextBase {
   /// Returns a const reference to current time and step information.
   const StepInfo<T>& get_step_info() const { return step_info_; }
 
-  /// Provides writable access to time and step information, with the side
-  /// effect of invaliding any computation that is dependent on them.
-  /// TODO(david-german-tri) Invalidate all cached time- and step-dependent
-  /// computations.
-  StepInfo<T>* get_mutable_step_info() { return &step_info_; }
-
-  /// Returns the InputPortValue at the given @p index, which may be nullptr if
-  /// it has never been set with SetInputPortValue().
-  /// Asserts if @p index is out of range.
-  virtual const InputPortValue* GetInputPortValue(int index) const = 0;
-
-  /// Allows derived classes to invoke the protected method on subcontexts.
-  static const InputPortValue* GetInputPortValue(const Context<T>& context,
-                                                 int index) {
-    return context.GetInputPortValue(index);
-  }
-
-  /// Connects the input port at @p index to the value source @p port_value.
-  /// Disconnects whatever value source was previously there, and de-registers
-  /// it from the output port on which it depends.  In some Context
-  /// implementations, may require a recursive search through a tree of
-  /// subcontexts. Implementations must abort if @p index is out of range.
-  virtual void SetInputPortValue(
-      int index, std::unique_ptr<InputPortValue> port_value) = 0;
-
-  /// Allows derived classes to invoke the protected method on subcontexts.
-  static void SetInputPortValue(Context<T>* context, int index,
-                                std::unique_ptr<InputPortValue> port_value) {
-    context->SetInputPortValue(index, std::move(port_value));
-  }
-
  private:
   // Current time and step information.
   StepInfo<T> step_info_;
 
   // Accuracy setting.
   optional<double> accuracy_;
-
-  // The context of the enclosing Diagram, used in EvalInputPort.
-  // This pointer MUST be treated as a black box. If you call any substantive
-  // methods on it, you are probably making a mistake.
-  reset_on_copy<const Context<T>*> parent_;
 };
 
 }  // namespace systems

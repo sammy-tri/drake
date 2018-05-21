@@ -17,7 +17,7 @@ endif()
 if(APPLE)
   set(MINIMUM_BAZEL_VERSION 0.12.0)
 else()
-  set(MINIMUM_BAZEL_VERSION 0.10.1)
+  set(MINIMUM_BAZEL_VERSION 0.12.0)
 endif()
 
 find_package(Bazel ${MINIMUM_BAZEL_VERSION} MODULE REQUIRED)
@@ -123,7 +123,7 @@ endif()
 option(WITH_GUROBI "Build with support for Gurobi" OFF)
 
 if(WITH_GUROBI)
-  find_package(Gurobi 7.5.2 MODULE REQUIRED)
+  find_package(Gurobi 8.0.0 MODULE REQUIRED)
 
   list(APPEND BAZEL_ARGS --config=gurobi)
 

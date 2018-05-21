@@ -3,8 +3,8 @@
 #include <gflags/gflags.h>
 
 #include "drake/common/drake_assert.h"
-#include "drake/geometry/geometry_system.h"
 #include "drake/geometry/geometry_visualization.h"
+#include "drake/geometry/scene_graph.h"
 #include "drake/lcm/drake_lcm.h"
 #include "drake/lcmt_viewer_draw.hpp"
 #include "drake/multibody/benchmarks/pendulum/make_pendulum_plant.h"
@@ -24,7 +24,7 @@
 
 namespace drake {
 
-using geometry::GeometrySystem;
+using geometry::SceneGraph;
 using geometry::SourceId;
 using lcm::DrakeLcm;
 using multibody::benchmarks::pendulum::MakePendulumPlant;
@@ -58,9 +58,8 @@ DEFINE_bool(is_time_stepping, false,
 int do_main() {
   systems::DiagramBuilder<double> builder;
 
-  GeometrySystem<double>& geometry_system =
-      *builder.AddSystem<GeometrySystem>();
-  geometry_system.set_name("geometry_system");
+  SceneGraph<double>& scene_graph = *builder.AddSystem<SceneGraph>();
+  scene_graph.set_name("scene_graph");
 
   // The model's parameters:
   PendulumParameters parameters;
@@ -85,9 +84,8 @@ int do_main() {
   MultibodyPlant<double>& pendulum =
       FLAGS_is_time_stepping ?
       *builder.AddSystem(MakePendulumPlant(
-          parameters, max_time_step, &geometry_system)) :
-      *builder.AddSystem(MakePendulumPlant(parameters, &geometry_system));
-
+          parameters, max_time_step, &scene_graph)) :
+      *builder.AddSystem(MakePendulumPlant(parameters, &scene_graph));
   const RevoluteJoint<double>& pin =
       pendulum.GetJointByName<RevoluteJoint>(parameters.pin_joint_name());
 
@@ -99,7 +97,7 @@ int do_main() {
   builder.Connect(torque_source->get_output_port(),
                   pendulum.get_actuation_input_port());
 
-  // Boilerplate used to connect the plant to a GeometrySystem for
+  // Boilerplate used to connect the plant to a SceneGraph for
   // visualization.
   DrakeLcm lcm;
   const PoseBundleToDrawMessage& converter =
@@ -115,15 +113,15 @@ int do_main() {
 
   builder.Connect(
       pendulum.get_geometry_poses_output_port(),
-      geometry_system.get_source_pose_port(pendulum.get_source_id().value()));
+      scene_graph.get_source_pose_port(pendulum.get_source_id().value()));
 
-  builder.Connect(geometry_system.get_pose_bundle_output_port(),
+  builder.Connect(scene_graph.get_pose_bundle_output_port(),
                   converter.get_input_port(0));
   builder.Connect(converter, publisher);
 
   // Last thing before building the diagram; dispatch the message to load
   // geometry.
-  geometry::DispatchLoadMessage(geometry_system);
+  geometry::DispatchLoadMessage(scene_graph);
 
   std::unique_ptr<systems::Diagram<double>> diagram = builder.Build();
 

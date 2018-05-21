@@ -9,7 +9,7 @@
 
 #include "drake/common/drake_optional.h"
 #include "drake/common/nice_type_name.h"
-#include "drake/geometry/geometry_system.h"
+#include "drake/geometry/scene_graph.h"
 #include "drake/multibody/multibody_tree/force_element.h"
 #include "drake/multibody/multibody_tree/multibody_plant/coulomb_friction.h"
 #include "drake/multibody/multibody_tree/multibody_tree.h"
@@ -37,7 +37,7 @@ namespace multibody_plant {
 /// collection of interconnected bodies.
 /// %MultibodyPlant provides a user-facing API to:
 /// - add bodies, joints, force elements, and constraints,
-/// - register geometries to a provided GeometrySystem instance,
+/// - register geometries to a provided SceneGraph instance,
 /// - create and manipulate its Context,
 /// - perform Context-dependent computational queries.
 ///
@@ -85,33 +85,33 @@ namespace multibody_plant {
 ///
 /// All modeling elements **must** be added pre-finalize.
 ///
-/// @section geometry_registration Registering geometry with a GeometrySystem
+/// @section geometry_registration Registering geometry with a SceneGraph
 ///
-/// %MultibodyPlant users can register geometry with a GeometrySystem for
+/// %MultibodyPlant users can register geometry with a SceneGraph for
 /// essentially two purposes; a) visualization and, b) contact modeling.
-// TODO(SeanCurtis-TRI): update this comment as the number of GeometrySystem
+// TODO(SeanCurtis-TRI): update this comment as the number of SceneGraph
 // roles changes.
 /// Before any geometry registration takes place, a user **must** first make a
-/// call to RegisterAsSourceForGeometrySystem() in order to register the
-/// %MultibodyPlant as a client of a GeometrySystem instance, point at which the
+/// call to RegisterAsSourceForSceneGraph() in order to register the
+/// %MultibodyPlant as a client of a SceneGraph instance, point at which the
 /// plant will have assigned a valid geometry::SourceId.
 /// At Finalize(), %MultibodyPlant will declare input/output ports as
-/// appropriate to communicate with the GeometrySystem instance on which
+/// appropriate to communicate with the SceneGraph instance on which
 /// registrations took place. All geometry registration **must** be performed
 /// pre-finalize.
 ///
-/// If %MultibodyPlant registers geometry with a GeometrySystem via calls to
+/// If %MultibodyPlant registers geometry with a SceneGraph via calls to
 /// RegisterCollisionGeometry(), an input port for geometric queries will be
 /// declared at Finalize() time, see get_geometry_query_input_port(). Users must
 /// connect this input port to the output port for geometric queries of the
-/// GeometrySystem used for registration, which can be obtained with
-/// GeometrySystem::get_query_output_port().
+/// SceneGraph used for registration, which can be obtained with
+/// SceneGraph::get_query_output_port().
 /// In summary, if %MultibodyPlant registers collision geometry, the setup
 /// process will include:
-/// 1. Call to RegisterAsSourceForGeometrySystem().
+/// 1. Call to RegisterAsSourceForSceneGraph().
 /// 2. Calls to RegisterCollisionGeometry(), as many as needed.
 /// 3. Call to Finalize(), user is done specifying the model.
-/// 4. Connect GeometrySystem::get_query_output_port() to
+/// 4. Connect SceneGraph::get_query_output_port() to
 ///    get_geometry_query_input_port().
 /// Refer to the documentation provided in each of the methods above for further
 /// details.
@@ -124,7 +124,7 @@ namespace multibody_plant {
 ///   for details,
 /// - declare the plant's state,
 /// - declare the plant's input and output ports,
-/// - declare input and output ports for communication with a GeometrySystem.
+/// - declare input and output ports for communication with a SceneGraph.
 /// @cond
 /// TODO(amcastro-tri): Consider making the actual geometry registration with GS
 /// AFTER Finalize() so that we can tell if there are any bodies welded to the
@@ -239,7 +239,16 @@ class MultibodyPlant : public systems::LeafSystem<T> {
   const RigidBody<T>& AddRigidBody(
       const std::string& name, const SpatialInertia<double>& M_BBo_B) {
     DRAKE_MBP_THROW_IF_FINALIZED();
-    return model_->AddRigidBody(name, M_BBo_B);
+    const RigidBody<T>& body = model_->AddRigidBody(name, M_BBo_B);
+    // Each entry of visual_geometries_, ordered by body index, contains a
+    // std::vector of geometry ids for that body. The emplace_back() below
+    // resizes visual_geometries_ to store the geometry ids for the body we
+    // just added.
+    // TODO(amcastro-tri): static_cast should not be needed. Update when
+    // TypeSafeIndex is fixed to support this comparison.
+    DRAKE_DEMAND(static_cast<int>(visual_geometries_.size()) == body.index());
+    visual_geometries_.emplace_back();
+    return body;
   }
 
   /// This method adds a Joint of type `JointType` between two bodies.
@@ -461,28 +470,38 @@ class MultibodyPlant : public systems::LeafSystem<T> {
   const JointType<T>& GetJointByName(const std::string& name) const {
     return model_->template GetJointByName<JointType>(name);
   }
+
+  /// Returns a constant reference to the actuator that is uniquely identified
+  /// by the string `name` in `this` model.
+  /// @throws std::logic_error if there is no actuator with the requested name.
+  /// @see HasJointActuatorNamed() to query if there exists an actuator in
+  /// `this` model with a given specified name.
+  const JointActuator<T>& GetJointActuatorByName(
+      const std::string& name) const {
+    return model_->GetJointActuatorByName(name);
+  }
   /// @}
 
   /// Registers `this` plant to serve as a source for an instance of
-  /// GeometrySystem. This registration allows %MultibodyPlant to
-  /// register geometry with `geometry_system` for visualization and/or
+  /// SceneGraph. This registration allows %MultibodyPlant to
+  /// register geometry with `scene_graph` for visualization and/or
   /// collision queries.
-  /// Successive registration calls with GeometrySystem **must** be performed on
-  /// the same instance to which the pointer argument `geometry_system` points
+  /// Successive registration calls with SceneGraph **must** be performed on
+  /// the same instance to which the pointer argument `scene_graph` points
   /// to. Failure to do so will result in runtime exceptions.
-  /// @param geometry_system
-  ///   A valid non nullptr to the GeometrySystem instance for which
-  ///   `this` plant will sever as a source, see GeometrySystem documentation
+  /// @param scene_graph
+  ///   A valid non nullptr to the SceneGraph instance for which
+  ///   `this` plant will sever as a source, see SceneGraph documentation
   ///   for further details.
-  /// @returns the SourceId of `this` plant in `geometry_system`. It can also
+  /// @returns the SourceId of `this` plant in `scene_graph`. It can also
   /// later on be retrieved with get_source_id().
   /// @throws if called post-finalize.
-  /// @throws if `geometry_system` is the nullptr.
+  /// @throws if `scene_graph` is the nullptr.
   /// @throws if called more than once.
-  geometry::SourceId RegisterAsSourceForGeometrySystem(
-      geometry::GeometrySystem<T>* geometry_system);
+  geometry::SourceId RegisterAsSourceForSceneGraph(
+      geometry::SceneGraph<T>* scene_graph);
 
-  /// Registers geometry in a GeometrySystem with a given geometry::Shape to be
+  /// Registers geometry in a SceneGraph with a given geometry::Shape to be
   /// used for visualization of a given `body`.
   ///
   /// @param[in] body
@@ -492,21 +511,30 @@ class MultibodyPlant : public systems::LeafSystem<T> {
   /// @param[in] shape
   ///   The geometry::Shape used for visualization. E.g.: geometry::Sphere,
   ///   geometry::Cylinder, etc.
-  /// @param[out] geometry_system
-  ///   A valid non nullptr to a GeometrySystem on which geometry will get
+  /// @param[out] scene_graph
+  ///   A valid non nullptr to a SceneGraph on which geometry will get
   ///   registered.
-  /// @throws if `geometry_system` is the nullptr.
+  /// @throws if `scene_graph` is the nullptr.
   /// @throws if called post-finalize.
-  /// @throws if `geometry_system` does not correspond to the same instance with
-  /// which RegisterAsSourceForGeometrySystem() was called.
+  /// @throws if `scene_graph` does not correspond to the same instance with
+  /// which RegisterAsSourceForSceneGraph() was called.
   // TODO(amcastro-tri): When GS supports it, provide argument to specify
   // visual properties.
-  void RegisterVisualGeometry(
-      const Body<T>& body,
-      const Isometry3<double>& X_BG, const geometry::Shape& shape,
-      geometry::GeometrySystem<T>* geometry_system);
+  void RegisterVisualGeometry(const Body<T>& body,
+                              const Isometry3<double>& X_BG,
+                              const geometry::Shape& shape,
+                              geometry::SceneGraph<T>* scene_graph);
 
-  /// Registers geometry in a GeometrySystem with a given geometry::Shape to be
+  /// Returns an array of GeometryId's identifying the different visual
+  /// geometries for `body` previously registered with a SceneGraph.
+  /// @note This method can be called at any time during the lifetime of `this`
+  /// plant, either pre- or post-finalize, see Finalize().
+  /// Post-finalize calls will always return the same value.
+  /// @see RegisterVisualGeometry(), Finalize()
+  const std::vector<geometry::GeometryId>& GetVisualGeometriesForBody(
+      const Body<T>& body) const;
+
+  /// Registers geometry in a SceneGraph with a given geometry::Shape to be
   /// used for the contact modeling of a given `body`.
   /// More than one geometry can be registered with a body, in which case the
   /// body's contact geometry is the union of all geometries registered to that
@@ -522,24 +550,24 @@ class MultibodyPlant : public systems::LeafSystem<T> {
   /// @param[in] coulomb_friction
   ///   Coulomb's law of friction coefficients to model friction on the
   ///   surface of `shape` for the given `body`.
-  /// @param[out] geometry_system
-  ///   A valid, non-null pointer to a GeometrySystem on which geometry will get
+  /// @param[out] scene_graph
+  ///   A valid, non-null pointer to a SceneGraph on which geometry will get
   ///   registered.
-  /// @throws std::exception if `geometry_system` is the nullptr.
+  /// @throws std::exception if `scene_graph` is the nullptr.
   /// @throws std::exception if called post-finalize.
-  /// @throws std::exception if `geometry_system` does not correspond to the
-  /// same instance with which RegisterAsSourceForGeometrySystem() was called.
+  /// @throws std::exception if `scene_graph` does not correspond to the
+  /// same instance with which RegisterAsSourceForSceneGraph() was called.
   geometry::GeometryId RegisterCollisionGeometry(
-      const Body<T>& body,
-      const Isometry3<double>& X_BG, const geometry::Shape& shape,
+      const Body<T>& body, const Isometry3<double>& X_BG,
+      const geometry::Shape& shape,
       const CoulombFriction<double>& coulomb_friction,
-      geometry::GeometrySystem<T>* geometry_system);
+      geometry::SceneGraph<T>* scene_graph);
 
   /// Returns the number of geometries registered for visualization.
   /// This method can be called at any time during the lifetime of `this` plant,
   /// either pre- or post-finalize, see Finalize().
   /// Post-finalize calls will always return the same value.
-  int get_num_visual_geometries() const {
+  int num_visual_geometries() const {
     return static_cast<int>(geometry_id_to_visual_index_.size());
   }
 
@@ -567,14 +595,14 @@ class MultibodyPlant : public systems::LeafSystem<T> {
     return default_coulomb_friction_[collision_index];
   }
 
-  /// @name Retrieving ports for communication with a GeometrySystem.
+  /// @name Retrieving ports for communication with a SceneGraph.
   /// @{
 
   /// Returns the unique id identifying `this` plant as a source for a
-  /// GeometrySystem.
+  /// SceneGraph.
   /// Returns `nullopt` if `this` plant did not register any geometry.
   /// This method can be called at any time during the lifetime of `this` plant
-  /// to query if `this` plant has been registered with a GeometrySystem, either
+  /// to query if `this` plant has been registered with a SceneGraph, either
   /// pre- or post-finalize, see Finalize(). However, a geometry::SourceId is
   /// only assigned once at the first call of any of this plant's geometry
   /// registration methods, and it does not change after that.
@@ -584,27 +612,27 @@ class MultibodyPlant : public systems::LeafSystem<T> {
   }
 
   /// Returns a constant reference to the input port used to perform geometric
-  /// queries on a GeometrySystem. See GeometrySystem::get_query_output_port().
+  /// queries on a SceneGraph. See SceneGraph::get_query_output_port().
   /// Refer to section @ref geometry_registration of this class's
   /// documentation for further details on collision geometry registration and
-  /// connection with a GeometrySystem.
+  /// connection with a SceneGraph.
   /// @throws std::exception if this system was not registered with a
-  /// GeometrySystem.
+  /// SceneGraph.
   /// @throws std::exception if called pre-finalize. See Finalize().
   const systems::InputPortDescriptor<T>& get_geometry_query_input_port() const;
 
   /// Returns the output port of frames' poses to communicate with a
-  /// GeometrySystem.
+  /// SceneGraph.
   /// @throws std::exception if this system was not registered with a
-  /// GeometrySystem.
+  /// SceneGraph.
   /// @throws std::exception if called pre-finalize. See Finalize().
   const systems::OutputPort<T>& get_geometry_poses_output_port() const;
   /// @}
 
   /// Returns `true` if `this` %MultibodyPlant was registered with a
-  /// GeometrySystem.
+  /// SceneGraph.
   /// This method can be called at any time during the lifetime of `this` plant
-  /// to query if `this` plant has been registered with a GeometrySystem, either
+  /// to query if `this` plant has been registered with a SceneGraph, either
   /// pre- or post-finalize, see Finalize().
   bool geometry_source_is_registered() const {
     return !!source_id_;
@@ -671,8 +699,8 @@ class MultibodyPlant : public systems::LeafSystem<T> {
   /// No more multibody elements can be added after a call to Finalize().
   ///
   /// At Finalize(), state and input/output ports for `this` plant are declared.
-  /// If `this` plant registered geometry with a GeometrySystem, input and
-  /// output ports to enable communication with that GeometrySystem are declared
+  /// If `this` plant registered geometry with a SceneGraph, input and
+  /// output ports to enable communication with that SceneGraph are declared
   /// as well.
   ///
   /// @see is_finalized().
@@ -904,18 +932,18 @@ class MultibodyPlant : public systems::LeafSystem<T> {
       const Body<T>& body,
       const Isometry3<double>& X_BG, const geometry::Shape& shape,
       geometry::VisualMaterial& color,
-      geometry::GeometrySystem<T>* geometry_system);
+      geometry::SceneGraph<T>* scene_graph);
 
   // Helper method to register anchored geometry to the world, either visual or
   // collision. This associates a GeometryId with the world body.
   // This assumes:
   // 1. Finalize() was not called on `this` plant.
-  // 2. RegisterAsSourceForGeometrySystem() was called on `this` plant.
-  // 3. `geometry_system` points to the same GeometrySystem instance previously
-  //    passed to RegisterAsSourceForGeometrySystem().
+  // 2. RegisterAsSourceForSceneGraph() was called on `this` plant.
+  // 3. `scene_graph` points to the same SceneGraph instance previously
+  //    passed to RegisterAsSourceForSceneGraph().
   geometry::GeometryId RegisterAnchoredGeometry(
       const Isometry3<double>& X_WG, const geometry::Shape& shape,
-      geometry::GeometrySystem<T>* geometry_system);
+      geometry::SceneGraph<T>* scene_graph);
 
   bool body_has_registered_frame(const Body<T>& body) const {
     return body_index_to_frame_id_.find(body.index()) !=
@@ -927,8 +955,8 @@ class MultibodyPlant : public systems::LeafSystem<T> {
       const systems::Context<T>& context, systems::BasicVector<T>* state) const;
 
   // Helper method to declare output ports used by this plant to communicate
-  // with a GeometrySystem.
-  void DeclareGeometrySystemPorts();
+  // with a SceneGraph.
+  void DeclareSceneGraphPorts();
 
   void CalcFramePoseOutput(const systems::Context<T>& context,
                            geometry::FramePoseVector<T>* poses) const;
@@ -1145,8 +1173,13 @@ class MultibodyPlant : public systems::LeafSystem<T> {
   // Maps a GeometryId with a visual index. This allows, for instance, to find
   // out visual properties for a given geometry.
   // TODO(amcastro-tri): verify insertions were correct once visual_index gets
-  // used with the landing of visual properties in GeometrySystem.
+  // used with the landing of visual properties in SceneGraph.
   std::unordered_map<geometry::GeometryId, int> geometry_id_to_visual_index_;
+
+  // Per-body arrays of visual geometries indexed by BodyIndex.
+  // That is, visual_geometries_[body_index] corresponds to the array of visual
+  // geometries for body with index body_index.
+  std::vector<std::vector<geometry::GeometryId>> visual_geometries_;
 
   // Maps a GeometryId with a collision index. This allows, for instance, to
   // find out collision properties (such as friction coefficient) for a given
@@ -1162,10 +1195,10 @@ class MultibodyPlant : public systems::LeafSystem<T> {
   int geometry_pose_port_{-1};
 
   // For geometry registration with a GS, we save a pointer to the GS instance
-  // on which this plants calls RegisterAsSourceForGeometrySystem(). This is
+  // on which this plants calls RegisterAsSourceForSceneGraph(). This is
   // ONLY (and it MUST ONLY be used) used to verify that successive registration
   // calls are performed on the same instance of GS.
-  const geometry::GeometrySystem<T>* geometry_system_{nullptr};
+  const geometry::SceneGraph<T>* scene_graph_{nullptr};
 
   // Input/Output port indexes:
   int actuation_port_{-1};
