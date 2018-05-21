@@ -16,12 +16,6 @@
 
 #include <fstream>
 #include <iostream>
-#define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
-#define PRINT_VARn(a) std::cout << #a":\n" << a << std::endl;
-//#define PRINT_VAR(a) (void) (a);
-//#define PRINT_VARn(a) (void) (a);
-
-#include <iostream>
 //#define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
 //#define PRINT_VARn(a) std::cout << #a":\n" << a << std::endl;
 #define PRINT_VAR(a) (void)a;
@@ -720,6 +714,47 @@ MatrixX<double> MultibodyPlant<double>::CalcFischerBurmeisterSolverJacobian(
   return *J;
 }
 
+template <>
+std::vector<PenetrationAsPointPair<double>>
+MultibodyPlant<double>::CalcPointPairPenetrations(
+    const systems::Context<double>& context) const {
+  const geometry::QueryObject<double>& query_object =
+      this->EvalAbstractInput(context, geometry_query_port_)
+          ->template GetValue<geometry::QueryObject<double>>();
+  std::vector<PenetrationAsPointPair<double>> penetrations =
+      query_object.ComputePointPairPenetration();
+
+  // TODO(amcastro-tri): Request SceneGraph to do this filtering for us
+  // when that capability lands.
+  // TODO(amcastro-tri): consider allowing this id's to belong to a third
+  // external system when they correspond to anchored geometry.
+  std::vector<PenetrationAsPointPair<double>> filtered_penetrations;
+  for (const auto& penetration : penetrations) {
+    const GeometryId geometryA_id = penetration.id_A;
+    const GeometryId geometryB_id = penetration.id_B;
+
+    // Filter visuals.
+    if (!is_collision_geometry(geometryA_id) ||
+        !is_collision_geometry(geometryB_id))
+      continue;
+
+    BodyIndex bodyA_index = geometry_id_to_body_index_.at(geometryA_id);
+    BodyIndex bodyB_index = geometry_id_to_body_index_.at(geometryB_id);
+
+    // Filter out same body collisions.
+    if (bodyA_index == bodyB_index) continue;
+
+    filtered_penetrations.push_back(penetration);
+  }
+  return filtered_penetrations;
+}
+
+template<typename T>
+std::vector<PenetrationAsPointPair<T>> MultibodyPlant<T>::CalcPointPairPenetrations(
+    const systems::Context<T>&) const {
+  DRAKE_ABORT_MSG("Only <double> is supported.");
+}
+
 template<typename T>
 MatrixX<double> MultibodyPlant<T>::CalcFischerBurmeisterSolverJacobian(
     // state at t0
@@ -846,7 +881,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   context_star.get_mutable_discrete_state(0).SetFromVector(x_star);
 
   std::vector<PenetrationAsPointPair<double>> contact_penetrations_star =
-      ComputePenetrations(context_star);
+      CalcPointPairPenetrations(context_star);
   int num_contacts = contact_penetrations_star.size();
 
   //////////////////////////////////////////////////////////////////////////////
@@ -1286,42 +1321,6 @@ void MultibodyPlant<T>::DoCalcDiscreteVariableUpdates(
   DRAKE_ABORT_MSG("T != double not supported.");
 }
 
-template <typename T>
-template <typename  T1>
-typename std::enable_if<
-    std::is_same<T1, double>::value,
-    std::vector<geometry::PenetrationAsPointPair<T>>>::type
-MultibodyPlant<T>::ComputePenetrations(
-    const Context<T>& context) const {
-  std::vector<PenetrationAsPointPair<T>> contact_penetrations;
-  if (num_collision_geometries() == 0) return contact_penetrations;
-
-  const geometry::QueryObject<double>& query_object =
-      this->EvalAbstractInput(context, geometry_query_port_)
-          ->template GetValue<geometry::QueryObject<double>>();
-  std::vector<PenetrationAsPointPair<double>> penetrations =
-      query_object.ComputePointPairPenetration();
-
-  // Count the number of contacts using filtering from visuals
-  for (const auto& penetration : penetrations) {
-    const GeometryId geometryA_id = penetration.id_A;
-    const GeometryId geometryB_id = penetration.id_B;
-    if (is_collision_geometry(geometryA_id) &&
-        is_collision_geometry(geometryB_id))
-      contact_penetrations.push_back(penetration);
-  }
-  return contact_penetrations;
-}
-
-template <typename T>
-template <typename  T1>
-typename std::enable_if<
-    !std::is_same<T1, double>::value,
-    std::vector<geometry::PenetrationAsPointPair<T>>>::type
-MultibodyPlant<T>::ComputePenetrations(const Context<T>&) const {
-  DRAKE_ABORT_MSG("Only <double> is supported.");
-}
-
 // This method is assuming that we are giving a compatible `context` with a
 // `contact_penetrations`, where each contact pair, in theory,
 // has point_pair.depth = 0. That is, each contact pair is "exactly" at contact.
@@ -1569,47 +1568,6 @@ template<typename T>
 void MultibodyPlant<T>::DoPublish(const systems::Context<T>& context,
                const std::vector<const systems::PublishEvent<T>*>&) const {
   PRINT_VAR(context.get_time());
-}
-
-template <>
-std::vector<PenetrationAsPointPair<double>>
-MultibodyPlant<double>::CalcPointPairPenetrations(
-    const systems::Context<double>& context) const {
-  const geometry::QueryObject<double>& query_object =
-      this->EvalAbstractInput(context, geometry_query_port_)
-          ->template GetValue<geometry::QueryObject<double>>();
-  std::vector<PenetrationAsPointPair<double>> penetrations =
-      query_object.ComputePointPairPenetration();
-
-  // TODO(amcastro-tri): Request SceneGraph to do this filtering for us
-  // when that capability lands.
-  // TODO(amcastro-tri): consider allowing this id's to belong to a third
-  // external system when they correspond to anchored geometry.
-  std::vector<PenetrationAsPointPair<double>> filtered_penetrations;
-  for (const auto& penetration : penetrations) {
-    const GeometryId geometryA_id = penetration.id_A;
-    const GeometryId geometryB_id = penetration.id_B;
-
-    // Filter visuals.
-    if (!is_collision_geometry(geometryA_id) ||
-        !is_collision_geometry(geometryB_id))
-      continue;
-
-    BodyIndex bodyA_index = geometry_id_to_body_index_.at(geometryA_id);
-    BodyIndex bodyB_index = geometry_id_to_body_index_.at(geometryB_id);
-
-    // Filter out same body collisions.
-    if (bodyA_index == bodyB_index) continue;
-
-    filtered_penetrations.push_back(penetration);
-  }
-  return filtered_penetrations;
-}
-
-template<typename T>
-std::vector<PenetrationAsPointPair<T>> MultibodyPlant<T>::CalcPointPairPenetrations(
-    const systems::Context<T>&) const {
-  DRAKE_ABORT_MSG("Only <double> is supported.");
 }
 
 template<>

@@ -986,20 +986,6 @@ class MultibodyPlant : public systems::LeafSystem<T> {
       const VelocityKinematicsCache<T>& vc,
       std::vector<SpatialForce<T>>* F_BBo_W_array) const;
 
-  template <typename T1 = T>
-  typename std::enable_if<
-      std::is_same<T1, double>::value,
-      std::vector<geometry::PenetrationAsPointPair<T>>>::type
-  ComputePenetrations(
-      const systems::Context<T>& context) const;
-
-  template <typename T1 = T>
-  typename std::enable_if<
-      !std::is_same<T1, double>::value,
-      std::vector<geometry::PenetrationAsPointPair<T>>>::type
-  ComputePenetrations(
-      const systems::Context<T>& context) const;
-
   MatrixX<T> ComputeNormalVelocityJacobianMatrix(
       const systems::Context<T>& context,
       std::vector<geometry::PenetrationAsPointPair<T>>& penetrations) const;
