@@ -984,7 +984,9 @@ class MultibodyPlant : public systems::LeafSystem<T> {
       const systems::Context<T>& context,
       const PositionKinematicsCache<T>& pc,
       const VelocityKinematicsCache<T>& vc,
-      std::vector<SpatialForce<T>>* F_BBo_W_array) const;
+      std::vector<SpatialForce<T>>* F_BBo_W_array, bool include_friction = true,
+      const std::vector<geometry::PenetrationAsPointPair<T>>& penetrations,
+      VectorX<double>* fn) const;
 
   MatrixX<T> ComputeNormalVelocityJacobianMatrix(
       const systems::Context<T>& context,

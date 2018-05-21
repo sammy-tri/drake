@@ -306,7 +306,11 @@ void MultibodyPlant<T>::DoCalcTimeDerivatives(
 
   // Compute contact forces on each body by penalty method.
   if (num_collision_geometries() > 0) {
-    CalcAndAddContactForcesByPenaltyMethod(context, pc, vc, &F_BBo_W_array);
+    std::vector<PenetrationAsPointPair<double>> penetrations =
+        CalcPointPairPenetrations(context);
+    VectorX<double> fn(penetrations.size());
+    CalcAndAddContactForcesByPenaltyMethod(context, pc, vc, &F_BBo_W_array,
+                                           true, penetrations, &fn);
   }
 
   model_->CalcInverseDynamics(
@@ -771,7 +775,7 @@ MatrixX<double> MultibodyPlant<T>::CalcFischerBurmeisterSolverJacobian(
 
 template<>
 void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
-    const drake::systems::Context<double>& context,
+    const drake::systems::Context<double>& context0,
     const std::vector<const drake::systems::DiscreteUpdateEvent<double>*>& events,
     drake::systems::DiscreteValues<double>* updates) const {
   using std::sqrt;
@@ -784,20 +788,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   const int nq = this->num_positions();
   const int nv = this->num_velocities();
 
-  int istep = context.get_time() / time_step_;
-
-  // BIG HACK #1!!! context0 can only be used in MBP/MBT queries!! if used for GS
-  // queries or something outside this system scope, it'll cause a crash.
-  // Create a copy of context into context0.
-  //std::unique_ptr<systems::Context<double>> context0 = this->CreateDefaultContext();
-  //DRAKE_DEMAND(context0->get_num_discrete_state_groups() == 1);
-  //context0->get_mutable_discrete_state(0).SetFromVector(con);
-  //context0->SetTimeStateAndParametersFrom(context);
-  Context<double>& context0 = const_cast<Context<double>&>(context);
-
-  // BIG HACK #2!!! get a mutable reference to context so that we can modify it
-  // to hold the solution at tstar. That will allow us to perform GS queries.
-  Context<double>& context_star = const_cast<Context<double>&>(context);
+  int istep = context0.get_time() / time_step_;
 
   // Save the system state as a raw Eigen vector (solution at previous time step).
   auto x0 = context0.get_discrete_state(0).get_value();
@@ -811,6 +802,10 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   // Allocate workspace. We might want to cache these to avoid allocations.
   // Mass matrix.
   MatrixX<double> M0(nv, nv);
+  // Mass matrix and its LDLT factorization.
+  model_->CalcMassMatrixViaInverseDynamics(context0, &M0);
+  auto M0_ldlt = M0.ldlt();
+
   // Forces.
   MultibodyForces<double> forces(*model_);
   // Bodies' accelerations, ordered by BodyNodeIndex.
@@ -842,97 +837,68 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
     }
   }
 
-  // Mass matrix and its LDLT factorization.
-  model_->CalcMassMatrixViaInverseDynamics(context0, &M0);
-  auto M0_ldlt = M0.ldlt();
-
   // Velocity at next time step.
   VectorX<double> vn(this->num_velocities());
 
-  // With vdot = 0, this computes:
-  //   tau = C(q, v)v - tau_app - ∑ J_WBᵀ(q) Fapp_Bo_W.
   std::vector<SpatialForce<double>>& F_BBo_W_array = forces.mutable_body_forces();
-  VectorX<double>& tau0 = forces.mutable_generalized_forces();
+
+  std::vector<PenetrationAsPointPair<double>> point_pairs0 =
+      CalcPointPairPenetrations(context0);
+  const int num_contacts = point_pairs0.size();
+  VectorX<double> fn(num_contacts);
+  VectorX<double> that(2*num_contacts);
+
+  // Compute contact forces on each body by penalty method. No friction, only normal forces.
+  if (num_collision_geometries() > 0) {
+    CalcAndAddContactForcesByPenaltyMethod(
+        context0, pc0, vc0, &F_BBo_W_array, false, point_pairs0, &fn, &that);
+  }
+
+  // With vdot = 0, this computes (includes normal forces):
+  //   -tau = C(q, v)v - tau_app - ∑ J_WBᵀ(q) Fapp_Bo_W.
+  VectorX<double>& minus_tau = forces.mutable_generalized_forces();
   model_->CalcInverseDynamics(
       context0, pc0, vc0, vdot,
-      F_BBo_W_array, tau0,
+      F_BBo_W_array, minus_tau,
       &A_WB_array,
       &F_BBo_W_array, /* Notice these arrays gets overwritten on output. */
-      &tau0);
+      &minus_tau);
 
   //////////////////////////////////////////////////////////////////////////////
   // WORK WITH CONTEXT_STAR
   //////////////////////////////////////////////////////////////////////////////
 
-  // Compute discrete update without contact forces.
-  VectorX<double> v_star = vn = v0 + dt * M0_ldlt.solve(-tau0);
+  // Compute discrete update without friction forces.
+  VectorX<double> v_star = vn = v0 + dt * M0_ldlt.solve(-minus_tau);
   VectorX<double> qdot_star(this->num_positions());
   model_->MapVelocityToQDot(context0, vn, &qdot_star);
   VectorX<double> q_star = q0 + dt * qdot_star;
 
-  // At state star, compute (candidate) contact points.
-
-  //if (get_num_collision_geometries() == 0) return;
-  VectorX<double> x_star(this->num_multibody_states());
-  x_star << q_star, v_star;
-  //std::unique_ptr<systems::LeafContext<double>> context_star = DoMakeLeafContext();
-  //std::unique_ptr<systems::Context<double>> context_star = this->CreateDefaultContext();
-  DRAKE_DEMAND(context_star.get_num_discrete_state_groups() == 1);
-  context_star.get_mutable_discrete_state(0).SetFromVector(x_star);
-
-  std::vector<PenetrationAsPointPair<double>> contact_penetrations_star =
-      CalcPointPairPenetrations(context_star);
-  int num_contacts = contact_penetrations_star.size();
-
   //////////////////////////////////////////////////////////////////////////////
-  // WORK WITH CONTEXT0
+  // Compute Jacobians and Delassus operators.
   //////////////////////////////////////////////////////////////////////////////
-  context0.get_mutable_discrete_state(0).SetFromVector(x0);
 
   // Compute normal and tangential velocity Jacobians at tstar.
-  MatrixX<double> Nstar(num_contacts, nv);  // of size nc x nv
-  MatrixX<double> Dstar(2*num_contacts, nv);  // of size (2nc) x nv
-  //MatrixX<double> Dstar;
-  MatrixX<double> M0inv_times_Ntrans(nv, num_contacts);  // of size nv x nc.
-  MatrixX<double> M0inv_times_Dtrans(nv, 2*num_contacts);  // of size nv x (2nc).
-  MatrixX<double> Wnn(num_contacts, num_contacts);  // of size nc x nc
-  MatrixX<double> Wnt(num_contacts, 2*num_contacts);  // of size nc x (2*nc)
+  MatrixX<double> D(2*num_contacts, nv);  // of size (2nc) x nv
+  MatrixX<double> Minv_times_Dtrans(nv, 2*num_contacts);  // of size nv x (2nc).
   MatrixX<double> Wtt(2*num_contacts, 2*num_contacts);  // of size (2nc) x (2*nc)
-  VectorX<double> vnstar(num_contacts);
   VectorX<double> vtstar(2*num_contacts);
   //Eigen::LDLT<MatrixX<double>> W_ldlt;
   if (num_contacts > 0) {
-    // NOTE: The approximation here is to use the state at t0 and the contact
-    // penetraions at tstar. Ideally both would be at tc, but then there would
-    // be a different tc per contact pair.
-    // TODO(amcastro-tri): consider doing something better here. Would it be
-    // possible to compute a cheap approximation to tc?
-    Nstar = ComputeNormalVelocityJacobianMatrix(
-        context0, contact_penetrations_star);
-    vnstar = Nstar * v_star;
-
-    Dstar = ComputeTangentVelocityJacobianMatrix(
-        context0, contact_penetrations_star);
-    vtstar = Dstar * v_star;
-
-    // M0^{-1} * N^{T}
-    M0inv_times_Ntrans = M0_ldlt.solve(Nstar.transpose());
-    // Delasuss operator: N * M0^{-1} * N^{T}:
-    Wnn = Nstar * M0inv_times_Ntrans;
+    D = ComputeTangentVelocityJacobianMatrix(context0, point_pairs0);
+    vtstar = D * v_star;
 
     // M0^{-1} * D^{T}
-    M0inv_times_Dtrans = M0_ldlt.solve(Dstar.transpose());
-    // Wnt = N * M0^{-1} * D^{T}:
-    Wnt = Nstar * M0inv_times_Dtrans;
+    Minv_times_Dtrans = M0_ldlt.solve(D.transpose());
     // Wtt = D * M0^{-1} * D^{T}:
-    Wtt = Dstar * M0inv_times_Dtrans;
+    Wtt = D * Minv_times_Dtrans;
 
 #if 0
     PRINT_VARn(M0);
     PRINT_VARn(Nstar);
     PRINT_VARn(M0inv_times_Ntrans);
     PRINT_VARn(Wnn);
-    PRINT_VARn(Dstar);
+    PRINT_VARn(D);
 #endif
     //W_ldlt = W.ldlt();
   }
@@ -941,18 +907,10 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   VectorX<double> mu(num_contacts);
   if (num_contacts > 0) {
     for (int ic = 0; ic < num_contacts; ++ic) {
-      const auto& penetration = contact_penetrations_star[ic];
+      const auto& penetration = point_pairs0[ic];
 
       const GeometryId geometryA_id = penetration.id_A;
       const GeometryId geometryB_id = penetration.id_B;
-
-      // TODO(amcastro-tri): Request GeometrySystem to do this filtering for us
-      // when that capability lands.
-      // TODO(amcastro-tri): consider allowing this id's to belong to a third
-      // external system when they correspond to anchored geometry.
-      if (!is_collision_geometry(geometryA_id) ||
-          !is_collision_geometry(geometryB_id))
-        continue;
 
       const int collision_indexA =
           geometry_id_to_collision_index_.at(geometryA_id);
@@ -965,327 +923,52 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
       const CoulombFriction<double> combined_friction_coefficients =
           CalcContactFrictionFromSurfaceProperties(
               geometryA_friction, geometryB_friction);
-      // Static friction is ignored.
+      // Static friction is ignored, they are supposed to be equal.
       mu[ic] = combined_friction_coefficients.dynamic_friction();
     }
   }
 
   int iter(0);
   double residual(0);
-  const int num_betas = 2 * num_contacts;
-  const int num_lambdas = num_contacts;
-  const int num_unknowns = num_contacts + num_betas + num_lambdas;
-  VectorX<double> Xk = VectorX<double>::Zero(num_unknowns);
-  // Aliases to different portions in Xk
-  auto cnk = Xk.segment(0, num_contacts);
-  auto betak = Xk.segment(num_contacts, num_betas);
-  auto lambdak = Xk.segment(num_contacts + num_betas, num_lambdas);
+  const int num_unknowns = 2 * num_contacts;
+  VectorX<double> vtk = VectorX<double>::Zero(num_unknowns);
 
   if (num_contacts > 0) {
-    //auto betak = Xk.segment(nv + num_contacts, num_betas);
-    //auto lambdak = Xk.segment(nv + num_contacts + num_betas, num_lambdas);
-    // Reuse context_star for the NR iteration.
-    //Context<double>& context_k = *context_star;
-    //(void) context_k;
 
-    // Initial guess for NR iteration.
-    cnk.setConstant(1.0e-8);
-    betak.setConstant(1.0e-8);
-    lambdak.setConstant(1.0e-8);
+    const int max_iterations = 50;
+    const double tolerance = 1.0e-6;
 
-    const int max_iterations = 500;
-    const double tolerance = 1.0e-8;
-    const double alpha = 0.5;
-    const int max_line_search = 20;
-
-    //const bool update_geometry_every_iteration = false;
-
-    VectorX<double> Rk(Xk.size());
-    MatrixX<double> Jk(Xk.size(), Xk.size());
-    VectorX<double> DeltaXk(Xk.size());
+    VectorX<double> Rk(vtk.size());
+    MatrixX<double> Jk(vtk.size(), vtk.size());
+    VectorX<double> DeltaXk(vtk.size());
+    VectorX<double> that(vtk.size());
+    VectorX<double> vsk(num_contacts);
+    vtk = vtstar;  // Initial guess with zero friction forces.
     for (iter = 0; iter < max_iterations; ++iter) {
-      // Compute NR residual.
-      // TODO(amcastro-tri): consider updating Nk = Nstar. This will however be
-      // a more expensive operation.
+      // Compute 2D tangent vectors.
+      for (int ic = 0; ic < num_contacts; ++ic) {
+        const int ik = 2*ic;
+        const auto vt_ic = vtk.segment<2>(ik);
+        const double vs_ic = vt_ic.norm() + 1.0e-14;
+        that.segment<2>(ik) = vt_ic / vs_ic;
+        vsk(ic) = vs_ic;
+      }
 
-      //R = CalcFischerBurmeisterSolverResidual(
-      //  v0, M0, tau0, Nstar, VectorX<double>(vk), VectorX<double>(cnk));
+      // NR residual
+      Rk = vtk - vtstar;
+      for (int ic = 0; ic < num_contacts; ++ic) {
+        const int ik = 2 * ic;
+        auto Rk_ic = Rk.segment(ik, 2);
+        const auto vt_ic = vtk.segment(ik, 2);
 
-      // Compute Residual and Jacobian.
-      // CalcFischerBurmeisterSolverJacobian(v0, M0, tau0, Nstar, vk, cnk, &Rk, &Jk);
-
-      bool with_friction = iter == 0 ? false : true;
-
-      Rk = CalcFischerBurmeisterSolverResidualOnConstraintsOnly(
-          istep,
-          vnstar, vtstar,
-          Wnn, Wnt, Wtt, mu,
-          cnk, betak, lambdak,
-          with_friction,
-          &Jk);
-#if 0
-      // Debugging code to compute Jacobian by finite differences.
-      if( istep == 71) {
-        double delta = 1.0e-12;
-        MatrixX<double> Jnum(num_unknowns, num_unknowns);
-        VectorX<double> dcn = cnk;
-        VectorX<double> db = betak;
-        VectorX<double> dl = lambdak;
-        Jnum.setZero();
         for (int jc = 0; jc < num_contacts; ++jc) {
-          //////////////////////////////////////////////////
-          // dR/dc
-          dcn(jc) += delta;
-          VectorX<double> col =
-              CalcFischerBurmeisterSolverResidualOnConstraintsOnly(
-                  istep,
-                  vnstar, vtstar,
-                  Wnn, Wnt, Wtt, mu,
-                  dcn, betak, lambdak,
-                  with_friction,
-                  &Jk);
-          Jnum.block(0, jc, num_unknowns, 1) = (col - Rk) / delta;
-          //PRINT_VAR(col.transpose());
-          //PRINT_VAR(Rk.transpose());
-          // revert
-          dcn(jc) = cnk(jc);
-
-          //////////////////////////////////////////////////
-          // dR/dbeta
-          db(2*jc) += delta;
-          col = CalcFischerBurmeisterSolverResidualOnConstraintsOnly(
-              istep,
-                  vnstar, vtstar,
-                  Wnn, Wnt, Wtt, mu,
-                  cnk, db, lambdak,
-                  with_friction,
-                  &Jk);
-          Jnum.block(0, num_contacts+2*jc, num_unknowns, 1) = (col - Rk) / delta;
-          db(2*jc) = betak(2*jc);
-
-          db(2*jc+1) += delta;
-          col = CalcFischerBurmeisterSolverResidualOnConstraintsOnly(
-              istep,
-              vnstar, vtstar,
-              Wnn, Wnt, Wtt, mu,
-              cnk, db, lambdak,
-              with_friction,
-              &Jk);
-          Jnum.block(0, num_contacts+2*jc+1, num_unknowns, 1) = (col - Rk) / delta;
-          db(2*jc+1) = betak(2*jc+1);
-
-          //////////////////////////////////////////////////
-          // dR/dlambda
-          dl(jc) += delta;
-          col =
-              CalcFischerBurmeisterSolverResidualOnConstraintsOnly(
-                  istep,
-                  vnstar, vtstar,
-                  Wnn, Wnt, Wtt, mu,
-                  cnk, betak, dl,
-                  with_friction,
-                  &Jk);
-          Jnum.block(0, num_contacts+num_betas+jc, num_unknowns, 1) = (col - Rk) / delta;
-          // revert
-          dl(jc) = lambdak(jc);
+          const int jk = 2 * jc;
+          const auto Wij = Wtt.block<2, 2>(ik, jk);
+          const auto that_jc = that.segment<2>(jk);
+          Vector2<double> ft_jc = mu(jc) * that_jc * fn(jc);
+          Rk_ic += time_step_ * Wij * ft_jc;
         }
-
-        // Recompute Jk
-        Rk = CalcFischerBurmeisterSolverResidualOnConstraintsOnly(
-            istep,
-            vnstar, vtstar,
-            Wnn, Wnt, Wtt, mu,
-            cnk, betak, lambdak,
-            with_friction,
-            &Jk);
-
-        PRINT_VARn(Jk);
-        PRINT_VARn(Jnum);
       }
-#endif
-
-      if (with_friction) {
-#if 0
-        // Compute the complete orthogonal factorization of J.
-        Eigen::CompleteOrthogonalDecomposition<MatrixX<double>> Jk_QTZ(Jk);
-
-        // Solve
-        DeltaXk = -Jk_QTZ.solve(Rk);
-
-        // Update solution:
-        Xk = Xk + DeltaXk;
-#endif
-
-        // Minimize cost f = |Xk|^2/2
-        MatrixX<double> A = Jk * Jk.transpose();
-        Eigen::CompleteOrthogonalDecomposition<MatrixX<double>> A_QTZ(A);
-
-        // RHS for lagrange multipliers
-        VectorX<double> Rlambda = Jk * Xk - Rk;
-
-        VectorX<double> lagrange_multipliers = A_QTZ.solve(Rlambda);
-
-        VectorX<double> Xk0 = Xk;  // for residual computation.
-        Xk = Jk.transpose() * lagrange_multipliers;
-
-        DeltaXk = Xk - Xk0;
-
-        // Prototype Line Search
-        // Save previous
-        //VectorX<double> Xk0 = Xk;
-        VectorX<double> Xkp = Xk;
-
-        PRINT_VAR("Line search");
-        double omega = 1.0;
-        double ls_residual0 = Rk.norm();
-        for (int isearch = 0; isearch < max_line_search; ++isearch) {
-          // Update solution:
-          Xk = Xk0 + omega * DeltaXk;
-
-          Rk = CalcFischerBurmeisterSolverResidualOnConstraintsOnly(
-              istep,
-              vnstar, vtstar,
-              Wnn, Wnt, Wtt, mu,
-              cnk, betak, lambdak,
-              with_friction,
-              &Jk);
-
-          double ls_residual = Rk.norm();
-
-          PRINT_VAR(isearch);
-          PRINT_VAR(omega);
-          PRINT_VAR(ls_residual);
-
-          if (ls_residual > ls_residual0 && isearch != 0) {
-            // back up
-            Xk = Xkp;
-            break;
-          }
-
-          ls_residual0 = ls_residual;
-          omega *= alpha;
-          Xkp = Xk;
-        }
-
-      } else {
-        // Compute the complete orthogonal factorization of J. Only the cn block.
-        Eigen::CompleteOrthogonalDecomposition<MatrixX<double>> Jk_QTZ(
-            Jk.block(0, 0, num_contacts, num_contacts));
-
-        // Solve
-        DeltaXk.segment(0, num_contacts) =
-            -Jk_QTZ.solve(Rk.segment(0, num_contacts));
-
-        // Update solution:
-        Xk.segment(0, num_contacts) = Xk.segment(0, num_contacts) + DeltaXk.segment(0, num_contacts);
-        Xk.tail(num_betas + num_lambdas).setZero();
-
-        VectorX<double> vtk = vtstar + Wnt.transpose() * cnk;
-        for (int ic=0; ic< num_contacts; ++ic) {
-          const int ik_beta0 = num_contacts + 2 * ic;
-          const int ik_beta1 = num_contacts + 2 * ic + 1;
-          const double vt0 = vtk(2 * ic);
-          const double vt1 = vtk(2 * ic + 1);
-          const double vt_norm = sqrt(vt0 * vt0 + vt1 * vt1) + 1.0e-10;
-          const double cn = max(0.0, cnk(ic));
-          Xk(ik_beta0) = -mu(ic) * cn * vt0 / vt_norm;
-          Xk(ik_beta1) = -mu(ic) * cn * vt1 / vt_norm;
-          const int ik_lambda = num_contacts + num_betas + ic;
-          Xk(ik_lambda) = vt_norm;
-
-          // Attempting to detect static vs dynamic for initial guess.
-          // Option below with beta = 0 and lambda = |vt| actually worked better.
-#if 0
-          const double Wtt_norm = Wtt.norm();
-          const double beta_norm = mu(ic) * cn;
-          if (vt_norm < Wtt_norm * beta_norm) {  // probably static is a better guess.
-            Xk(ik_lambda) = vt_norm / 10;
-          }
-#endif
-
-          const double Wnorm = Wnn.diagonal().maxCoeff() + Wtt.diagonal().maxCoeff();
-
-          Xk(ik_beta0) = 0.0;
-          Xk(ik_beta1) = 0.0;
-          Xk(ik_lambda) = vt_norm / Wnorm;
-        }
-
-      }
-
-      if (num_contacts > 0) {
-#if 0
-        PRINT_VAR(iter);
-        PRINT_VAR(num_contacts);
-        //PRINT_VARn(M0);
-        //PRINT_VAR(tau0.transpose());
-        PRINT_VARn(Nstar);
-        PRINT_VAR(Xk.transpose());
-        PRINT_VAR(Rk.transpose());
-        PRINT_VARn(Jk);
-        PRINT_VAR(cnk.transpose());
-
-        VectorX<double> vk = v_star + M0inv_times_Ntrans * cnk + M0inv_times_Dtrans * betak;
-        PRINT_VAR(v_star.transpose());
-        PRINT_VAR(cnk.transpose());
-        PRINT_VAR(betak.transpose());
-        PRINT_VAR(lambdak.transpose());
-        PRINT_VAR(vk.transpose());
-
-        VectorX<double> vtk = Dstar * vk;
-        PRINT_VAR(vtk.transpose());
-
-        PRINT_VARn(Wnn);
-        PRINT_VARn(Wnt);
-        PRINT_VARn(Wtt);
-#endif
-      }
-
-      residual = DeltaXk.norm();
-
-      PRINT_VAR(context.get_time());
-
-      if (istep == 64) {
-        PRINT_VAR("***********************************************************");
-        PRINT_VAR(iter);
-        PRINT_VAR(residual);
-        PRINT_VAR(num_contacts);
-        PRINT_VARn(M0);
-        //PRINT_VAR(tau0.transpose());
-        PRINT_VARn(Wnn);
-        PRINT_VARn(Wnt);
-        PRINT_VARn(Wtt);
-        PRINT_VARn(Nstar);
-        PRINT_VARn(Dstar);
-        PRINT_VAR(Xk.transpose());
-        PRINT_VAR(DeltaXk.transpose());
-        PRINT_VAR(Rk.transpose());
-        PRINT_VARn(Jk);
-        PRINT_VAR(cnk.transpose());
-        PRINT_VAR(cnk.transpose());
-        PRINT_VAR(betak.transpose());
-        PRINT_VAR(lambdak.transpose());
-
-        VectorX<double> vk = v_star + M0inv_times_Ntrans * cnk + M0inv_times_Dtrans * betak;
-
-        PRINT_VAR(vk.transpose());
-
-        VectorX<double> vtk = Dstar * vk;
-        PRINT_VAR(vtk.transpose());
-
-        std::ofstream outfile;
-        outfile.open("nr_stats.dat", std::ios_base::app);
-        outfile << fmt::format(
-            "{} {} {} {}\n",
-            context.get_time(), iter, residual, Rk.transpose());
-        outfile.close();
-      }
-
-
-#if 0
-      PRINT_VAR(residual);
-      PRINT_VAR(vk.transpose());
-      PRINT_VAR(Xk.transpose());
-#endif
 
       if (residual < tolerance) {
         break;
@@ -1293,15 +976,15 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
     }
   }
 
-  std::ofstream outfile;
-  outfile.open("nr_iteration.dat", std::ios_base::app);
-  outfile << fmt::format("{0:14.6e} {1:d} {2:d} {3:14.6e}\n", context.get_time(), iter, num_contacts,residual);
-  outfile.close();
+  //std::ofstream outfile;
+  //outfile.open("nr_iteration.dat", std::ios_base::app);
+  //outfile << fmt::format("{0:14.6e} {1:d} {2:d} {3:14.6e}\n", context.get_time(), iter, num_contacts,residual);
+  //outfile.close();
 
   // Compute solution
   vn = v_star;
   if (num_contacts > 0) {
-    vn += M0inv_times_Ntrans * cnk + M0inv_times_Dtrans * betak;
+    vn += time_step_ * Minv_times_Dtrans * ftk;
   }
 
   VectorX<double> qdotn(this->num_positions());
@@ -1575,14 +1258,14 @@ void MultibodyPlant<double>::CalcAndAddContactForcesByPenaltyMethod(
     const systems::Context<double>& context,
     const PositionKinematicsCache<double>& pc,
     const VelocityKinematicsCache<double>& vc,
-    std::vector<SpatialForce<double>>* F_BBo_W_array) const {
+    std::vector<SpatialForce<double>>* F_BBo_W_array, bool include_friction,
+    const std::vector<PenetrationAsPointPair<double>>& penetrations,
+    VectorX<double>* fn, VectorX<double>* that) const {
   if (num_collision_geometries() == 0) return;
-
-  std::vector<PenetrationAsPointPair<double>> penetrations =
-      CalcPointPairPenetrations(context);
 
   PRINT_VAR(penetrations.size());
 
+  int ic = 0;
   for (const auto& penetration : penetrations) {
     const GeometryId geometryA_id = penetration.id_A;
     const GeometryId geometryB_id = penetration.id_B;
@@ -1630,46 +1313,50 @@ void MultibodyPlant<double>::CalcAndAddContactForcesByPenaltyMethod(
     const double d = penalty_method_contact_parameters_.damping;
     const double fn_AC = k * x * (1.0 + d * vn);
 
+    (*fn)(ic++) = fn_AC;
+
     if (fn_AC > 0) {
       // Normal force on body A, at C, expressed in W.
       const Vector3<double> fn_AC_W = fn_AC * nhat_BA_W;
 
-      // Since the normal force is positive (non-zero), compute the friction
-      // force. First obtain the friction coefficients:
-      const int collision_indexA =
-          geometry_id_to_collision_index_.at(geometryA_id);
-      const int collision_indexB =
-          geometry_id_to_collision_index_.at(geometryB_id);
-      const CoulombFriction<double>& geometryA_friction =
-          default_coulomb_friction_[collision_indexA];
-      const CoulombFriction<double>& geometryB_friction =
-          default_coulomb_friction_[collision_indexB];
-      const CoulombFriction<double> combined_friction_coefficients =
-          CalcContactFrictionFromSurfaceProperties(
-              geometryA_friction, geometryB_friction);
-      // Compute tangential velocity, that is, v_AcBc projected onto the tangent
-      // plane with normal nhat_BA:
-      const Vector3<double> vt_AcBc_W = v_AcBc_W - vn * nhat_BA_W;
-      // Tangential speed (squared):
-      const double vt_squared = vt_AcBc_W.squaredNorm();
-
-      // Consider a value indistinguishable from zero if it is smaller
-      // then 1e-14 and test against that value squared.
-      const double kNonZeroSqd = 1e-14 * 1e-14;
-      // Tangential friction force on A at C, expressed in W.
       Vector3<double> ft_AC_W = Vector3<double>::Zero();
-      if (vt_squared > kNonZeroSqd) {
-        const double vt = sqrt(vt_squared);
-        // Stribeck friction coefficient.
-        const double mu_stribeck = stribeck_model_.ComputeFrictionCoefficient(
-            vt, combined_friction_coefficients);
-        // Tangential direction.
-        const Vector3<double> that_W = vt_AcBc_W / vt;
+      if (include_friction) {
+        // Since the normal force is positive (non-zero), compute the friction
+        // force. First obtain the friction coefficients:
+        const int collision_indexA =
+            geometry_id_to_collision_index_.at(geometryA_id);
+        const int collision_indexB =
+            geometry_id_to_collision_index_.at(geometryB_id);
+        const CoulombFriction<double> &geometryA_friction =
+            default_coulomb_friction_[collision_indexA];
+        const CoulombFriction<double> &geometryB_friction =
+            default_coulomb_friction_[collision_indexB];
+        const CoulombFriction<double> combined_friction_coefficients =
+            CalcContactFrictionFromSurfaceProperties(
+                geometryA_friction, geometryB_friction);
+        // Compute tangential velocity, that is, v_AcBc projected onto the tangent
+        // plane with normal nhat_BA:
+        const Vector3<double> vt_AcBc_W = v_AcBc_W - vn * nhat_BA_W;
+        // Tangential speed (squared):
+        const double vt_squared = vt_AcBc_W.squaredNorm();
 
-        // Magnitude of the friction force on A at C.
-        const double ft_AC = mu_stribeck * fn_AC;
-        ft_AC_W = ft_AC * that_W;
-      }
+        // Consider a value indistinguishable from zero if it is smaller
+        // then 1e-14 and test against that value squared.
+        const double kNonZeroSqd = 1e-14 * 1e-14;
+        // Tangential friction force on A at C, expressed in W.
+        if (vt_squared > kNonZeroSqd) {
+          const double vt = sqrt(vt_squared);
+          // Stribeck friction coefficient.
+          const double mu_stribeck = stribeck_model_.ComputeFrictionCoefficient(
+              vt, combined_friction_coefficients);
+          // Tangential direction.
+          const Vector3<double> that_W = vt_AcBc_W / vt;
+
+          // Magnitude of the friction force on A at C.
+          const double ft_AC = mu_stribeck * fn_AC;
+          ft_AC_W = ft_AC * that_W;
+        }
+      } // include friction
 
       // Spatial force on body A at C, expressed in the world frame W.
       const SpatialForce<double> F_AC_W(Vector3<double>::Zero(),
@@ -1703,7 +1390,7 @@ template<typename T>
 void MultibodyPlant<T>::CalcAndAddContactForcesByPenaltyMethod(
     const systems::Context<T>&,
     const PositionKinematicsCache<T>&, const VelocityKinematicsCache<T>&,
-    std::vector<SpatialForce<T>>*) const {
+    std::vector<SpatialForce<T>>*, bool, const std::vector<PenetrationAsPointPair<T>>&, VectorX<T>*) const {
   DRAKE_ABORT_MSG("Only <double> is supported.");
 }
 
