@@ -1294,7 +1294,7 @@ typename std::enable_if<
 MultibodyPlant<T>::ComputePenetrations(
     const Context<T>& context) const {
   std::vector<PenetrationAsPointPair<T>> contact_penetrations;
-  if (get_num_collision_geometries() == 0) return contact_penetrations;
+  if (num_collision_geometries() == 0) return contact_penetrations;
 
   const geometry::QueryObject<double>& query_object =
       this->EvalAbstractInput(context, geometry_query_port_)
