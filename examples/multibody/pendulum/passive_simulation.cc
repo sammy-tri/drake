@@ -89,6 +89,8 @@ int do_main() {
   const RevoluteJoint<double>& pin =
       pendulum.GetJointByName<RevoluteJoint>(parameters.pin_joint_name());
 
+  PRINT_VAR(pendulum.is_time_stepping());
+
   // A constant source for a zero applied torque at the pin joint.
   double applied_torque(0.0);
   auto torque_source =
