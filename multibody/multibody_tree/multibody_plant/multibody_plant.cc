@@ -16,10 +16,10 @@
 
 #include <fstream>
 #include <iostream>
-//#define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
-//#define PRINT_VARn(a) std::cout << #a":\n" << a << std::endl;
-#define PRINT_VAR(a) (void)a;
-#define PRINT_VARn(a) (void)a;
+#define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
+#define PRINT_VARn(a) std::cout << #a":\n" << a << std::endl;
+//#define PRINT_VAR(a) (void)a;
+//#define PRINT_VARn(a) (void)a;
 
 namespace drake {
 namespace multibody {
@@ -769,7 +769,7 @@ void MultibodyPlant<double>::CalcAndAddContactForcesByPenaltyMethod(
     VectorX<double>* fn) const {
   if (num_collision_geometries() == 0) return;
 
-  PRINT_VAR(penetrations.size());
+  //PRINT_VAR(penetrations.size());
 
   int ic = 0;
   for (const auto& penetration : penetrations) {
@@ -874,8 +874,8 @@ void MultibodyPlant<double>::CalcAndAddContactForcesByPenaltyMethod(
           const SpatialForce<double> F_AAo_W = F_AC_W.Shift(p_CoAo_W);
           F_BBo_W_array->at(bodyA_node_index) += F_AAo_W;
 
-          PRINT_VAR(model().get_body(bodyA_index).name());
-          PRINT_VAR(F_AAo_W);
+          //PRINT_VAR(model().get_body(bodyA_index).name());
+          //PRINT_VAR(F_AAo_W);
 
         }
 
@@ -884,8 +884,8 @@ void MultibodyPlant<double>::CalcAndAddContactForcesByPenaltyMethod(
           const SpatialForce<double> F_BBo_W = -F_AC_W.Shift(p_CoBo_W);
           F_BBo_W_array->at(bodyB_node_index) += F_BBo_W;
 
-          PRINT_VAR(model().get_body(bodyB_index).name());
-          PRINT_VAR(F_BBo_W);
+          //PRINT_VAR(model().get_body(bodyB_index).name());
+          //PRINT_VAR(F_BBo_W);
         }
       }
     }
@@ -1164,17 +1164,96 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
       Delta_vtk = Jk.lu().solve(-Rk);
       residual = Delta_vtk.norm();
 
+      // Limit the angle change
+      const  double theta_max = 0.25;  // about 15 degs
+      const double cmin = cos(theta_max);
+      for (int ic = 0; ic < num_contacts; ++ic) {
+        const int ik = 2 * ic;
+        auto v = vtk.segment<2>(ik);
+        const auto dv = Delta_vtk.segment<2>(ik);
+
+        double A = v.norm();
+        double B = v.dot(dv);
+        double DD = dv.norm();
+
+        //if (A < 1e-14 && D < 1e-14) continue;
+
+        Vector2<double> v1 = v+dv;  // for alpha = 1
+        const double v1_norm = v1.norm();
+        const double v_norm = v.norm();
+        const double cos_init = v1.dot(v) / (v1_norm+1e-10) / (v_norm+1e-10);
+
+        Vector2<double> valpha;
+        double alpha;
+
+        if (istep==598){
+          PRINT_VAR(iter);
+          PRINT_VAR(cos_init);
+          PRINT_VAR(v.transpose());
+          PRINT_VAR(v1.transpose());
+          PRINT_VAR(dv.transpose());
+        }
+
+
+        // 180 degrees direction change.
+        if ( std::abs(1.0+cos_init) < 1.0e-10 || (v1_norm*v_norm) < 1.0e-14) {
+          // Clip to near the origin since we know for sure we crossed it.
+          valpha = v / (v.norm()+1e-14) * stribeck_model_.stiction_tolerance() / 2.0;
+        } else if (cos_init > cmin) {  // the angle change is small enough
+          alpha = 1.0;
+          valpha = v1;
+        } else { // Limit the angle change
+          double A2 = A * A;
+          double A4 = A2 * A2;
+          double cmin2 = cmin * cmin;
+
+          double a = A2 * DD * DD * cmin2 - B * B;
+          double b = 2 * A2 * B * (cmin2 - 1.0);
+          double c = A4 * (cmin2 - 1.0);
+
+          double delta = b * b - 4 * a * c;
+          if ( delta <  0 || istep == 598) {
+            PRINT_VAR(iter);
+            PRINT_VAR(istep);
+            PRINT_VAR(delta);
+            PRINT_VAR(A);
+            PRINT_VAR(B);
+            PRINT_VAR(cmin);
+            PRINT_VAR(DD);
+            PRINT_VAR(cos_init);
+            PRINT_VAR(std::abs(1.0+cos_init));
+            PRINT_VAR(v.transpose());
+            PRINT_VAR(v1.transpose());
+            PRINT_VAR(dv.transpose());
+            DRAKE_DEMAND(delta > -1e-16);
+          }
+
+          double sqrt_delta = sqrt(std::max(delta, 0.0));
+
+          // There should be a positive and a negative root.
+          alpha = (-b + sqrt_delta) / a / 2.0;
+          //double alpha2 = (-b - sqrt_delta)/a/2.0;
+          DRAKE_DEMAND(alpha > 0);
+
+          valpha = v + alpha * dv;
+        }
+
+        // clip v
+        v = valpha;
+
+      }
+
       // See if worth detection crosses about the line perpendicular to the
       // velocity change, ala Sherm.
-      vtk += Delta_vtk;
+      //vtk += Delta_vtk;
     }
   }
 
   std::ofstream outfile;
   outfile.open("nr_iteration.dat", std::ios_base::app);
   outfile <<
-          fmt::format("{0:14.6e} {1:d} {2:d} {3:14.6e}\n",
-                      context0.get_time(), iter, num_contacts,residual);
+          fmt::format("{0:14.6e} {1:d} {2:d} {3:d} {4:14.6e}\n",
+                      context0.get_time(), istep, iter, num_contacts,residual);
   outfile.close();
 
   // Compute solution
@@ -1446,7 +1525,7 @@ void MultibodyPlant<T>::set_penetration_allowance(
 template<typename T>
 void MultibodyPlant<T>::DoPublish(const systems::Context<T>& context,
                const std::vector<const systems::PublishEvent<T>*>&) const {
-  PRINT_VAR(context.get_time());
+  //PRINT_VAR(context.get_time());
 }
 
 template<typename T>

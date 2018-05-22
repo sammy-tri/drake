@@ -2,7 +2,7 @@
 
 #include <memory>
 
-#include "drake/geometry/geometry_system.h"
+#include "drake/geometry/scene_graph.h"
 #include "drake/multibody/multibody_tree/multibody_plant/multibody_plant.h"
 
 namespace drake {
@@ -34,7 +34,7 @@ MakeBouncingBallPlant(int nspheres,
     const drake::multibody::multibody_plant::CoulombFriction<double>&
     surface_friction, const Vector3<double>& gravity_W,
     double dt,
-    geometry::GeometrySystem<double>* geometry_system = nullptr);
+    geometry::SceneGraph<double>* scene_graph = nullptr);
 
 }  // namespace bouncing_ball
 }  // namespace multibody

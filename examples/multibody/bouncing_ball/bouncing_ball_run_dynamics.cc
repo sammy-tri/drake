@@ -21,6 +21,13 @@
 #include "drake/systems/lcm/serializer.h"
 #include "drake/systems/rendering/pose_bundle_to_draw_message.h"
 
+#include <fstream>
+#include <iostream>
+#define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
+#define PRINT_VARn(a) std::cout << #a":\n" << a << std::endl;
+//#define PRINT_VAR(a) (void) a;
+//#define PRINT_VARn(a) (void) a;
+
 namespace drake {
 namespace examples {
 namespace multibody {
@@ -84,13 +91,17 @@ int do_main() {
   const CoulombFriction<double> coulomb_friction(
       mu /* static friction */, mu /* dynamic friction */);
 
-  const double time_step = FLAGS_is_time_stepping ? 0.001 : 0;
+  const double time_step = FLAGS_is_time_stepping ? 1.0e-4 : 0;
 
   MultibodyPlant<double>& plant =
       *builder.AddSystem(MakeBouncingBallPlant(nspheres,
           radius, mass, coulomb_friction, -g * Vector3d::UnitZ(),
           time_step, &scene_graph));
   const MultibodyTree<double>& model = plant.model();
+
+  PRINT_VAR(plant.is_time_stepping());
+  PRINT_VAR(time_step);
+  PRINT_VAR(plant.get_contact_penalty_method_time_scale());
 
   double max_time_step;
   if (!FLAGS_is_time_stepping) {
