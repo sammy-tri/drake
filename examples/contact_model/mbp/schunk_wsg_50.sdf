@@ -3,6 +3,57 @@
   <model name='Schunk_Gripper'>
     <!-- From contact_model/rigid_mug_gripper: Eigen::Vector3d(0.055 + 5e-4, 0, kMugHeight / 2 + 5e-4) -->
     <pose>0.0555 0 0.0505 0 0 1.57</pose>
+
+    <joint name='weld_base' type='fixed'>
+      <parent>world</parent>
+      <child>y_translate_link</child>
+      <pose>0 0 0 0 0 0</pose>
+    </joint>
+
+    <link name='y_translate_link'>
+      <pose frame=''>0 0 0 0 -0 0</pose>
+      <inertial>
+        <mass>0.0001</mass>
+        <inertia>
+          <ixx>0.0001</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>0.0001</iyy>
+          <iyz>0</iyz>
+          <izz>0.0001</izz>
+        </inertia>
+        <pose frame=''>0 0 0 0 -0 0</pose>
+      </inertial>
+      <self_collide>0</self_collide>
+      <kinematic>0</kinematic>
+      <gravity>1</gravity>
+    </link>
+
+    <joint name='y_translate_joint' type='prismatic'>
+      <parent>y_translate_link</parent>
+      <child>body</child>
+      <pose frame=''>0 0 0 0 -0 0</pose>
+      <axis>
+        <xyz>1 0 0</xyz>
+        <use_parent_model_frame>1</use_parent_model_frame>
+        <!-- Drake attaches an actuator to all and only joints with a nonzero
+             effort limit. -->
+        <limit>
+          <lower>-1</lower>
+          <upper>1</upper>
+          <effort>80</effort>
+          <stiffness>1500</stiffness>
+          <dissipation>50</dissipation>
+        </limit>
+        <dynamics>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+          <damping>0</damping>
+          <friction>0</friction>
+        </dynamics>
+      </axis>
+    </joint>
+
     <link name='body'>
       <pose frame=''>0 -0.049133 0 0 -0 0</pose>
       <inertial>
@@ -26,12 +77,6 @@
         </geometry>
       </visual>
     </link>
-
-    <joint name='weld_base' type='fixed'>
-      <parent>world</parent>
-      <child>body</child>
-      <pose>0 0 0 0 0 0</pose>
-    </joint>
 
     <link name='left_finger'>
       <pose frame=''>0.040 0.029 0 0 -0 0</pose>

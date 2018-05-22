@@ -21,6 +21,7 @@
 #include "drake/systems/analysis/semi_explicit_euler_integrator.h"
 #include "drake/systems/analysis/simulator.h"
 #include "drake/systems/framework/diagram_builder.h"
+#include "drake/systems/primitives/sine.h"
 #include "drake/systems/lcm/lcm_publisher_system.h"
 #include "drake/systems/lcm/serializer.h"
 #include "drake/systems/rendering/pose_bundle_to_draw_message.h"
@@ -59,6 +60,7 @@ using drake::systems::ImplicitEulerIntegrator;
 using drake::systems::RungeKutta2Integrator;
 using drake::systems::RungeKutta3Integrator;
 using drake::systems::SemiExplicitEulerIntegrator;
+using drake::systems::Sine;
 
 DEFINE_double(target_realtime_rate, 1.0,
               "Desired rate relative to real time.  See documentation for "
@@ -203,8 +205,8 @@ int do_main() {
 
   PRINT_VAR(max_time_step);
 
-  DRAKE_DEMAND(plant.num_actuators() == 1);
-  DRAKE_DEMAND(plant.num_actuated_dofs() == 1);
+  DRAKE_DEMAND(plant.num_actuators() == 2);
+  DRAKE_DEMAND(plant.num_actuated_dofs() == 2);
 
   // Boilerplate used to connect the plant to a SceneGraph for
   // visualization.
@@ -230,6 +232,26 @@ int do_main() {
                   converter.get_input_port(0));
   builder.Connect(converter, publisher);
 
+  // Sinusoidal force input.
+  const double mass = 1.0890;
+  const double freq = 2.0;  // Hz
+  const double omega = 2*M_PI*freq; //rad/s
+  const double x0 = 0.15; // meters
+  const double f0 = omega*omega*x0*mass;  // Newton
+  const double v0 = -x0*omega;
+  const double a0 = omega*omega*x0;
+  PRINT_VAR(a0);
+
+  const Vector2<double> amplitudes(f0, FLAGS_gripper_force);
+  const Vector2<double> frequencies(omega, 0.0);  // 1 Hz
+  const Vector2<double> phases(0.0, M_PI_2);
+  const auto& harmonic_force = *builder.AddSystem<Sine>(amplitudes, frequencies, phases);
+  // Initial velocity.
+
+
+  builder.Connect(harmonic_force.get_output_port(0),
+                  plant.get_actuation_input_port());
+
   // Last thing before building the diagram; dispatch the message to load
   // geometry.
   geometry::DispatchLoadMessage(scene_graph);
@@ -244,10 +266,13 @@ int do_main() {
   systems::Context<double>& plant_context =
       diagram->GetMutableSubsystemContext(plant, diagram_context.get());
 
+#if 0
   // Gripper force.
+  Vector2<double> actuation(1.0, FLAGS_gripper_force);
   plant_context.FixInputPort(
       plant.get_actuation_input_port().get_index(),
-      Vector1d(FLAGS_gripper_force));
+      actuation);
+#endif
 
   // Get joints so that we can set initial conditions.
   const PrismaticJoint<double>& finger_slider =
@@ -273,6 +298,11 @@ int do_main() {
   X_WM.linear() = RotationMatrix<double>(RollPitchYaw<double>(rpy)).matrix();
   X_WM.translation() = Vector3d(0.0, mug_y_W, 0.0);
   plant.model().SetFreeBodyPoseOrThrow(mug, X_WM, &plant_context);
+
+
+  const PrismaticJoint<double>& y_translate_joint =
+      plant.GetJointByName<PrismaticJoint>("y_translate_joint");
+  y_translate_joint.set_translation_rate(&plant_context, v0);
 
   // Set up simulator.
   systems::Simulator<double> simulator(*diagram, std::move(diagram_context));

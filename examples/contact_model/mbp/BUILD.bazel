@@ -36,6 +36,7 @@ drake_cc_binary(
         "//systems/analysis:simulator",
         "//systems/framework:diagram",
         "//systems/lcm:lcm_pubsub_system",
+        "//systems/primitives:sine",
         "//systems/rendering:pose_bundle_to_draw_message",
         "@gflags",
     ],
