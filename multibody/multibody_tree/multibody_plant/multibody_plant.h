@@ -1139,6 +1139,12 @@ class MultibodyPlant : public systems::LeafSystem<T> {
         const T& speed_BcAc,
         const CoulombFriction<T>& friction) const;
 
+    T ComputeFrictionCoefficient2(
+        const T& speed_BcAc, const T& mu) const;
+
+    T ComputeFrictionCoefficient2Prime(
+        const T& speed_BcAc, const T& mu) const;
+
     /// Evaluates an S-shaped quintic curve, f(x), mapping the domain [0, 1] to
     /// the range [0, 1] where f(0) = f''(0) = f''(1) = f'(0) = f'(1) = 0 and
     /// f(1) = 1.

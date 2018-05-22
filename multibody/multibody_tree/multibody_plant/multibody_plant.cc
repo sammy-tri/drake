@@ -931,25 +931,29 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   int iter(0);
   double residual(0);
   const int num_unknowns = 2 * num_contacts;
-  VectorX<double> vtk = VectorX<double>::Zero(num_unknowns);
 
+  const double kStictionVelocity = stribeck_model_.stiction_tolerance();
   if (num_contacts > 0) {
 
     const int max_iterations = 50;
     const double tolerance = 1.0e-6;
 
+    VectorX<double> vtk(num_unknowns);
     VectorX<double> Rk(vtk.size());
     MatrixX<double> Jk(vtk.size(), vtk.size());
     VectorX<double> DeltaXk(vtk.size());
     VectorX<double> that(vtk.size());
     VectorX<double> vsk(num_contacts);
+    VectorX<double> mus(num_contacts); // Stribeck friction.
+    VectorX<double> dmudv(num_contacts);
+    std::vector<Matrix2<double>> dft_dv;
     vtk = vtstar;  // Initial guess with zero friction forces.
     for (iter = 0; iter < max_iterations; ++iter) {
       // Compute 2D tangent vectors.
       for (int ic = 0; ic < num_contacts; ++ic) {
         const int ik = 2*ic;
         const auto vt_ic = vtk.segment<2>(ik);
-        const double vs_ic = vt_ic.norm() + 1.0e-14;
+        const double vs_ic = vt_ic.norm() + 1.0e-14;  // Sliding speed.
         that.segment<2>(ik) = vt_ic / vs_ic;
         vsk(ic) = vs_ic;
       }
@@ -960,13 +964,50 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
         const int ik = 2 * ic;
         auto Rk_ic = Rk.segment(ik, 2);
         const auto vt_ic = vtk.segment(ik, 2);
+        mus(ic) = stribeck_model_.ComputeFrictionCoefficient2(vsk(ic), mu(ic));
 
         for (int jc = 0; jc < num_contacts; ++jc) {
           const int jk = 2 * jc;
           const auto Wij = Wtt.block<2, 2>(ik, jk);
           const auto that_jc = that.segment<2>(jk);
-          Vector2<double> ft_jc = mu(jc) * that_jc * fn(jc);
+          Vector2<double> ft_jc = mus(jc) * that_jc * fn(jc);
           Rk_ic += time_step_ * Wij * ft_jc;
+        }
+
+        // Compute dmudv needed for Jacobian computation.
+        dmudv(ic) =
+            stribeck_model_.ComputeFrictionCoefficient2Prime(vsk(ic), mu(ic));
+
+        const auto that_ic = that.segment<2>(ik);
+
+        // Projection matrix. It projects in the direction of that.
+        const Matrix2<double> P_ic = that_ic * that_ic.transpose();
+
+        // Removes the projected direction along that.
+        const Matrix2<double> Pperp_ic = Matrix2<double>::Identity() - P_ic;
+
+        // Compute dft/dv:
+        // Changes in direction of that.
+        dft_dv[ic] = Pperp_ic * mus(ic) / vsk(ic) * fn(ic);
+
+        // Changes due to mu stribeck, in the direction of that.
+        dft_dv[ic] += P_ic * dmudv(ic) * fn(ic);
+      }
+
+      // NR Jacobian
+      Jk.setIdentity();  // Identity I2 blocks.
+      Matrix2<double> dft_dv;
+      for (int ic = 0; ic < num_contacts; ++ic) {
+        const int ik = 2 * ic;
+        const auto that_ic = that.segment<2>(ik);
+
+        for (int jc = 0; jc < num_contacts; ++jc) {
+          const int jk = 2 * jc;
+          const auto that_jc = that.segment<2>(jk);
+          const auto Wij = Wtt.block<2, 2>(ik, jk);
+          auto Jij = Jk.block<2, 2>(ik, jk);
+
+          Jij += time_step_ * Wij * dft_dv[jc];
         }
       }
 
@@ -1588,6 +1629,30 @@ T MultibodyPlant<T>::StribeckModel::ComputeFrictionCoefficient(
     return mu_s - (mu_s - mu_d) * step5((v - 1) / 2);
   } else {
     return mu_s * step5(v);
+  }
+}
+
+template <typename T>
+T MultibodyPlant<T>::StribeckModel::ComputeFrictionCoefficient2(
+    const T& speed_BcAc, const T& mu) const {
+  DRAKE_ASSERT(speed_BcAc >= 0);
+  const T v = speed_BcAc * inv_v_stiction_tolerance_;
+  if (v >= 1) {
+    return mu;
+  } else {
+    return mu * (1.0-(v-1)*(v-1));
+  }
+}
+
+template <typename T>
+T MultibodyPlant<T>::StribeckModel::ComputeFrictionCoefficient2Prime(
+    const T& speed_BcAc, const T& mu) const {
+  DRAKE_ASSERT(speed_BcAc >= 0);
+  const T x = speed_BcAc * inv_v_stiction_tolerance_;
+  if (x >= 1) {
+    return 0;
+  } else {
+    return mu * (2*(1-x)) * inv_v_stiction_tolerance_;
   }
 }
 
