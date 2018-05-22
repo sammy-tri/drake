@@ -932,7 +932,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   double residual(0);
   const int num_unknowns = 2 * num_contacts;
 
-  const double kStictionVelocity = stribeck_model_.stiction_tolerance();
+  VectorX<double> ftk(num_unknowns);
   if (num_contacts > 0) {
 
     const int max_iterations = 50;
@@ -941,7 +941,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
     VectorX<double> vtk(num_unknowns);
     VectorX<double> Rk(vtk.size());
     MatrixX<double> Jk(vtk.size(), vtk.size());
-    VectorX<double> DeltaXk(vtk.size());
+    VectorX<double> Delta_vtk(vtk.size());
     VectorX<double> that(vtk.size());
     VectorX<double> vsk(num_contacts);
     VectorX<double> mus(num_contacts); // Stribeck friction.
@@ -951,11 +951,15 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
     for (iter = 0; iter < max_iterations; ++iter) {
       // Compute 2D tangent vectors.
       for (int ic = 0; ic < num_contacts; ++ic) {
-        const int ik = 2*ic;
+        const int ik = 2 * ic;
         const auto vt_ic = vtk.segment<2>(ik);
         const double vs_ic = vt_ic.norm() + 1.0e-14;  // Sliding speed.
-        that.segment<2>(ik) = vt_ic / vs_ic;
+        const auto that_ic =  vt_ic / vs_ic;
+        that.segment<2>(ik) = that_ic;
         vsk(ic) = vs_ic;
+        mus(ic) = stribeck_model_.ComputeFrictionCoefficient2(vsk(ic), mu(ic));
+        // Note: minus sign not included.
+        ftk.segment<2>(ik) = mus(ic) * that_ic * fn(ic);
       }
 
       // NR residual
@@ -963,14 +967,11 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
       for (int ic = 0; ic < num_contacts; ++ic) {
         const int ik = 2 * ic;
         auto Rk_ic = Rk.segment(ik, 2);
-        const auto vt_ic = vtk.segment(ik, 2);
-        mus(ic) = stribeck_model_.ComputeFrictionCoefficient2(vsk(ic), mu(ic));
 
         for (int jc = 0; jc < num_contacts; ++jc) {
           const int jk = 2 * jc;
           const auto Wij = Wtt.block<2, 2>(ik, jk);
-          const auto that_jc = that.segment<2>(jk);
-          Vector2<double> ft_jc = mus(jc) * that_jc * fn(jc);
+          const auto ft_jc = ftk.segment<2>(jk);
           Rk_ic += time_step_ * Wij * ft_jc;
         }
 
@@ -999,17 +1000,23 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
       Matrix2<double> dft_dv;
       for (int ic = 0; ic < num_contacts; ++ic) {
         const int ik = 2 * ic;
-        const auto that_ic = that.segment<2>(ik);
 
         for (int jc = 0; jc < num_contacts; ++jc) {
           const int jk = 2 * jc;
-          const auto that_jc = that.segment<2>(jk);
+
           const auto Wij = Wtt.block<2, 2>(ik, jk);
           auto Jij = Jk.block<2, 2>(ik, jk);
 
           Jij += time_step_ * Wij * dft_dv[jc];
         }
       }
+
+      Delta_vtk = Jk.ldlt().solve(-Rk);
+      residual = Delta_vtk.norm();
+
+      // See if worth detection crosses about the line perpendicular to the
+      // velocity change, ala Sherm.
+      vtk += Delta_vtk;
 
       if (residual < tolerance) {
         break;
@@ -1025,7 +1032,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   // Compute solution
   vn = v_star;
   if (num_contacts > 0) {
-    vn += time_step_ * Minv_times_Dtrans * ftk;
+    vn -= time_step_ * Minv_times_Dtrans * ftk;
   }
 
   VectorX<double> qdotn(this->num_positions());
