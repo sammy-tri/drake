@@ -754,8 +754,150 @@ MultibodyPlant<double>::CalcPointPairPenetrations(
 }
 
 template<typename T>
-std::vector<PenetrationAsPointPair<T>> MultibodyPlant<T>::CalcPointPairPenetrations(
+std::vector<PenetrationAsPointPair<double>> MultibodyPlant<T>::CalcPointPairPenetrations(
     const systems::Context<T>&) const {
+  DRAKE_ABORT_MSG("Only <double> is supported.");
+}
+
+template<>
+void MultibodyPlant<double>::CalcAndAddContactForcesByPenaltyMethod(
+    const systems::Context<double>& context,
+    const PositionKinematicsCache<double>& pc,
+    const VelocityKinematicsCache<double>& vc,
+    std::vector<SpatialForce<double>>* F_BBo_W_array, bool include_friction,
+    const std::vector<PenetrationAsPointPair<double>>& penetrations,
+    VectorX<double>* fn) const {
+  if (num_collision_geometries() == 0) return;
+
+  PRINT_VAR(penetrations.size());
+
+  int ic = 0;
+  for (const auto& penetration : penetrations) {
+    const GeometryId geometryA_id = penetration.id_A;
+    const GeometryId geometryB_id = penetration.id_B;
+
+    BodyIndex bodyA_index = geometry_id_to_body_index_.at(geometryA_id);
+    BodyIndex bodyB_index = geometry_id_to_body_index_.at(geometryB_id);
+
+    BodyNodeIndex bodyA_node_index =
+        model().get_body(bodyA_index).node_index();
+    BodyNodeIndex bodyB_node_index =
+        model().get_body(bodyB_index).node_index();
+
+    // Penetration depth, > 0 during penetration.
+    const double& x = penetration.depth;
+    DRAKE_ASSERT(x >= 0);
+    const Vector3<double>& nhat_BA_W = penetration.nhat_BA_W;
+    const Vector3<double>& p_WCa = penetration.p_WCa;
+    const Vector3<double>& p_WCb = penetration.p_WCb;
+
+    // Contact point C.
+    const Vector3<double> p_WC = 0.5 * (p_WCa + p_WCb);
+
+    // Contact point position on body A.
+    const Vector3<double>& p_WAo =
+        pc.get_X_WB(bodyA_node_index).translation();
+    const Vector3<double>& p_CoAo_W = p_WAo - p_WC;
+
+    // Contact point position on body B.
+    const Vector3<double>& p_WBo =
+        pc.get_X_WB(bodyB_node_index).translation();
+    const Vector3<double>& p_CoBo_W = p_WBo - p_WC;
+
+    // Separation velocity, > 0  if objects separate.
+    const Vector3<double> v_WAc =
+        vc.get_V_WB(bodyA_node_index).Shift(-p_CoAo_W).translational();
+    const Vector3<double> v_WBc =
+        vc.get_V_WB(bodyB_node_index).Shift(-p_CoBo_W).translational();
+    const Vector3<double> v_AcBc_W = v_WBc - v_WAc;
+
+    // if xdot = vn > 0 ==> they are getting closer.
+    const double vn = v_AcBc_W.dot(nhat_BA_W);
+
+    // Magnitude of the normal force on body A at contact point C.
+    const double k = penalty_method_contact_parameters_.stiffness;
+    const double d = penalty_method_contact_parameters_.damping;
+    const double fn_AC = k * x * (1.0 + d * vn);
+
+    (*fn)(ic++) = fn_AC;
+
+    if (fn_AC > 0) {
+      // Normal force on body A, at C, expressed in W.
+      const Vector3<double> fn_AC_W = fn_AC * nhat_BA_W;
+
+      Vector3<double> ft_AC_W = Vector3<double>::Zero();
+      if (include_friction) {
+        // Since the normal force is positive (non-zero), compute the friction
+        // force. First obtain the friction coefficients:
+        const int collision_indexA =
+            geometry_id_to_collision_index_.at(geometryA_id);
+        const int collision_indexB =
+            geometry_id_to_collision_index_.at(geometryB_id);
+        const CoulombFriction<double> &geometryA_friction =
+            default_coulomb_friction_[collision_indexA];
+        const CoulombFriction<double> &geometryB_friction =
+            default_coulomb_friction_[collision_indexB];
+        const CoulombFriction<double> combined_friction_coefficients =
+            CalcContactFrictionFromSurfaceProperties(
+                geometryA_friction, geometryB_friction);
+        // Compute tangential velocity, that is, v_AcBc projected onto the tangent
+        // plane with normal nhat_BA:
+        const Vector3<double> vt_AcBc_W = v_AcBc_W - vn * nhat_BA_W;
+        // Tangential speed (squared):
+        const double vt_squared = vt_AcBc_W.squaredNorm();
+
+        // Consider a value indistinguishable from zero if it is smaller
+        // then 1e-14 and test against that value squared.
+        const double kNonZeroSqd = 1e-14 * 1e-14;
+        // Tangential friction force on A at C, expressed in W.
+        if (vt_squared > kNonZeroSqd) {
+          const double vt = sqrt(vt_squared);
+          // Stribeck friction coefficient.
+          const double mu_stribeck = stribeck_model_.ComputeFrictionCoefficient(
+              vt, combined_friction_coefficients);
+          // Tangential direction.
+          const Vector3<double> that_W = vt_AcBc_W / vt;
+
+          // Magnitude of the friction force on A at C.
+          const double ft_AC = mu_stribeck * fn_AC;
+          ft_AC_W = ft_AC * that_W;
+        }
+      } // include friction
+
+      // Spatial force on body A at C, expressed in the world frame W.
+      const SpatialForce<double> F_AC_W(Vector3<double>::Zero(),
+                                        fn_AC_W + ft_AC_W);
+
+      if (F_BBo_W_array != nullptr) {
+        if (bodyA_index != world_index()) {
+          // Spatial force on body A at Ao, expressed in W.
+          const SpatialForce<double> F_AAo_W = F_AC_W.Shift(p_CoAo_W);
+          F_BBo_W_array->at(bodyA_node_index) += F_AAo_W;
+
+          PRINT_VAR(model().get_body(bodyA_index).name());
+          PRINT_VAR(F_AAo_W);
+
+        }
+
+        if (bodyB_index != world_index()) {
+          // Spatial force on body B at Bo, expressed in W.
+          const SpatialForce<double> F_BBo_W = -F_AC_W.Shift(p_CoBo_W);
+          F_BBo_W_array->at(bodyB_node_index) += F_BBo_W;
+
+          PRINT_VAR(model().get_body(bodyB_index).name());
+          PRINT_VAR(F_BBo_W);
+        }
+      }
+    }
+  }
+}
+
+template<typename T>
+void MultibodyPlant<T>::CalcAndAddContactForcesByPenaltyMethod(
+    const systems::Context<T>&,
+    const PositionKinematicsCache<T>&, const VelocityKinematicsCache<T>&,
+    std::vector<SpatialForce<T>>*, bool,
+    const std::vector<PenetrationAsPointPair<double>>&, VectorX<double>*) const {
   DRAKE_ABORT_MSG("Only <double> is supported.");
 }
 
@@ -789,6 +931,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
   const int nv = this->num_velocities();
 
   int istep = context0.get_time() / time_step_;
+  (void) istep;
 
   // Save the system state as a raw Eigen vector (solution at previous time step).
   auto x0 = context0.get_discrete_state(0).get_value();
@@ -846,12 +989,11 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
       CalcPointPairPenetrations(context0);
   const int num_contacts = point_pairs0.size();
   VectorX<double> fn(num_contacts);
-  VectorX<double> that(2*num_contacts);
 
   // Compute contact forces on each body by penalty method. No friction, only normal forces.
   if (num_collision_geometries() > 0) {
     CalcAndAddContactForcesByPenaltyMethod(
-        context0, pc0, vc0, &F_BBo_W_array, false, point_pairs0, &fn, &that);
+        context0, pc0, vc0, &F_BBo_W_array, false, point_pairs0, &fn);
   }
 
   // With vdot = 0, this computes (includes normal forces):
@@ -946,7 +1088,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
     VectorX<double> vsk(num_contacts);
     VectorX<double> mus(num_contacts); // Stribeck friction.
     VectorX<double> dmudv(num_contacts);
-    std::vector<Matrix2<double>> dft_dv;
+    std::vector<Matrix2<double>> dft_dv(num_contacts);
     vtk = vtstar;  // Initial guess with zero friction forces.
     for (iter = 0; iter < max_iterations; ++iter) {
       // Compute 2D tangent vectors.
@@ -954,12 +1096,18 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
         const int ik = 2 * ic;
         const auto vt_ic = vtk.segment<2>(ik);
         const double vs_ic = vt_ic.norm() + 1.0e-14;  // Sliding speed.
-        const auto that_ic =  vt_ic / vs_ic;
+        const Vector2<double> that_ic =  vt_ic / vs_ic;
         that.segment<2>(ik) = that_ic;
         vsk(ic) = vs_ic;
         mus(ic) = stribeck_model_.ComputeFrictionCoefficient2(vsk(ic), mu(ic));
         // Note: minus sign not included.
         ftk.segment<2>(ik) = mus(ic) * that_ic * fn(ic);
+      }
+
+      // After the previous iteration, we allow updating ftk above to have its
+      // latest value before leaving.
+      if (residual < tolerance) {
+        break;
       }
 
       // NR residual
@@ -989,15 +1137,16 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
 
         // Compute dft/dv:
         // Changes in direction of that.
-        dft_dv[ic] = Pperp_ic * mus(ic) / vsk(ic) * fn(ic);
+        dft_dv[ic] = Pperp_ic * mus(ic) / vsk(ic);
 
         // Changes due to mu stribeck, in the direction of that.
-        dft_dv[ic] += P_ic * dmudv(ic) * fn(ic);
+        dft_dv[ic] += P_ic * dmudv(ic);
+
+        dft_dv[ic] *= fn(ic);
       }
 
       // NR Jacobian
       Jk.setIdentity();  // Identity I2 blocks.
-      Matrix2<double> dft_dv;
       for (int ic = 0; ic < num_contacts; ++ic) {
         const int ik = 2 * ic;
 
@@ -1011,16 +1160,12 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
         }
       }
 
-      Delta_vtk = Jk.ldlt().solve(-Rk);
+      Delta_vtk = Jk.lu().solve(-Rk);
       residual = Delta_vtk.norm();
 
       // See if worth detection crosses about the line perpendicular to the
       // velocity change, ala Sherm.
       vtk += Delta_vtk;
-
-      if (residual < tolerance) {
-        break;
-      }
     }
   }
 
@@ -1301,147 +1446,6 @@ void MultibodyPlant<T>::DoPublish(const systems::Context<T>& context,
   PRINT_VAR(context.get_time());
 }
 
-template<>
-void MultibodyPlant<double>::CalcAndAddContactForcesByPenaltyMethod(
-    const systems::Context<double>& context,
-    const PositionKinematicsCache<double>& pc,
-    const VelocityKinematicsCache<double>& vc,
-    std::vector<SpatialForce<double>>* F_BBo_W_array, bool include_friction,
-    const std::vector<PenetrationAsPointPair<double>>& penetrations,
-    VectorX<double>* fn, VectorX<double>* that) const {
-  if (num_collision_geometries() == 0) return;
-
-  PRINT_VAR(penetrations.size());
-
-  int ic = 0;
-  for (const auto& penetration : penetrations) {
-    const GeometryId geometryA_id = penetration.id_A;
-    const GeometryId geometryB_id = penetration.id_B;
-
-    BodyIndex bodyA_index = geometry_id_to_body_index_.at(geometryA_id);
-    BodyIndex bodyB_index = geometry_id_to_body_index_.at(geometryB_id);
-
-    BodyNodeIndex bodyA_node_index =
-        model().get_body(bodyA_index).node_index();
-    BodyNodeIndex bodyB_node_index =
-        model().get_body(bodyB_index).node_index();
-
-    // Penetration depth, > 0 during penetration.
-    const double& x = penetration.depth;
-    DRAKE_ASSERT(x >= 0);
-    const Vector3<double>& nhat_BA_W = penetration.nhat_BA_W;
-    const Vector3<double>& p_WCa = penetration.p_WCa;
-    const Vector3<double>& p_WCb = penetration.p_WCb;
-
-    // Contact point C.
-    const Vector3<double> p_WC = 0.5 * (p_WCa + p_WCb);
-
-    // Contact point position on body A.
-    const Vector3<double>& p_WAo =
-        pc.get_X_WB(bodyA_node_index).translation();
-    const Vector3<double>& p_CoAo_W = p_WAo - p_WC;
-
-    // Contact point position on body B.
-    const Vector3<double>& p_WBo =
-        pc.get_X_WB(bodyB_node_index).translation();
-    const Vector3<double>& p_CoBo_W = p_WBo - p_WC;
-
-    // Separation velocity, > 0  if objects separate.
-    const Vector3<double> v_WAc =
-        vc.get_V_WB(bodyA_node_index).Shift(-p_CoAo_W).translational();
-    const Vector3<double> v_WBc =
-        vc.get_V_WB(bodyB_node_index).Shift(-p_CoBo_W).translational();
-    const Vector3<double> v_AcBc_W = v_WBc - v_WAc;
-
-    // if xdot = vn > 0 ==> they are getting closer.
-    const double vn = v_AcBc_W.dot(nhat_BA_W);
-
-    // Magnitude of the normal force on body A at contact point C.
-    const double k = penalty_method_contact_parameters_.stiffness;
-    const double d = penalty_method_contact_parameters_.damping;
-    const double fn_AC = k * x * (1.0 + d * vn);
-
-    (*fn)(ic++) = fn_AC;
-
-    if (fn_AC > 0) {
-      // Normal force on body A, at C, expressed in W.
-      const Vector3<double> fn_AC_W = fn_AC * nhat_BA_W;
-
-      Vector3<double> ft_AC_W = Vector3<double>::Zero();
-      if (include_friction) {
-        // Since the normal force is positive (non-zero), compute the friction
-        // force. First obtain the friction coefficients:
-        const int collision_indexA =
-            geometry_id_to_collision_index_.at(geometryA_id);
-        const int collision_indexB =
-            geometry_id_to_collision_index_.at(geometryB_id);
-        const CoulombFriction<double> &geometryA_friction =
-            default_coulomb_friction_[collision_indexA];
-        const CoulombFriction<double> &geometryB_friction =
-            default_coulomb_friction_[collision_indexB];
-        const CoulombFriction<double> combined_friction_coefficients =
-            CalcContactFrictionFromSurfaceProperties(
-                geometryA_friction, geometryB_friction);
-        // Compute tangential velocity, that is, v_AcBc projected onto the tangent
-        // plane with normal nhat_BA:
-        const Vector3<double> vt_AcBc_W = v_AcBc_W - vn * nhat_BA_W;
-        // Tangential speed (squared):
-        const double vt_squared = vt_AcBc_W.squaredNorm();
-
-        // Consider a value indistinguishable from zero if it is smaller
-        // then 1e-14 and test against that value squared.
-        const double kNonZeroSqd = 1e-14 * 1e-14;
-        // Tangential friction force on A at C, expressed in W.
-        if (vt_squared > kNonZeroSqd) {
-          const double vt = sqrt(vt_squared);
-          // Stribeck friction coefficient.
-          const double mu_stribeck = stribeck_model_.ComputeFrictionCoefficient(
-              vt, combined_friction_coefficients);
-          // Tangential direction.
-          const Vector3<double> that_W = vt_AcBc_W / vt;
-
-          // Magnitude of the friction force on A at C.
-          const double ft_AC = mu_stribeck * fn_AC;
-          ft_AC_W = ft_AC * that_W;
-        }
-      } // include friction
-
-      // Spatial force on body A at C, expressed in the world frame W.
-      const SpatialForce<double> F_AC_W(Vector3<double>::Zero(),
-                                        fn_AC_W + ft_AC_W);
-
-      if (F_BBo_W_array != nullptr) {
-        if (bodyA_index != world_index()) {
-          // Spatial force on body A at Ao, expressed in W.
-          const SpatialForce<double> F_AAo_W = F_AC_W.Shift(p_CoAo_W);
-          F_BBo_W_array->at(bodyA_node_index) += F_AAo_W;
-
-          PRINT_VAR(model().get_body(bodyA_index).name());
-          PRINT_VAR(F_AAo_W);
-
-        }
-
-        if (bodyB_index != world_index()) {
-          // Spatial force on body B at Bo, expressed in W.
-          const SpatialForce<double> F_BBo_W = -F_AC_W.Shift(p_CoBo_W);
-          F_BBo_W_array->at(bodyB_node_index) += F_BBo_W;
-
-          PRINT_VAR(model().get_body(bodyB_index).name());
-          PRINT_VAR(F_BBo_W);
-        }
-      }
-    }
-  }
-}
-
-template<typename T>
-void MultibodyPlant<T>::CalcAndAddContactForcesByPenaltyMethod(
-    const systems::Context<T>&,
-    const PositionKinematicsCache<T>&, const VelocityKinematicsCache<T>&,
-    std::vector<SpatialForce<T>>*, bool, const std::vector<PenetrationAsPointPair<T>>&, VectorX<T>*) const {
-  DRAKE_ABORT_MSG("Only <double> is supported.");
-}
-
 template<typename T>
 void MultibodyPlant<T>::DoMapQDotToVelocity(
     const systems::Context<T>& context,
@@ -1643,11 +1647,11 @@ template <typename T>
 T MultibodyPlant<T>::StribeckModel::ComputeFrictionCoefficient2(
     const T& speed_BcAc, const T& mu) const {
   DRAKE_ASSERT(speed_BcAc >= 0);
-  const T v = speed_BcAc * inv_v_stiction_tolerance_;
-  if (v >= 1) {
+  const T x = speed_BcAc * inv_v_stiction_tolerance_;
+  if (x >= 1) {
     return mu;
   } else {
-    return mu * (1.0-(v-1)*(v-1));
+    return mu * x * (2.0 - x);
   }
 }
 
