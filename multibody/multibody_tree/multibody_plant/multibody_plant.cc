@@ -1194,12 +1194,14 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
           PRINT_VAR(dv.transpose());
         }
 
+        const double x = v_norm / stribeck_model_.stiction_tolerance();
+        const double x1 = v1_norm / stribeck_model_.stiction_tolerance();
 
         // 180 degrees direction change.
-        if ( std::abs(1.0+cos_init) < 1.0e-10 || (v1_norm*v_norm) < 1.0e-14) {
+        if ( std::abs(1.0+cos_init) < 1.0e-10 ) {
           // Clip to near the origin since we know for sure we crossed it.
           valpha = v / (v.norm()+1e-14) * stribeck_model_.stiction_tolerance() / 2.0;
-        } else if (cos_init > cmin) {  // the angle change is small enough
+        } else if (cos_init > cmin || (v1_norm*v_norm) < 1.0e-14 || x < 1.0 || x1 < 1.0) {  // the angle change is small enough
           alpha = 1.0;
           valpha = v1;
         } else { // Limit the angle change
@@ -1233,6 +1235,25 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
           // There should be a positive and a negative root.
           alpha = (-b + sqrt_delta) / a / 2.0;
           //double alpha2 = (-b - sqrt_delta)/a/2.0;
+          if (alpha <= 0) {
+            PRINT_VAR(alpha);
+            PRINT_VAR(iter);
+            PRINT_VAR(istep);
+            PRINT_VAR(delta);
+            PRINT_VAR(A);
+            PRINT_VAR(B);
+            PRINT_VAR(cmin);
+            PRINT_VAR(DD);
+            PRINT_VAR(cos_init);
+            PRINT_VAR(std::abs(1.0+cos_init));
+            PRINT_VAR(a);
+            PRINT_VAR(b);
+            PRINT_VAR(c);
+            PRINT_VAR(v.transpose());
+            PRINT_VAR(v1.transpose());
+            PRINT_VAR(dv.transpose());
+          }
+
           DRAKE_DEMAND(alpha > 0);
 
           valpha = v + alpha * dv;

@@ -18,12 +18,12 @@ cd bazel-bin/examples/contact_model/mbp/rigid_mug_gripper_mbp.runfiles/drake
 
 ./examples/contact_model/mbp/rigid_mug_gripper_mbp \
     --simulation_time=40.0 --target_realtime_rate=0 \
-    --integration_scheme=implicit_euler --max_time_step=1e-4 --accuracy=1e-2 \
+    --integration_scheme=implicit_euler --max_time_step=5e-4 --accuracy=1e-2 \
     --gripper_force=10.0 \
     --ring_static_friction=1.0 --ring_dynamic_friction=0.5 \
-    --penetration_allowance=0.01 --v_stiction_tolerance=2e-4 \
+    --penetration_allowance=0.01 --v_stiction_tolerance=1e-4 \
     --ring_samples=8 --ring_orient=0 \
-    --grip_width=0.09 \
+    --grip_width=0.15 \
     --rx=0 --ry=0 --rz=0
 
 # Note on grip width:
