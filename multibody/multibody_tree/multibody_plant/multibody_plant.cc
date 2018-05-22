@@ -1079,6 +1079,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
 
     const int max_iterations = 50;
     const double tolerance = 1.0e-6;
+    residual = 2 * tolerance;
 
     VectorX<double> vtk(num_unknowns);
     VectorX<double> Rk(vtk.size());
@@ -1169,10 +1170,12 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
     }
   }
 
-  //std::ofstream outfile;
-  //outfile.open("nr_iteration.dat", std::ios_base::app);
-  //outfile << fmt::format("{0:14.6e} {1:d} {2:d} {3:14.6e}\n", context.get_time(), iter, num_contacts,residual);
-  //outfile.close();
+  std::ofstream outfile;
+  outfile.open("nr_iteration.dat", std::ios_base::app);
+  outfile <<
+          fmt::format("{0:14.6e} {1:d} {2:d} {3:14.6e}\n",
+                      context0.get_time(), iter, num_contacts,residual);
+  outfile.close();
 
   // Compute solution
   vn = v_star;
