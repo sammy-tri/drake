@@ -152,7 +152,7 @@ int do_main() {
   SceneGraph<double>& scene_graph = *builder.AddSystem<SceneGraph>();
   scene_graph.set_name("scene_graph");
 
-  MultibodyPlant<double>& plant = *builder.AddSystem<MultibodyPlant>();
+  MultibodyPlant<double>& plant = *builder.AddSystem<MultibodyPlant>(FLAGS_max_time_step);
   std::string full_name =
       FindResourceOrThrow("drake/examples/contact_model/mbp/schunk_wsg_50.sdf");
   AddModelFromSdfFile(full_name, &plant, &scene_graph);
@@ -197,6 +197,9 @@ int do_main() {
   const double max_time_step =
       FLAGS_max_time_step > 0 ? FLAGS_max_time_step :
       plant.get_contact_penalty_method_time_scale() / 30;
+
+  PRINT_VAR(FLAGS_max_time_step);
+  PRINT_VAR(plant.get_contact_penalty_method_time_scale());
 
   PRINT_VAR(max_time_step);
 
