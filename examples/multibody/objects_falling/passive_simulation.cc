@@ -5,7 +5,7 @@
 #include "drake/common/drake_assert.h"
 #include "drake/common/text_logging_gflags.h"
 #include "drake/examples/multibody/objects_falling/make_objects_falling.h"
-#include "drake/geometry/geometry_system.h"
+#include "drake/geometry/scene_graph.h"
 #include "drake/geometry/geometry_visualization.h"
 #include "drake/lcm/drake_lcm.h"
 #include "drake/lcmt_viewer_draw.hpp"
@@ -48,7 +48,7 @@ DEFINE_double(simulation_time, 10.0,
 using Eigen::Matrix3d;
 using Eigen::Quaterniond;
 using Eigen::Vector3d;
-using geometry::GeometrySystem;
+using geometry::SceneGraph;
 using geometry::SourceId;
 using lcm::DrakeLcm;
 using drake::multibody::multibody_plant::MultibodyPlant;
@@ -65,8 +65,8 @@ using drake::systems::SemiExplicitEulerIntegrator;
 int do_main() {
   systems::DiagramBuilder<double> builder;
 
-  GeometrySystem<double>& geometry_system =
-      *builder.AddSystem<GeometrySystem>();
+  SceneGraph<double>& geometry_system =
+      *builder.AddSystem<SceneGraph>();
   geometry_system.set_name("geometry_system");
 
   const double simulation_time = 30.00;
@@ -80,11 +80,11 @@ int do_main() {
   const double mass = 0.1;      // kg
   const double g = 9.81;        // m/s^2
   const double z0 = 0.3;        // Initial height.
-  const double friction = 0.3;
+  const double friction = 0.0;
   const int nballs = 5;
   const int ncylinders = 5;
 
-  const double time_step = 1e-3;
+  const double time_step = 1e-4;
 
   std::ofstream outfile;
   outfile.open("nr_iteration.dat");
@@ -97,7 +97,7 @@ int do_main() {
           &geometry_system));
   const MultibodyTree<double>& model = plant.model();
 
-  const double penetration_length = 1.0e-3;
+  const double penetration_length = 1.0e-4;
 #if 0
   const double stiffness = mass * g / penetration_length;  // static equilibrium (under estimation)
   const double omega = sqrt(stiffness / mass);  // frequency
@@ -112,6 +112,7 @@ int do_main() {
     max_time_step = plant.get_contact_penalty_method_time_scale() / 50;
   }
   PRINT_VARn(max_time_step);
+  PRINT_VAR(plant.get_contact_penalty_method_time_scale());
   //plant.set_contact_penalty_stiffness(stiffness);
   //plant.set_contact_penalty_damping(damping);
   //plant.set_contact_penalty_damping(0.0);
@@ -119,7 +120,7 @@ int do_main() {
   //DRAKE_DEMAND(plant.num_velocities() == 6);
   //DRAKE_DEMAND(plant.num_positions() == 7);
 
-  // Boilerplate used to connect the plant to a GeometrySystem for
+  // Boilerplate used to connect the plant to a SceneGraph for
   // visualization.
   DrakeLcm lcm;
   const PoseBundleToDrawMessage& converter =
@@ -275,7 +276,7 @@ int do_main() {
 int main(int argc, char* argv[]) {
   gflags::SetUsageMessage(
       "A simple acrobot demo using Drake's MultibodyTree,"
-      "with GeometrySystem visualization. "
+      "with SceneGraph visualization. "
       "Launch drake-visualizer before running this example.");
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   drake::logging::HandleSpdlogGflags();

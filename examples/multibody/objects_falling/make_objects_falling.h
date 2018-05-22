@@ -2,7 +2,7 @@
 
 #include <memory>
 
-#include "drake/geometry/geometry_system.h"
+#include "drake/geometry/scene_graph.h"
 #include "drake/multibody/multibody_tree/multibody_plant/multibody_plant.h"
 
 namespace drake {
@@ -29,7 +29,7 @@ MakeObjectsFallingPlant(
     double radius, double mass,const Vector3<double>& gravity, double friction,
     int nballs, int ncylinders,
     double time_step,
-    geometry::GeometrySystem<double>* geometry_system = nullptr);
+    geometry::SceneGraph<double>* scene_graph = nullptr);
 
 }  // namespace objects_falling
 }  // namespace multibody
