@@ -17,7 +17,7 @@
 cd bazel-bin/examples/contact_model/mbp/rigid_mug_gripper_mbp.runfiles/drake
 
 ./examples/contact_model/mbp/rigid_mug_gripper_mbp \
-    --simulation_time=40.0 --target_realtime_rate=0 \
+    --simulation_time=40.0 --target_realtime_rate=0.0 \
     --integration_scheme=implicit_euler --max_time_step=5e-4 --accuracy=1e-2 \
     --gripper_force=10.0 \
     --ring_static_friction=1.0 --ring_dynamic_friction=0.5 \

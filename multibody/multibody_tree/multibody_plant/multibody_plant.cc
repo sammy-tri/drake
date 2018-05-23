@@ -1463,7 +1463,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdatesPGS(
   VectorX<double> ftk0(num_unknowns);
   if (num_contacts > 0) {
 
-    const int max_iterations = 50;
+    const int max_iterations = 500000;
     const double tolerance = 1.0e-6;
     residual = 2 * tolerance;
 
@@ -1508,6 +1508,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdatesPGS(
         auto ft_ic = ftk.segment<2>(ik);
 
         ft_ic = ft_ic - invWii[ic] * vtilde / time_step_;
+        //ft_ic = ft_ic - vtilde / Lambda(ic) / time_step_;
 
         // Project into the friction circle, we know the radius.
         double ft_norm = ft_ic.norm();
