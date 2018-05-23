@@ -86,8 +86,8 @@ int do_main() {
   const double g = 9.81;        // m/s^2
   const double z0 = radius + 0.02;        // Initial height.
   const double v0 = 1.0;   // Commented parameters for demo of spheres rolling into each other.
-  const double mu = 0.1;  // 0.05
-  const int nspheres = 1;  // 2
+  const double mu = 0.05;  // 0.05
+  const int nspheres = 2;  // 2
   const CoulombFriction<double> coulomb_friction(
       mu /* static friction */, mu /* dynamic friction */);
 
@@ -175,7 +175,7 @@ int do_main() {
       SpatialVelocity<double>(Vector3d{0.0, 0, 0},Vector3d{v0, 0, 0}), &plant_context);
 
   if( nspheres==2) {
-    X_WB.translation() = Vector3d(5.0 * radius, 0.0, z0);
+    X_WB.translation() = Vector3d(10.0 * radius, 0.0, z0);
     model.SetFreeBodyPoseOrThrow(
         model.GetBodyByName("Ball2"), X_WB, &plant_context);
     model.SetFreeBodySpatialVelocityOrThrow(

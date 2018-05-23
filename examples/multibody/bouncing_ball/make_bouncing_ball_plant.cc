@@ -159,12 +159,12 @@ MakeBouncingBallPlant(int nspheres, double radius, double mass,
         scene_graph);
 
     // Add sphere geometry for the ball.
-    //AddSphereWithSpokes(plant.get(), scene_graph,
-    //                    ball, radius, surface_friction);
+    AddSphereWithSpokes(plant.get(), scene_graph,
+                        ball, radius, surface_friction);
 
-    AddCylinderWithMultiContact(
-        plant.get(), scene_graph,
-        ball, radius, 4 * radius, surface_friction, radius / 20.0, 10);
+    //AddCylinderWithMultiContact(
+      //  plant.get(), scene_graph,
+        //ball, radius, 4 * radius, surface_friction, radius / 20.0, 10);
 
 #if 0
     // Add a bunch of little spheres to simulate "multi-contact".
