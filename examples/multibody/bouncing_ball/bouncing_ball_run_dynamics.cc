@@ -91,7 +91,7 @@ int do_main() {
   const CoulombFriction<double> coulomb_friction(
       mu /* static friction */, mu /* dynamic friction */);
 
-  const double time_step = FLAGS_is_time_stepping ? 1.0e-4 : 0;
+  const double time_step = FLAGS_is_time_stepping ? 2.0e-4 : 0;
 
   MultibodyPlant<double>& plant =
       *builder.AddSystem(MakeBouncingBallPlant(nspheres,
