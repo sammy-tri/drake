@@ -23,7 +23,7 @@ cd bazel-bin/examples/contact_model/mbp/rigid_mug_gripper_mbp.runfiles/drake
     --ring_static_friction=1.0 --ring_dynamic_friction=0.5 \
     --penetration_allowance=0.01 --v_stiction_tolerance=1e-4 \
     --ring_samples=8 --ring_orient=0 \
-    --grip_width=0.15 \
+    --grip_width=0.12 \
     --rx=0 --ry=0 --rz=0
 
 # Note on grip width:

@@ -164,8 +164,8 @@ int do_main() {
   AddModelFromSdfFile(full_name, &plant, &scene_graph);
 
   // Add gravity to the model.
-  plant.AddForceElement<UniformGravityFieldElement>(
-      -9.81 * Vector3<double>::UnitZ());
+  //plant.AddForceElement<UniformGravityFieldElement>(
+    //  -9.81 * Vector3<double>::UnitZ());
 
   // Add the pads.
   const Body<double>& left_finger = plant.GetBodyByName("left_finger");
@@ -290,18 +290,20 @@ int do_main() {
   const Vector3d& p_WBr = X_WB_all[right_finger.index()].translation();
   const Vector3d& p_WBl = X_WB_all[left_finger.index()].translation();
   const double mug_y_W = (p_WBr(1) + p_WBl(1)) / 2.0;
+  (void) mug_y_W;
 
   Isometry3d X_WM;
   Vector3d rpy(FLAGS_rx * M_PI / 180,
                FLAGS_ry * M_PI / 180,
                (FLAGS_rz * M_PI / 180) + M_PI);
   X_WM.linear() = RotationMatrix<double>(RollPitchYaw<double>(rpy)).matrix();
-  X_WM.translation() = Vector3d(0.0, mug_y_W, 0.0);
+  X_WM.translation() = Vector3d(0.0, 0, 0.0);
   plant.model().SetFreeBodyPoseOrThrow(mug, X_WM, &plant_context);
 
 
   const PrismaticJoint<double>& y_translate_joint =
       plant.GetJointByName<PrismaticJoint>("y_translate_joint");
+  y_translate_joint.set_translation(&plant_context, 0.015);
   y_translate_joint.set_translation_rate(&plant_context, v0);
 
   // Set up simulator.

@@ -1463,7 +1463,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdatesPGS(
   VectorX<double> ftk0(num_unknowns);
   if (num_contacts > 0) {
 
-    const int max_iterations = 500000;
+    const int max_iterations = 5000;
     const double tolerance = 1.0e-6;
     residual = 2 * tolerance;
 
