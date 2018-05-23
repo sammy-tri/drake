@@ -52,6 +52,24 @@ sdf::Element* MaybeGetChildElement(
   return nullptr;
 }
 
+// Helper to return the child element of `element` named `child_name`.
+// Throws std::runtime_error if not found.
+const sdf::Element& GetChildElementOrThrow(
+    const sdf::Element& element, const std::string &child_name) {
+  // First verify <child_name> is present (otherwise GetElement() has the
+  // side effect of adding new elements if not present!!).
+  if (!element.HasElement(child_name)) {
+    throw std::runtime_error(
+        "Element <" + child_name + "> not found nested within element <" +
+            element.GetName() + ">.");
+  }
+  // NOTE: The const_cast() here is needed because sdformat does not provide
+  // a const version of GetElement(). However, the snippet below still
+  // guarantees "element" is not changed as promised by this method's
+  // signature. See sdformat issue #188.
+  return *const_cast<sdf::Element&>(element).GetElement(child_name);
+}
+
 // Helper to return the value of a child of `element` named `child_name`.
 // A std::runtime_error is thrown if the `<child_name>` tag is missing from the
 // SDF file, or the tag has a bad or missing value.
@@ -251,8 +269,8 @@ CoulombFriction<double> MakeCoulombFrictionFromSdfCollision(
   // object. Only a bug could cause this.
   DRAKE_DEMAND(collision_element != nullptr);
 
-  const sdf::ElementPtr friction_element =
-      GetElementPointerOrNullPtr(collision_element, "drake_friction");
+  const sdf::Element* const friction_element =
+      MaybeGetChildElement(*collision_element, "drake_friction");
 
   // If friction_element is not found, the default is that of a frictionless
   // surface (i.e. zero friction coefficients).
@@ -260,10 +278,10 @@ CoulombFriction<double> MakeCoulombFrictionFromSdfCollision(
 
   // Once <drake_friction> is (optionally) specified, <static_friction> and
   // <dynamic_friction> are required.
-  const double static_friction = GetValueOrThrow<double>(
-      friction_element, "static_friction");
-  const double dynamic_friction = GetValueOrThrow<double>(
-      friction_element, "dynamic_friction");
+  const double static_friction = GetChildElementValueOrThrow<double>(
+      *friction_element, "static_friction");
+  const double dynamic_friction = GetChildElementValueOrThrow<double>(
+      *friction_element, "dynamic_friction");
 
   try {
     return CoulombFriction<double>(static_friction, dynamic_friction);
@@ -281,24 +299,26 @@ CoulombFriction<double> MakeCoulombFrictionFromSdfCollisionOde(
   // object. Only a bug could cause this.
   DRAKE_DEMAND(collision_element != nullptr);
 
-  const sdf::ElementPtr surface_element =
-      GetElementPointerOrNullPtr(collision_element, "surface");
+  const sdf::Element* const surface_element =
+      MaybeGetChildElement(*collision_element, "surface");
 
   // If the surface is not found, the default is that of a frictionless
   // surface (i.e. zero friction coefficients).
   if (!surface_element) return CoulombFriction<double>();
 
   // Once <surface> is found, <friction> and <ode> are required.
-  const sdf::ElementPtr friction_element =
-      GetElementPointerOrThrow(surface_element, "friction");
-  const sdf::ElementPtr ode_element =
-      GetElementPointerOrThrow(friction_element, "ode");
+  const sdf::Element& friction_element =
+      GetChildElementOrThrow(*surface_element, "friction");
+  const sdf::Element& ode_element =
+      GetChildElementOrThrow(friction_element, "ode");
 
 
   // Once <ode> is found, <mu> (for static) and <mu2> (for dynamic) are
   // required.
-  const double static_friction = GetValueOrThrow<double>(ode_element, "mu");
-  const double dynamic_friction = GetValueOrThrow<double>(ode_element, "mu2");
+  const double static_friction =
+      GetChildElementValueOrThrow<double>(ode_element, "mu");
+  const double dynamic_friction =
+      GetChildElementValueOrThrow<double>(ode_element, "mu2");
 
   try {
     return CoulombFriction<double>(static_friction, dynamic_friction);
