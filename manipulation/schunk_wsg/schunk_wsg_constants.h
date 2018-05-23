@@ -17,8 +17,8 @@ namespace manipulation {
 namespace schunk_wsg {
 
 constexpr int kSchunkWsgNumActuators = 1;
-constexpr int kSchunkWsgNumPositions = 1;
-constexpr int kSchunkWsgNumVelocities = 1;
+constexpr int kSchunkWsgNumPositions = 5;
+constexpr int kSchunkWsgNumVelocities = 5;
 
 constexpr int kSchunkWsgPositionIndex = 0;
 constexpr int kSchunkWsgVelocityIndex =
@@ -57,22 +57,6 @@ VectorX<T> GetSchunkWsgOpenPosition() {
        1.27982,
        0.0550667,
        0.009759) .finished();
-  // clang-format on
-}
-
-/**
- * Returns the position vector corresponding to mug grasping position of the
- * gripper.
- */
-template <typename T>
-VectorX<T> GetSchunkWsgMugGraspPosition() {
-  // clang-format off
-  return (VectorX<T>(kSchunkWsgNumPositions) <<
-     -0.04248,
-      0.12346,
-      1.07289,
-      0.04248,
-      0.12346) .finished();
   // clang-format on
 }
 

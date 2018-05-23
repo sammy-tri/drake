@@ -12,7 +12,6 @@
 #include "drake/multibody/kinematics_cache.h"
 #include "drake/multibody/rigid_body_plant/compliant_contact_model.h"
 #include "drake/multibody/rigid_body_plant/compliant_material.h"
-#include "drake/multibody/rigid_body_plant/point_contact_detail.h"
 #include "drake/solvers/mathematical_program.h"
 
 using std::make_unique;
@@ -92,14 +91,6 @@ void RigidBodyPlant<T>::initialize() {
 
   // Declares an abstract valued output port for contact information.
   contact_output_port_index_ = DeclareContactResultsOutputPort();
-
-  // @TODO(edrumwri): Remove this once the discretization constraint "force"
-  //                  results have been cached (which will allow us to compute
-  //                  the contact force outputs the "proper" way and obviate the
-  //                  need to initialize the generalized contact force vector in
-  //                  this way).
-  discretized_system_contact_results_.set_generalized_contact_force(
-      VectorX<T>::Zero(tree_->get_num_velocities()));
 
   // Schedule discretization update.
   if (timestep_ > 0.0)
@@ -568,8 +559,9 @@ void RigidBodyPlant<T>::CalcContactStiffnessDampingMuAndNumHalfConeEdges(
   // radius. See @ref hunt_crossley (in contact_model_doxygen.h) for a lengthy
   // discussion on converting Young's Modulus to a stiffness.
   // The "length" will be incorporated using the contact depth.
-  *stiffness = material.youngs_modulus() *
-      compliant_contact_model_->characteristic_radius();
+  // TODO(edrumwri): Make characteristic radius user settable.
+  const double characteristic_radius = 1e-2;  // 1 cm.
+  *stiffness = material.youngs_modulus() * characteristic_radius;
 
   // Get the damping value (b) from the compliant model dissipation (α).
   // Equation (16) from [Hunt 1975] yields b = 3/2 * α * k * x. We can assume
@@ -587,8 +579,9 @@ void RigidBodyPlant<T>::CalcContactStiffnessDampingMuAndNumHalfConeEdges(
   *mu = material.static_friction();
 
   // TODO(edrumwri): The number of half-cone edges should be able to be set on
-  // a per-geometry pair basis.
-  *num_half_cone_edges = default_half_num_friction_cone_edges_;
+  // a per-geometry pair basis. For now, just set the value to pyramidal
+  // friction.
+  *num_half_cone_edges = 2;
 
   // Verify the friction directions are set correctly.
   DRAKE_DEMAND(*num_half_cone_edges >= 2);
@@ -1112,34 +1105,30 @@ RigidBodyPlant<T>::DoCalcDiscreteVariableUpdatesImpl(
 
   // Set up the N multiplication operator (projected velocity along the contact
   // normals) and the N' multiplication operator (effect of contact normal
-  // forces on generalized forces). Note that Nᵀ is scaled by dt which makes
-  // the contact forces non-impulsive.
+  // forces on generalized forces).
   data.N_mult = [this, &contacts, &q](const VectorX<T>& w) -> VectorX<T> {
     return ContactNormalJacobianMult(contacts, q, w);
   };
-  data.N_transpose_mult = [this, &contacts, &kinematics_cache, dt]
+  data.N_transpose_mult = [this, &contacts, &kinematics_cache]
       (const VectorX<T>& f) -> VectorX<T> {
-    return TransposedContactNormalJacobianMult(
-        contacts, kinematics_cache, f) * dt;
+    return TransposedContactNormalJacobianMult(contacts, kinematics_cache, f);
   };
 
   // Set up the F multiplication operator (projected velocity along the contact
   // tangent directions) and the F' multiplication operator (effect of contact
-  // frictional forces on generalized forces). Note that Fᵀ is scaled by dt
-  // which makes the contact forces non-impulsive.
+  // frictional forces on generalized forces).
   data.F_mult = [this, &contacts, &q, &data](const VectorX<T>& w) ->
       VectorX<T> {
     return ContactTangentJacobianMult(contacts, q, w, data.r);
   };
-  data.F_transpose_mult = [this, &contacts, &kinematics_cache, &data, dt]
+  data.F_transpose_mult = [this, &contacts, &kinematics_cache, &data]
       (const VectorX<T>& f) -> VectorX<T> {
     return TransposedContactTangentJacobianMult(contacts,
-        kinematics_cache, f, data.r) * dt;
+        kinematics_cache, f, data.r);
   };
 
   // Set the range-of-motion (L) Jacobian multiplication operator and the
-  // transpose_mult() operation. Note that Lᵀ is scaled by dt which makes the
-  // contact forces non-impulsive.
+  // transpose_mult() operation.
   data.L_mult = [&limits](const VectorX<T>& w) -> VectorX<T> {
     VectorX<T> result(limits.size());
     for (int i = 0; static_cast<size_t>(i) < limits.size(); ++i) {
@@ -1148,27 +1137,19 @@ RigidBodyPlant<T>::DoCalcDiscreteVariableUpdatesImpl(
     }
     return result;
   };
-  data.L_transpose_mult = [this, &v, &limits, dt](const VectorX<T>& lambda) {
+  data.L_transpose_mult = [this, &v, &limits](const VectorX<T>& lambda) {
     VectorX<T> result = VectorX<T>::Zero(v.size());
     for (int i = 0; static_cast<size_t>(i) < limits.size(); ++i) {
       const int index = limits[i].v_index;
       result[index] = (limits[i].lower_limit) ? lambda[i] : -lambda[i];
     }
-    return result * dt;
+    return result;
   };
 
-  // Set the regularization and stabilization terms for contact tangent
-  // directions (kF).
-  const int total_friction_cone_edges = std::accumulate(
-      data.r.begin(), data.r.end(), 0);
-  data.kF.setZero(total_friction_cone_edges);
-  data.gammaF.setZero(total_friction_cone_edges);
-  data.gammaE.setZero(contacts.size());
-
   // Output the Jacobians.
-#ifdef SPDLOG_DEBUG_ON
+  #ifdef SPDLOG_DEBUG_ON
   MatrixX<T> N(contacts.size(), v.size()), L(limits.size(), v.size()),
-      F(total_friction_cone_edges, v.size());
+      F(contacts.size() * 2, v.size());
   for (int i = 0; i < v.size(); ++i) {
     VectorX<T> unit = VectorX<T>::Unit(v.size(), i);
     N.col(i) = data.N_mult(unit);
@@ -1178,7 +1159,15 @@ RigidBodyPlant<T>::DoCalcDiscreteVariableUpdatesImpl(
   SPDLOG_DEBUG(drake::log(), "N: {}", N);
   SPDLOG_DEBUG(drake::log(), "F: {}", F);
   SPDLOG_DEBUG(drake::log(), "L: {}", L);
-#endif
+  #endif
+
+  // Set the regularization and stabilization terms for contact tangent
+  // directions (kF).
+  const int total_friction_cone_edges = std::accumulate(
+      data.r.begin(), data.r.end(), 0);
+  data.kF.setZero(total_friction_cone_edges);
+  data.gammaF.setZero(total_friction_cone_edges);
+  data.gammaE.setZero(contacts.size());
 
   // Set the regularization and stabilization terms for joint limit
   // constraints (kL).
@@ -1205,9 +1194,9 @@ RigidBodyPlant<T>::DoCalcDiscreteVariableUpdatesImpl(
   data.Mv = H * v + right_hand_side * dt;
 
   // Solve the rigid impact problem.
-  VectorX<T> new_velocity, constraint_force;
-  constraint_solver_.SolveImpactProblem(data, &constraint_force);
-  constraint_solver_.ComputeGeneralizedVelocityChange(data, constraint_force,
+  VectorX<T> new_velocity, contact_force;
+  constraint_solver_.SolveImpactProblem(data, &contact_force);
+  constraint_solver_.ComputeGeneralizedVelocityChange(data, contact_force,
       &new_velocity);
   SPDLOG_DEBUG(drake::log(), "Actuator forces: {} ", u.transpose());
   SPDLOG_DEBUG(drake::log(), "Transformed actuator forces: {} ",
@@ -1235,112 +1224,12 @@ RigidBodyPlant<T>::DoCalcDiscreteVariableUpdatesImpl(
   SPDLOG_DEBUG(drake::log(), "g(): {}",
       tree.positionConstraints(kinematics_cache).transpose());
 
-  // TODO(edrumwri): Relocate this block of code to the contact output function
-  // when caching is in place.
-  // Note that constraint forces are non-impulsive, so scaling by dt is
-  // unnecessary.
-  ComputeDiscretizedSystemContactResults(contacts, data, kinematics_cache,
-                                    constraint_force,
-                                    &discretized_system_contact_results_);
-
   // qn = q + dt*qdot.
   VectorX<T> xn(this->get_num_states());
   xn << q + dt * tree.transformVelocityToQDot(kinematics_cache, new_velocity),
       new_velocity;
   updates->get_mutable_vector(0).SetFromVector(xn);
   updates->get_mutable_vector(1)[0] = t + dt;
-}
-
-// Populates `contact_results` for the time stepping calculation using the
-// geometric data (`contacts`), the time stepping problem data, and the computed
-// contact force (impulse) solution.
-template <typename T>
-void RigidBodyPlant<T>::ComputeDiscretizedSystemContactResults(
-    const std::vector<multibody::collision::PointPair<T>>& contacts,
-    const multibody::constraint::ConstraintVelProblemData<T>& data,
-    const KinematicsCache<T>& kinematics_cache,
-    const VectorX<T>& constraint_force,
-    ContactResults<T>* contact_results) const {
-  const int total_friction_cone_edges = std::accumulate(
-      data.r.begin(), data.r.end(), 0);
-
-  int normal_force_index = 0;
-  int frictional_force_index = static_cast<int>(contacts.size());
-  contact_results->Clear();
-  for (const auto& contact : contacts) {
-    // Get the two body indices.
-    const int body_a_index = contact.elementA->get_body()->get_body_index();
-    const int body_b_index = contact.elementB->get_body()->get_body_index();
-
-    // The reported point on A's surface (As) in the world frame (W).
-    const Vector3<T> p_WAs =
-        kinematics_cache.get_element(body_a_index).transform_to_world *
-            contact.ptA;
-
-    // The reported point on B's surface (Bs) in the world frame (W).
-    const Vector3<T> p_WBs =
-        kinematics_cache.get_element(body_b_index).transform_to_world *
-            contact.ptB;
-
-    // Get the point halfway between the two in the world frame.
-    const Vector3<T> p_W = (p_WAs + p_WBs) * 0.5;
-
-    // Initialize the contact result.
-    ContactInfo<T>& contact_result = contact_results->AddContact(
-        contact.elementA->getId(), contact.elementB->getId());
-
-    // Compute an orthonormal basis, the contact frame.
-    const int kXAxisIndex = 0, kYAxisIndex = 1, kZAxisIndex = 2;
-    auto R_WC = math::ComputeBasisFromAxis(kXAxisIndex, contact.normal);
-    const Vector3<T> tan1_dir = R_WC.col(kYAxisIndex);
-    const Vector3<T> tan2_dir = R_WC.col(kZAxisIndex);
-
-    // Determine the contact force. This computation requires knowledge of the
-    // packed format used for the constraint force calculations. See
-    // ConstraintSolver::SolveImpactProblem().
-    std::vector<std::unique_ptr<ContactDetail<T>>> contact_details;
-    Vector3<T> force = contact.normal * constraint_force[normal_force_index];
-    if (data.r[normal_force_index] == 2) {
-      // Special case: pyramid friction.
-      force += tan1_dir * constraint_force[frictional_force_index++];
-      force += tan2_dir * constraint_force[frictional_force_index++];
-    } else {
-      for (int j = 0; j < data.r[normal_force_index]; ++j) {
-        double theta = M_PI * j /
-            (static_cast<double>(data.r[normal_force_index]) - 1);
-        const double cth = cos(theta);
-        const double sth = sin(theta);
-        force += tan1_dir * cth * constraint_force[frictional_force_index] +
-                 tan2_dir * sth * constraint_force[frictional_force_index];
-        ++frictional_force_index;
-      }
-    }
-
-    ++normal_force_index;
-    const ContactForce<T> resultant_force(p_W, contact.normal, force);
-    contact_result.set_resultant_force(resultant_force);
-
-    // Allows us to stream penetration via LCM.
-    contact_result.set_penetration_depth(contact.distance);
-
-    // Placeholder: stream slip velocity via LCM.
-
-    contact_details.emplace_back(new PointContactDetail<T>(resultant_force));
-    contact_result.set_contact_details(std::move(contact_details));
-  }
-
-  // Convert the contact forces to generalized forces after first zeroing
-  // range-of-motion and bilateral constraint forces first- we do not want those
-  // accounted for in the calculation.
-  VectorX<T> generalized_contact_force;
-  const int limits_start = contacts.size() + total_friction_cone_edges;
-  VectorX<T> contact_force = constraint_force;
-  contact_force.segment(
-      limits_start, constraint_force.size() - limits_start).setZero();
-  constraint_solver_.ComputeGeneralizedImpulseFromConstraintImpulses(
-      data, contact_force, &generalized_contact_force);
-  contact_results->set_generalized_contact_force(
-      generalized_contact_force);
 }
 
 template <typename T>
@@ -1474,12 +1363,13 @@ void RigidBodyPlant<T>::CalcContactResultsOutput(
   contacts->set_generalized_contact_force(
       VectorX<T>::Zero(get_num_velocities()));
 
-  // If the state is discrete, we use the last contact results, which we can
-  // do because the discretized model only steps forward in time.
-  if (is_state_discrete()) {
-    *contacts = discretized_system_contact_results_;
+  // TODO(siyuanfeng-tri): Need to correctly output contact results for time
+  // stepping.
+
+  // This code should do nothing if the state is discrete because the compliant
+  // contact model will not be used to compute contact forces.
+  if (is_state_discrete())
     return;
-  }
 
   // TODO(SeanCurtis-TRI): This is horribly redundant code that only exists
   // because the data is not properly accessible in the cache.  This is
