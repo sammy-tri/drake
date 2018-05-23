@@ -1077,7 +1077,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdatesImplStribeck(
   VectorX<double> ftk(num_unknowns);
   if (num_contacts > 0) {
 
-    const int max_iterations = 50;
+    const int max_iterations = 200;
     const double tolerance = 1.0e-6;
     residual = 2 * tolerance;
 
@@ -1560,7 +1560,8 @@ void MultibodyPlant<T>::DoCalcDiscreteVariableUpdates(
     const drake::systems::Context<T>& context0,
     const std::vector<const drake::systems::DiscreteUpdateEvent<T>*>& events,
     drake::systems::DiscreteValues<T>* updates) const {
-  DoCalcDiscreteVariableUpdatesPGS(context0, events, updates);
+  //DoCalcDiscreteVariableUpdatesPGS(context0, events, updates);
+  DoCalcDiscreteVariableUpdatesImplStribeck(context0, events, updates);
 }
 
 // This method is assuming that we are giving a compatible `context` with a
