@@ -908,6 +908,16 @@ class MultibodyPlant : public systems::LeafSystem<T> {
       const std::vector<const drake::systems::DiscreteUpdateEvent<T>*>& events,
       drake::systems::DiscreteValues<T>* updates) const override;
 
+  void DoCalcDiscreteVariableUpdatesImplStribeck(
+      const drake::systems::Context<T>& context0,
+      const std::vector<const drake::systems::DiscreteUpdateEvent<T>*>& events,
+      drake::systems::DiscreteValues<T>* updates) const;
+
+  void DoCalcDiscreteVariableUpdatesPGS(
+      const drake::systems::Context<T>& context0,
+      const std::vector<const drake::systems::DiscreteUpdateEvent<T>*>& events,
+      drake::systems::DiscreteValues<T>* updates) const;
+
   void DoMapQDotToVelocity(
       const systems::Context<T>& context,
       const Eigen::Ref<const VectorX<T>>& qdot,

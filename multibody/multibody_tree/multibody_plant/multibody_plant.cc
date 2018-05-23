@@ -916,7 +916,7 @@ MatrixX<double> MultibodyPlant<T>::CalcFischerBurmeisterSolverJacobian(
 }
 
 template<>
-void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
+void MultibodyPlant<double>::DoCalcDiscreteVariableUpdatesImplStribeck(
     const drake::systems::Context<double>& context0,
     const std::vector<const drake::systems::DiscreteUpdateEvent<double>*>& events,
     drake::systems::DiscreteValues<double>* updates) const {
@@ -1293,11 +1293,273 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdates(
 }
 
 template<typename T>
-void MultibodyPlant<T>::DoCalcDiscreteVariableUpdates(
+void MultibodyPlant<T>::DoCalcDiscreteVariableUpdatesImplStribeck(
     const drake::systems::Context<T>& context,
     const std::vector<const drake::systems::DiscreteUpdateEvent<T>*>& events,
     drake::systems::DiscreteValues<T>* updates) const {
   DRAKE_ABORT_MSG("T != double not supported.");
+}
+
+template<>
+void MultibodyPlant<double>::DoCalcDiscreteVariableUpdatesPGS(
+    const drake::systems::Context<double>& context0,
+    const std::vector<const drake::systems::DiscreteUpdateEvent<double>*>& events,
+    drake::systems::DiscreteValues<double>* updates) const {
+  using std::sqrt;
+  using std::max;
+  // If plant state is continuous, no discrete state to update.
+  if (!is_state_discrete()) return;
+
+  const double& dt = time_step_;  // shorter alias.
+
+  const int nq = this->num_positions();
+  const int nv = this->num_velocities();
+
+  int istep = context0.get_time() / time_step_;
+  (void) istep;
+
+  // Save the system state as a raw Eigen vector (solution at previous time step).
+  auto x0 = context0.get_discrete_state(0).get_value();
+  VectorX<double> q0 = x0.topRows(nq);
+  VectorX<double> v0 = x0.bottomRows(nv);
+
+  //////////////////////////////////////////////////////////////////////////////
+  // WORK WITH CONTEXT0
+  //////////////////////////////////////////////////////////////////////////////
+
+  // Allocate workspace. We might want to cache these to avoid allocations.
+  // Mass matrix.
+  MatrixX<double> M0(nv, nv);
+  // Mass matrix and its LDLT factorization.
+  model_->CalcMassMatrixViaInverseDynamics(context0, &M0);
+  auto M0_ldlt = M0.ldlt();
+
+  // Forces.
+  MultibodyForces<double> forces(*model_);
+  // Bodies' accelerations, ordered by BodyNodeIndex.
+  std::vector<SpatialAcceleration<double>> A_WB_array(model_->num_bodies());
+  // Generalized accelerations.
+  VectorX<double> vdot = VectorX<double>::Zero(nv);
+
+  const PositionKinematicsCache<double>& pc0 = EvalPositionKinematics(context0);
+  const VelocityKinematicsCache<double>& vc0 = EvalVelocityKinematics(context0);
+
+  // Compute forces applied through force elements. This effectively resets
+  // the forces to zero and adds in contributions due to force elements.
+  model_->CalcForceElementsContribution(context0, pc0, vc0, &forces);
+
+  // If there is any input actuation, add it to the multibody forces.
+  if (num_actuators() > 0) {
+    Eigen::VectorBlock<const VectorX<double>> u =
+        this->EvalEigenVectorInput(context0, actuation_port_);
+    for (JointActuatorIndex actuator_index(0);
+         actuator_index < num_actuators(); ++actuator_index) {
+      const JointActuator<double>& actuator =
+          model().get_joint_actuator(actuator_index);
+      // We only support actuators on single dof joints for now.
+      DRAKE_DEMAND(actuator.joint().num_dofs() == 1);
+      for (int joint_dof = 0;
+           joint_dof < actuator.joint().num_dofs(); ++joint_dof) {
+        actuator.AddInOneForce(context0, joint_dof, u[actuator_index], &forces);
+      }
+    }
+  }
+
+  // Velocity at next time step.
+  VectorX<double> vn(this->num_velocities());
+
+  std::vector<SpatialForce<double>>& F_BBo_W_array = forces.mutable_body_forces();
+
+  std::vector<PenetrationAsPointPair<double>> point_pairs0 =
+      CalcPointPairPenetrations(context0);
+  const int num_contacts = point_pairs0.size();
+  VectorX<double> fn(num_contacts);
+
+  // Compute contact forces on each body by penalty method. No friction, only normal forces.
+  if (num_collision_geometries() > 0) {
+    CalcAndAddContactForcesByPenaltyMethod(
+        context0, pc0, vc0, &F_BBo_W_array, false, point_pairs0, &fn);
+  }
+
+  // With vdot = 0, this computes (includes normal forces):
+  //   -tau = C(q, v)v - tau_app - ∑ J_WBᵀ(q) Fapp_Bo_W.
+  VectorX<double>& minus_tau = forces.mutable_generalized_forces();
+  model_->CalcInverseDynamics(
+      context0, pc0, vc0, vdot,
+      F_BBo_W_array, minus_tau,
+      &A_WB_array,
+      &F_BBo_W_array, /* Notice these arrays gets overwritten on output. */
+      &minus_tau);
+
+  //////////////////////////////////////////////////////////////////////////////
+  // WORK WITH CONTEXT_STAR
+  //////////////////////////////////////////////////////////////////////////////
+
+  // Compute discrete update without friction forces.
+  VectorX<double> v_star = vn = v0 + dt * M0_ldlt.solve(-minus_tau);
+  VectorX<double> qdot_star(this->num_positions());
+  model_->MapVelocityToQDot(context0, vn, &qdot_star);
+  VectorX<double> q_star = q0 + dt * qdot_star;
+
+  //////////////////////////////////////////////////////////////////////////////
+  // Compute Jacobians and Delassus operators.
+  //////////////////////////////////////////////////////////////////////////////
+
+  // Compute normal and tangential velocity Jacobians at tstar.
+  MatrixX<double> D(2*num_contacts, nv);  // of size (2nc) x nv
+  MatrixX<double> Minv_times_Dtrans(nv, 2*num_contacts);  // of size nv x (2nc).
+  MatrixX<double> Wtt(2*num_contacts, 2*num_contacts);  // of size (2nc) x (2*nc)
+  VectorX<double> vtstar(2*num_contacts);
+  //Eigen::LDLT<MatrixX<double>> W_ldlt;
+  if (num_contacts > 0) {
+    D = ComputeTangentVelocityJacobianMatrix(context0, point_pairs0);
+    vtstar = D * v_star;
+
+    // M0^{-1} * D^{T}
+    Minv_times_Dtrans = M0_ldlt.solve(D.transpose());
+    // Wtt = D * M0^{-1} * D^{T}:
+    Wtt = D * Minv_times_Dtrans;
+
+#if 0
+    PRINT_VARn(M0);
+    PRINT_VARn(Nstar);
+    PRINT_VARn(M0inv_times_Ntrans);
+    PRINT_VARn(Wnn);
+    PRINT_VARn(D);
+#endif
+    //W_ldlt = W.ldlt();
+  }
+
+  // Compute friction coefficients at each contact point.
+  VectorX<double> mu(num_contacts);
+  if (num_contacts > 0) {
+    for (int ic = 0; ic < num_contacts; ++ic) {
+      const auto& penetration = point_pairs0[ic];
+
+      const GeometryId geometryA_id = penetration.id_A;
+      const GeometryId geometryB_id = penetration.id_B;
+
+      const int collision_indexA =
+          geometry_id_to_collision_index_.at(geometryA_id);
+      const int collision_indexB =
+          geometry_id_to_collision_index_.at(geometryB_id);
+      const CoulombFriction<double> &geometryA_friction =
+          default_coulomb_friction_[collision_indexA];
+      const CoulombFriction<double> &geometryB_friction =
+          default_coulomb_friction_[collision_indexB];
+      const CoulombFriction<double> combined_friction_coefficients =
+          CalcContactFrictionFromSurfaceProperties(
+              geometryA_friction, geometryB_friction);
+      // Static friction is ignored, they are supposed to be equal.
+      mu[ic] = combined_friction_coefficients.dynamic_friction();
+    }
+  }
+
+  int iter(0);
+  double residual(0);
+  const int num_unknowns = 2 * num_contacts;
+
+  VectorX<double> ftk(num_unknowns);
+  VectorX<double> ftk0(num_unknowns);
+  if (num_contacts > 0) {
+
+    const int max_iterations = 50;
+    const double tolerance = 1.0e-6;
+    residual = 2 * tolerance;
+
+    // Approximate Delassus.
+    VectorX<double> Lambda(num_contacts);
+    VectorX<double> vtk(num_unknowns);
+    vtk = vtstar;  // Initial guess with zero friction forces.
+
+    // Exact inverse of Delassus (it's a 2x2 matrix anyways)
+    std::vector<Matrix2<double>> invWii(num_contacts);
+    for (int ic = 0; ic < num_contacts; ++ic) {
+      const int ik = 2 * ic;
+      const Matrix2<double> Wii = Wtt.block<2, 2>(ik, ik);
+      Eigen::SelfAdjointEigenSolver<Matrix2<double>> es(Wii);
+      const Vector2<double> lambdas = es.eigenvalues();
+      Lambda(ic) = (lambdas(0) + lambdas(1)) / 2.0;
+      invWii[ic] = Wii.inverse();  // Cheap for 2x2 matrices.
+
+      // Initial guess for the friction forces
+      const auto vt_ic = vtk.segment<2>(ik);
+      const Vector2<double> that_ic = vt_ic / (vt_ic.norm() + 1.0e-14);
+      auto ft_ic = ftk.segment<2>(ik);
+      ft_ic = -that_ic * mu[ic] * fn(ic);
+    }
+
+    Vector2<double> vtilde;
+    ftk0 = ftk;
+    for (iter = 0; iter < max_iterations; ++iter) {
+      for (int ic = 0; ic < num_contacts; ++ic) {
+        const int ik = 2 * ic;
+        const auto vt_ic = vtk.segment<2>(ik);
+
+        vtilde = vt_ic;
+        for (int jc = 0; jc < num_contacts; ++jc) {
+          const int jk = 2 * jc;
+          const auto Wij = Wtt.block<2, 2>(ik, jk);
+          const auto ft_jc = ftk.segment<2>(jk);
+          vtilde += time_step_ * Wij * ft_jc;
+        }
+
+        // Assume vt_ic = 0, then compute resulting force
+        auto ft_ic = ftk.segment<2>(ik);
+
+        ft_ic = ft_ic - invWii[ic] * vtilde / time_step_;
+
+        // Project into the friction circle, we know the radius.
+        double ft_norm = ft_ic.norm();
+        if (ft_norm > mu[ic] * fn(ic)) {
+          ft_ic *= mu[ic] * fn(ic) / ft_norm;
+        }
+      } //ic
+
+      residual = (ftk - ftk0).norm();
+      if (residual < tolerance) break;
+
+      ftk0 = ftk;
+    } //iter
+
+  } // num_contacts > 0
+
+  std::ofstream outfile;
+  outfile.open("nr_iteration.dat", std::ios_base::app);
+  outfile <<
+          fmt::format("{0:14.6e} {1:d} {2:d} {3:d} {4:14.6e}\n",
+                      context0.get_time(), istep, iter, num_contacts,residual);
+  outfile.close();
+
+  // Compute solution
+  vn = v_star;
+  if (num_contacts > 0) {
+    vn += time_step_ * Minv_times_Dtrans * ftk;
+  }
+
+  VectorX<double> qdotn(this->num_positions());
+  model_->MapVelocityToQDot(context0, vn, &qdotn);
+
+  // qn = q + dt*qdot.
+  VectorX<double> xn(this->num_multibody_states());
+  xn << q0 + dt * qdotn, vn;
+  updates->get_mutable_vector(0).SetFromVector(xn);
+}
+
+template<typename T>
+void MultibodyPlant<T>::DoCalcDiscreteVariableUpdatesPGS(
+    const drake::systems::Context<T>& context,
+    const std::vector<const drake::systems::DiscreteUpdateEvent<T>*>& events,
+    drake::systems::DiscreteValues<T>* updates) const {
+  DRAKE_ABORT_MSG("T != double not supported.");
+}
+
+template<typename T>
+void MultibodyPlant<T>::DoCalcDiscreteVariableUpdates(
+    const drake::systems::Context<T>& context0,
+    const std::vector<const drake::systems::DiscreteUpdateEvent<T>*>& events,
+    drake::systems::DiscreteValues<T>* updates) const {
+  DoCalcDiscreteVariableUpdatesPGS(context0, events, updates);
 }
 
 // This method is assuming that we are giving a compatible `context` with a
