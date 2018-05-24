@@ -77,6 +77,11 @@ int DoMain() {
   // Sanity check on the availability of the optional source id before using it.
   DRAKE_DEMAND(!!kuka_plant.get_source_id());
 
+  const MultibodyTree<double>& mbtree = kuka_plant.model();
+  for (multibody::BodyIndex i(0); i < mbtree.num_bodies(); i++) {
+    std::cerr << "body " << i << ": " << mbtree.get_body(i).name() << "\n";
+  }
+
   // Boilerplate used to connect the plant to a SceneGraph for
   // visualization.
   DrakeLcm lcm;
