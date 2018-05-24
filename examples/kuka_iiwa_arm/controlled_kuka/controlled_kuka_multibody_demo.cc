@@ -96,6 +96,9 @@ int DoMain() {
   builder.Connect(
       kuka_plant.get_geometry_poses_output_port(),
       scene_graph.get_source_pose_port(kuka_plant.get_source_id().value()));
+  builder.Connect(
+      scene_graph.get_query_output_port(),
+      kuka_plant.get_geometry_query_input_port());
   builder.Connect(scene_graph.get_pose_bundle_output_port(),
                   converter.get_input_port(0));
   builder.Connect(converter, publisher);
