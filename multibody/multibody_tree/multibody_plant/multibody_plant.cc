@@ -66,24 +66,6 @@ MultibodyPlant<T>::MultibodyPlant(double time_step) :
   collision_geometries_.emplace_back();
 }
 
-template<typename T>
-template<typename U>
-MultibodyPlant<T>::MultibodyPlant(const MultibodyPlant<U>& other) {
-  DRAKE_THROW_UNLESS(other.is_finalized());
-  model_ = other.model_->template CloneToScalar<T>();
-  // Copy of all members related with geometry registration.
-  source_id_ = other.source_id_;
-  body_index_to_frame_id_ = other.body_index_to_frame_id_;
-  geometry_id_to_body_index_ = other.geometry_id_to_body_index_;
-  geometry_id_to_visual_index_ = other.geometry_id_to_visual_index_;
-  visual_geometries_ = other.visual_geometries_;
-  collision_geometries_ = other.collision_geometries_;
-  // MultibodyTree::CloneToScalar() already called MultibodyTree::Finalize() on
-  // the new MultibodyTree on U. Therefore we only Finalize the plant's
-  // internals (and not the MultibodyTree).
-  FinalizePlantOnly();
-}
-
 template <typename T>
 geometry::SourceId MultibodyPlant<T>::RegisterAsSourceForSceneGraph(
     SceneGraph<T>* scene_graph) {
@@ -171,6 +153,7 @@ geometry::GeometryId MultibodyPlant<T>::RegisterCollisionGeometry(
 template <typename T>
 const std::vector<geometry::GeometryId>&
 MultibodyPlant<T>::GetCollisionGeometriesForBody(const Body<T>& body) const {
+  DRAKE_ASSERT(body.index() < num_bodies());
   return collision_geometries_[body.index()];
 }
 
