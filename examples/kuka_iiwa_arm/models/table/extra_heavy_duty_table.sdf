@@ -4,7 +4,8 @@
     <link name='link'>
       <pose frame=''>0 0 0 0 -0 0</pose>
       <inertial>
-        <mass>53.5</mass>
+        <!-- <mass>53.5</mass> -->
+        <mass>0.00004</mass>
         <pose frame=''>0 0 0 0 -0 0</pose>
         <!--
         The spatial inertia values given below were derived based on the

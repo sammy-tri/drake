@@ -1,5 +1,7 @@
 #include "drake/multibody/multibody_tree/parsing/multibody_plant_sdf_parser.h"
 
+#include <iostream>
+
 #include <memory>
 
 #include <sdf/sdf.hh>
@@ -279,13 +281,6 @@ void AddModelFromSdfFile(
     throw std::runtime_error(error_accumulation);
   }
 
-  if (root.ModelCount() != 1) {
-    throw std::runtime_error("File must have a single <model> element.");
-  }
-
-  // Get the only model in the file.
-  const sdf::Model& model = *root.ModelByIndex(0);
-
   if (scene_graph != nullptr && !plant->geometry_source_is_registered()) {
     plant->RegisterAsSourceForSceneGraph(scene_graph);
   }
@@ -302,37 +297,45 @@ void AddModelFromSdfFile(
   parsers::PackageMap package_map;
   package_map.PopulateUpstreamToDrake(full_path);
 
-  // Add all the links
-  for (uint64_t link_index = 0; link_index < model.LinkCount(); ++link_index) {
-    const sdf::Link& link = *model.LinkByIndex(link_index);
+  const int model_count = static_cast<int>(root.ModelCount());
+  for (int model_idx = 0; model_idx < model_count; ++model_idx) {
+    const sdf::Model& model = *root.ModelByIndex(model_idx);
 
-    // Get the link's inertia relative to the Bcm frame.
-    // sdf::Link::Inertial() provides a representation for the SpatialInertia
-    // M_Bcm_Bi of body B, about its center of mass Bcm, and expressed in an
-    // inertial frame Bi as defined in <inertial> <pose></pose> </inertial>.
-    // Per SDF specification, Bi's origin is at the COM Bcm, but Bi is not
-    // necessarily aligned with B.
-    const ignition::math::Inertiald& Inertial_Bcm_Bi = link.Inertial();
+    std::cerr << "adding model: " << model.Name() << "\n";
 
-    const SpatialInertia<double> M_BBo_B =
-        ExtractSpatialInertiaAboutBoExpressedInB(Inertial_Bcm_Bi);
+    // Add all the links
+    for (uint64_t link_index = 0; link_index < model.LinkCount(); ++link_index) {
+      const sdf::Link& link = *model.LinkByIndex(link_index);
+      std::cerr << "adding link: " << link.Name() << "\n";
 
-    // Add a rigid body to model each link.
-    const RigidBody<double>& body = plant->AddRigidBody(link.Name(), M_BBo_B);
+      // Get the link's inertia relative to the Bcm frame.
+      // sdf::Link::Inertial() provides a representation for the SpatialInertia
+      // M_Bcm_Bi of body B, about its center of mass Bcm, and expressed in an
+      // inertial frame Bi as defined in <inertial> <pose></pose> </inertial>.
+      // Per SDF specification, Bi's origin is at the COM Bcm, but Bi is not
+      // necessarily aligned with B.
+      const ignition::math::Inertiald& Inertial_Bcm_Bi = link.Inertial();
 
-    if (scene_graph != nullptr) {
-      for (uint64_t visual_index = 0; visual_index < link.VisualCount();
-           ++visual_index) {
-        const sdf::Visual sdf_visual = detail::ResolveVisualUri(
-            *link.VisualByIndex(visual_index), package_map, root_dir);
-        unique_ptr<GeometryInstance> geometry_instance =
-            detail::MakeGeometryInstanceFromSdfVisual(sdf_visual);
-        // We check for nullptr in case someone decided to specify an SDF
-        // <empty/> geometry.
-        if (geometry_instance) {
-          plant->RegisterVisualGeometry(
-              body, geometry_instance->pose(), geometry_instance->shape(),
-              scene_graph);
+      const SpatialInertia<double> M_BBo_B =
+          ExtractSpatialInertiaAboutBoExpressedInB(Inertial_Bcm_Bi);
+
+      // Add a rigid body to model each link.
+      const RigidBody<double>& body = plant->AddRigidBody(link.Name(), M_BBo_B);
+
+      if (scene_graph != nullptr) {
+        for (uint64_t visual_index = 0; visual_index < link.VisualCount();
+             ++visual_index) {
+          const sdf::Visual sdf_visual = detail::ResolveVisualUri(
+              *link.VisualByIndex(visual_index), package_map, root_dir);
+          unique_ptr<GeometryInstance> geometry_instance =
+              detail::MakeGeometryInstanceFromSdfVisual(sdf_visual);
+          // We check for nullptr in case someone decided to specify an SDF
+          // <empty/> geometry.
+          if (geometry_instance) {
+            plant->RegisterVisualGeometry(
+                body, geometry_instance->pose(), geometry_instance->shape(),
+                scene_graph);
+          }
         }
       }
 
@@ -353,14 +356,15 @@ void AddModelFromSdfFile(
         }
       }
     }
-  }
 
-  // Add all the joints
-  for (uint64_t joint_index = 0; joint_index < model.JointCount();
-       ++joint_index) {
-    // Get a pointer to the SDF joint, and the joint axis information.
-    const sdf::Joint& joint = *model.JointByIndex(joint_index);
-    AddJointFromSpecification(model, joint, plant);
+    // Add all the joints
+    for (uint64_t joint_index = 0; joint_index < model.JointCount();
+         ++joint_index) {
+      // Get a pointer to the SDF joint, and the joint axis information.
+      const sdf::Joint& joint = *model.JointByIndex(joint_index);
+      std::cerr << "adding joint: " << joint.Name() << "\n";
+      AddJointFromSpecification(model, joint, plant);
+    }
   }
 }
 
