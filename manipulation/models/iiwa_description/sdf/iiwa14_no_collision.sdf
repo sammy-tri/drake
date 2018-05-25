@@ -26,7 +26,7 @@ weld_base_to_world joint, and remove damping from the joints.
         <geometry>
           <mesh>
             <scale>1 1 1</scale>
-            <uri>../meshes/visual/link_0.obj</uri>
+            <uri>package://iiwa_description/meshes/visual/link_0.obj</uri>
           </mesh>
         </geometry>
         <material>
@@ -41,12 +41,10 @@ weld_base_to_world joint, and remove damping from the joints.
       <self_collide>0</self_collide>
     </link>
 
-    <!--
     <joint name='weld_base_to_world' type='fixed' drake_ignore='true'>
       <child>iiwa_link_0</child>
       <parent>world</parent>
     </joint>
--->
 
     <link name='iiwa_link_1'>
       <pose frame=''>0 0 0.1575 0 -0 0</pose>
@@ -67,7 +65,7 @@ weld_base_to_world joint, and remove damping from the joints.
         <geometry>
           <mesh>
             <scale>1 1 1</scale>
-            <uri>../meshes/visual/link_1.obj</uri>
+            <uri>package://iiwa_description/meshes/visual/link_1.obj</uri>
           </mesh>
         </geometry>
         <material>
@@ -120,7 +118,7 @@ weld_base_to_world joint, and remove damping from the joints.
         <geometry>
           <mesh>
             <scale>1 1 1</scale>
-            <uri>../meshes/visual/link_2.obj</uri>
+            <uri>package://iiwa_description/meshes/visual/link_2.obj</uri>
           </mesh>
         </geometry>
         <material>
@@ -173,7 +171,7 @@ weld_base_to_world joint, and remove damping from the joints.
         <geometry>
           <mesh>
             <scale>1 1 1</scale>
-            <uri>../meshes/visual/link_3.obj</uri>
+            <uri>package://iiwa_description/meshes/visual/link_3.obj</uri>
           </mesh>
         </geometry>
         <material>
@@ -226,7 +224,7 @@ weld_base_to_world joint, and remove damping from the joints.
         <geometry>
           <mesh>
             <scale>1 1 1</scale>
-            <uri>../meshes/visual/link_4.obj</uri>
+            <uri>package://iiwa_description/meshes/visual/link_4.obj</uri>
           </mesh>
         </geometry>
         <material>
@@ -279,7 +277,7 @@ weld_base_to_world joint, and remove damping from the joints.
         <geometry>
           <mesh>
             <scale>1 1 1</scale>
-            <uri>../meshes/visual/link_5.obj</uri>
+            <uri>package://iiwa_description/meshes/visual/link_5.obj</uri>
           </mesh>
         </geometry>
         <material>
@@ -332,7 +330,7 @@ weld_base_to_world joint, and remove damping from the joints.
         <geometry>
           <mesh>
             <scale>1 1 1</scale>
-            <uri>../meshes/visual/link_6.obj</uri>
+            <uri>package://iiwa_description/meshes/visual/link_6.obj</uri>
           </mesh>
         </geometry>
         <material>
@@ -385,7 +383,7 @@ weld_base_to_world joint, and remove damping from the joints.
         <geometry>
           <mesh>
             <scale>1 1 1</scale>
-            <uri>../meshes/visual/link_7.obj</uri>
+            <uri>package://iiwa_description/meshes/visual/link_7.obj</uri>
           </mesh>
         </geometry>
         <material>

@@ -262,6 +262,7 @@ void AddJointFromSpecification(
 
 void AddModelFromSdfFile(
     const std::string& file_name,
+    parsers::PackageMap* package_map,
     multibody_plant::MultibodyPlant<double>* plant,
     geometry::SceneGraph<double>* scene_graph) {
   DRAKE_THROW_UNLESS(plant != nullptr);
@@ -293,9 +294,7 @@ void AddModelFromSdfFile(
     root_dir = full_path.substr(0, found);
   }
 
-  // TODO(sam.creasey) Add support for using an existing package map.
-  parsers::PackageMap package_map;
-  package_map.PopulateUpstreamToDrake(full_path);
+  package_map->PopulateUpstreamToDrake(full_path);
 
   const int model_count = static_cast<int>(root.ModelCount());
   for (int model_idx = 0; model_idx < model_count; ++model_idx) {
@@ -326,7 +325,7 @@ void AddModelFromSdfFile(
         for (uint64_t visual_index = 0; visual_index < link.VisualCount();
              ++visual_index) {
           const sdf::Visual sdf_visual = detail::ResolveVisualUri(
-              *link.VisualByIndex(visual_index), package_map, root_dir);
+              *link.VisualByIndex(visual_index), *package_map, root_dir);
           unique_ptr<GeometryInstance> geometry_instance =
               detail::MakeGeometryInstanceFromSdfVisual(sdf_visual);
           // We check for nullptr in case someone decided to specify an SDF
@@ -367,6 +366,15 @@ void AddModelFromSdfFile(
     }
   }
 }
+
+void AddModelFromSdfFile(
+    const std::string& file_name,
+    multibody_plant::MultibodyPlant<double>* plant,
+    geometry::SceneGraph<double>* scene_graph) {
+  parsers::PackageMap package_map;
+  AddModelFromSdfFile(file_name, &package_map, plant, scene_graph);
+}
+
 
 }  // namespace parsing
 }  // namespace multibody

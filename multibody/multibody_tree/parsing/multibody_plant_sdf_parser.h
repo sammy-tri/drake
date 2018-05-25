@@ -4,6 +4,7 @@
 
 #include "drake/geometry/scene_graph.h"
 #include "drake/multibody/multibody_tree/multibody_plant/multibody_plant.h"
+#include "drake/multibody/parsers/package_map.h"
 
 namespace drake {
 namespace multibody {
@@ -24,12 +25,22 @@ namespace parsing {
 ///
 /// @param file_name
 ///   The name of the SDF file to be parsed.
+/// @param package_map
+///   A package map containing search directories for geometry.  Any new packages
+///   found while parsing will be added.
 /// @param plant
 ///   A pointer to a mutable MultibodyPlant object to which the model will be
 ///   added.
 /// @param scene_graph
 ///   A pointer to a mutable SceneGraph object used for geometry registration
 ///   (either to model visual or contact geometry).
+void AddModelFromSdfFile(
+    const std::string& file_name,
+    parsers::PackageMap* package_map,
+    multibody_plant::MultibodyPlant<double>* plant,
+    geometry::SceneGraph<double>* scene_graph = nullptr);
+
+/// Variant of AddModelFromSdfFile using a default package map.
 void AddModelFromSdfFile(
     const std::string& file_name,
     multibody_plant::MultibodyPlant<double>* plant,
