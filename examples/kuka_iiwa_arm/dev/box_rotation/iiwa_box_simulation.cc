@@ -72,7 +72,7 @@ using systems::RigidBodyPlant;
 using systems::Simulator;
 using manipulation::util::FramePoseTracker;
 using systems::sensors::OptitrackEncoder;
-using systems::sensors::OptitrackLCMFrameSender;
+using systems::sensors::OptitrackLcmFrameSender;
 
 const char *const kIiwaUrdf = "drake/examples/kuka_iiwa_arm/dev/box_rotation/"
     "models/dual_iiwa14_primitive_sphere_visual_collision.urdf";
@@ -202,7 +202,7 @@ int DoMain() {
 
   // Create the Optitrack sender and publisher. The sender is configured to
   // send three objects: left arm base, right arm base, and box.
-  auto optitrack_sender = builder.AddSystem<OptitrackLCMFrameSender>(3);
+  auto optitrack_sender = builder.AddSystem<OptitrackLcmFrameSender>(3);
   optitrack_sender->set_name("optitrack frame sender");
   auto optitrack_pub = builder.AddSystem(
       systems::lcm::LcmPublisherSystem::Make<optitrack::optitrack_frame_t>(

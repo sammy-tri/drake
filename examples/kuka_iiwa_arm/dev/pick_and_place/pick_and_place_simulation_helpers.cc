@@ -16,7 +16,7 @@ using manipulation::util::FramePoseTracker;
 using manipulation::util::ModelInstanceInfo;
 using manipulation::util::WorldSimTreeBuilder;
 using systems::sensors::OptitrackEncoder;
-using systems::sensors::OptitrackLCMFrameSender;
+using systems::sensors::OptitrackLcmFrameSender;
 
 namespace {
 
@@ -194,7 +194,7 @@ const systems::OutputPort<double>& AddOptitrackComponents(
 
   // Create the Optitrack sender.
   auto optitrack_sender =
-      builder->AddSystem<OptitrackLCMFrameSender>(frame_name_to_id_map.size());
+      builder->AddSystem<OptitrackLcmFrameSender>(frame_name_to_id_map.size());
 
   // Connect the systems related to tracking bodies.
   builder->Connect(kinematics_port,

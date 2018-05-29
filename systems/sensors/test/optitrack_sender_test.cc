@@ -14,12 +14,12 @@ using systems::sensors::TrackedBody;
 using optitrack::optitrack_frame_t;
 
 // This test sets up a systems::sensors::TrackedBody structure to be passed
-// through by the OptitrackLCMFrameSender test object. The output should be
+// through by the OptitrackLcmFrameSender test object. The output should be
 // an abstract value object templated on type `optitrack_frame_t`. This test
-// ensures that the TrackedBody input to the OptitrackLCMFrameSender system
+// ensures that the TrackedBody input to the OptitrackLcmFrameSender system
 // matches the output `optitrack_frame_t` object.
-GTEST_TEST(OptitrackSenderTest, OptitrackLCMSenderTest) {
-  OptitrackLCMFrameSender dut(1);  // Create a frame sender with 1 rigid body.
+GTEST_TEST(OptitrackSenderTest, OptitrackLcmSenderTest) {
+  OptitrackLcmFrameSender dut(1);  // Create a frame sender with 1 rigid body.
   std::vector<TrackedBody> tracked_body(1);
 
   constexpr double tx = 0.2;  // x-translation for the test object

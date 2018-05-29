@@ -320,6 +320,7 @@ drake_cc_library(
     hdrs = ["optitrack_sender.h"],
     deps = [
         ":optitrack_encoder",
+        "//geometry:frame_kinematics",
         "//systems/framework:leaf_system",
         "@optitrack_driver//lcmtypes:optitrack_lcmtypes",
     ],
