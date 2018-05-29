@@ -1049,49 +1049,6 @@ class MultibodyPlant : public systems::LeafSystem<T> {
       const std::vector<geometry::PenetrationAsPointPair<double>>& penetrations,
       VectorX<double>* fn) const;
 
-  MatrixX<T> ComputeNormalVelocityJacobianMatrix(
-      const systems::Context<T>& context,
-      std::vector<geometry::PenetrationAsPointPair<T>>& penetrations) const;
-
-  MatrixX<T> ComputeTangentVelocityJacobianMatrix(
-      const systems::Context<T>& context,
-      std::vector<geometry::PenetrationAsPointPair<T>>& penetrations) const;
-
-  template<typename U>
-  VectorX<U> CalcFischerBurmeisterSolverResidual(
-      // state at t0
-      const VectorX<double>& v0,
-      const MatrixX<double>& M0,
-      // External forces (consider making them on <T>)
-      const VectorX<double>& tau0,
-      // Normal velocity Jacobian
-      const MatrixX<double>& N,
-      // Variables
-      const VectorX<U>& v, const VectorX<U>& cn) const;
-
-  VectorX<T> CalcFischerBurmeisterSolverResidualOnConstraintsOnly(
-      int istep,
-      const VectorX<T>& vnstar,
-      const VectorX<T>& vfstar,
-      const MatrixX<T>& Wnn,
-      const MatrixX<T>& Wnt,
-      const MatrixX<T>& Wtt,
-      const VectorX<T>& mu,
-      const VectorX<T>& cn, const VectorX<T>& beta, const VectorX<T>& lambda,
-      bool with_friction,
-      MatrixX<T>* J_ptr) const;
-
-  MatrixX<double> CalcFischerBurmeisterSolverJacobian(
-      // state at t0
-      const VectorX<double>& v0,
-      const MatrixX<double>& M0,
-      // External forces (consider making them on <T>)
-      const VectorX<double> tau0,
-      // Normal velocity Jacobian
-      const MatrixX<double> N,
-      const VectorX<double>& v, const VectorX<double>& cn,
-      VectorX<double>* R, MatrixX<double>* J) const;
-
   template<typename U>
   static U FischerBurmeisterFunction(const U& x, const U& y) {
     using std::sqrt;

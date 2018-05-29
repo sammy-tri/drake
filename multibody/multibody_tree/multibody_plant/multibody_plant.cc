@@ -430,394 +430,6 @@ MatrixX<T> MultibodyPlant<T>::CalcTangentVelocitiesJacobian(
   return D;
 }
 
-template<typename T>
-VectorX<T> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidualOnConstraintsOnly(
-    int istep,
-    const VectorX<T>& vnstar,
-    const VectorX<T>& vfstar,
-    const MatrixX<T>& Wnn,
-    const MatrixX<T>& Wnt,
-    const MatrixX<T>& Wtt,
-    const VectorX<T>& mu,
-    const VectorX<T>& cn, const VectorX<T>& beta, const VectorX<T>& lambda,
-    bool with_friction,
-    MatrixX<T>* J_ptr) const {
-  const int num_contacts = cn.size();
-  const int num_betas = 2 * num_contacts;
-  const int num_lambdas = num_contacts;
-  const int num_unknowns = num_contacts + num_betas + num_lambdas;
-
-  using std::sqrt;
-
-  // Abbreviations
-  const int nc = num_contacts;
-  //const int nb = num_betas;
-
-  DRAKE_DEMAND(vnstar.size() == num_contacts);
-  DRAKE_DEMAND(Wnn.rows() == num_contacts && Wnn.cols() == num_contacts);
-  DRAKE_DEMAND(Wnt.rows() == num_contacts && Wnt.cols() == num_betas);
-  DRAKE_DEMAND(beta.size() == num_betas);
-  DRAKE_DEMAND(vfstar.size() == num_betas);
-  DRAKE_DEMAND(Wtt.rows() == num_betas && Wtt.cols() == num_betas);
-  DRAKE_DEMAND(mu.size() == num_contacts);
-  DRAKE_DEMAND(lambda.size() == num_lambdas);
-
-  DRAKE_DEMAND(J_ptr->rows() == num_unknowns);
-  DRAKE_DEMAND(J_ptr->cols() == num_unknowns);
-
-  MatrixX<T>& J = *J_ptr;
-
-  VectorX<T> R(num_unknowns);
-  R.setZero();
-
-  J.setZero();
-
-  // Scaling factor
-  //const T Wnorm = sqrt(Wnn.squaredNorm() + Wnt.squaredNorm() + Wtt.squaredNorm());
-
-  const T Wnorm = Wnn.diagonal().maxCoeff() + Wtt.diagonal().maxCoeff();
-
-  //const T dt = time_step_;
-  const double epsilon = 2e-5;  // WARNING: Now with units of momentum!!
-
-  if (istep == 64){
-    PRINT_VAR(Wnorm);
-  }
-
-  if (num_contacts >0 ) {
-    const int betas_start = num_contacts;
-    const int lambdas_start = betas_start + num_betas;
-
-#if 0
-    // Add Fischer-Burmeister terms to residual R.
-    VectorX<T> vn_plus = vnstar + Wnn * cn + Wnt * beta;
-    R.segment(0, num_contacts) = FischerBurmeisterFunction(vn_plus, cn);
-
-    // common term, find a better name.
-    VectorX<T> grad_x = FischerBurmeisterGradX(vn_plus, cn);
-
-    // dR_cn(1:nc)/dcn
-    J_ptr->block(0, 0, num_contacts, num_contacts) =
-        grad_x.asDiagonal() * Wnn +
-        FischerBurmeisterGradY(vn_plus, cn).asDiagonal();
-
-    // dR_cn(1:nc)/dbeta
-    J_ptr->block(0, num_contacts, num_contacts, num_betas) =
-        grad_x.asDiagonal() * Wnt;
-#endif
-
-    auto Wtn = Wnt.transpose();
-
-    VectorX<T> vn = vnstar + Wnn * cn;  // of size nc
-    VectorX<T> vf = vfstar + Wtn * cn;  // of size 2 * nc
-
-    if (with_friction) {
-      vn += Wnt * beta;  // of size nc
-      vf += Wtt * beta;  // of size 2 * nc
-    }
-
-    for (int ic = 0; ic < num_contacts; ++ic) {
-      const int ibeta0 = 2 * ic + 0;
-      const int ibeta1 = ibeta0 + 1;
-      const int ik_cn = ic;
-      const int ik_beta0 = num_contacts + ibeta0;
-      const int ik_beta1 = num_contacts + ibeta1;
-      const int ik_lambda = lambdas_start + ic;
-
-      // Multipliers for the i-th contact.
-      const T cn_i = cn(ic);
-      const T beta0_i = beta(ibeta0);
-      const T beta1_i = beta(ibeta1);
-      const T lambda_i = lambda(ic);
-      const T mu_i = mu(ic);
-      const T vn_i = vn(ic);
-      const T vf0_i = vf(ibeta0);
-      const T vf1_i = vf(ibeta1);
-
-      /////////////////////////////////////////////////////////////////////
-      // R_cn
-      /////////////////////////////////////////////////////////////////////
-      R(ik_cn) = FischerBurmeisterFunction(vn_i / Wnorm, cn_i);
-      const T dgcn_dx = FischerBurmeisterGradX(vn_i / Wnorm, cn_i);
-      const T dgcn_dy = FischerBurmeisterGradY(vn_i / Wnorm, cn_i);
-
-      // dR_cn/dcn
-      for (int jc = 0; jc < nc; ++jc) {
-        int jk_cn = jc;
-        J(ik_cn, jk_cn) = dgcn_dx * Wnn(ic, jc) / Wnorm;
-        if (ic == jc) {
-          J(ik_cn, jk_cn) += dgcn_dy;
-        }
-      }
-
-      // dR_cn/dbeta
-      if (with_friction) {
-        for (int jc = 0; jc < nc; ++jc) {
-          const int jbeta0 = 2 * jc + 0;
-          const int jbeta1 = jbeta0 + 1;
-          const int jk_beta0 = nc + jbeta0;
-          const int jk_beta1 = nc + jbeta1;
-
-          J(ik_cn, jk_beta0) = dgcn_dx * Wnt(ic, jbeta0) / Wnorm;
-          J(ik_cn, jk_beta1) = dgcn_dx * Wnt(ic, jbeta1) / Wnorm;
-        }
-      }
-
-      // dR_cn/dlambda = 0. Thus we add nothing.
-
-
-      // If there is no friction skip the rest.
-      if (!with_friction) continue;
-
-      /////////////////////////////////////////////////////////////////////
-      // R_beta
-      /////////////////////////////////////////////////////////////////////
-      // R_beta
-      R(ik_beta0) = mu_i * cn_i * vf0_i + lambda_i * beta0_i * Wnorm;
-      R(ik_beta1) = mu_i * cn_i * vf1_i + lambda_i * beta1_i * Wnorm;
-
-      // dR_beta/dcn
-      for (int jc = 0; jc < num_contacts; ++jc) {
-        const int jk_cn = jc;
-        if (jc == ic) {
-          J(ik_beta0, jk_cn) = mu_i * vf0_i;
-          J(ik_beta1, jk_cn) = mu_i * vf1_i;
-        }
-        J(ik_beta0, jk_cn) += mu_i * cn_i * Wtn(ibeta0, jc);
-        J(ik_beta1, jk_cn) += mu_i * cn_i * Wtn(ibeta1, jc);
-      }
-
-      // dR_beta/dbeta
-      for (int jc = 0; jc < nc; ++jc) {
-        const int jbeta0 = 2 * jc + 0;
-        const int jbeta1 = jbeta0 + 1;
-        const int jk_beta0 = nc + jbeta0;
-        const int jk_beta1 = nc + jbeta1;
-        if (ic == jc) {
-          J(ik_beta0, jk_beta0) = lambda_i * Wnorm;
-          J(ik_beta1, jk_beta1) = lambda_i * Wnorm;
-        }
-        J(ik_beta0, jk_beta0) += mu_i * cn_i * Wtt(ibeta0, jbeta0);
-        J(ik_beta0, jk_beta1) += mu_i * cn_i * Wtt(ibeta0, jbeta1);
-
-        J(ik_beta1, jk_beta0) += mu_i * cn_i * Wtt(ibeta1, jbeta0);
-        J(ik_beta1, jk_beta1) += mu_i * cn_i * Wtt(ibeta1, jbeta1);
-      }
-
-      // dR_beta/lambda
-      J(ik_beta0, ik_lambda) = beta0_i * Wnorm;
-      J(ik_beta1, ik_lambda) = beta1_i * Wnorm;
-
-      /////////////////////////////////////////////////////////////////////
-      // R_lambda
-      /////////////////////////////////////////////////////////////////////
-      const T mu_cn = mu_i * cn_i;
-      const T beta_mod = sqrt(beta0_i * beta0_i + beta1_i * beta1_i);
-      const T beta_mod_reg = beta_mod + 1.0e-14;
-      const T gamma = mu_cn - beta_mod;
-      R(ik_lambda) = FischerBurmeisterFunction(gamma, lambda_i) + epsilon;
-
-      const T dglambda_dx = FischerBurmeisterGradX(gamma, lambda_i);
-      const T dglambda_dy = FischerBurmeisterGradY(gamma, lambda_i);
-
-      // dR_lambda/dcn
-      J(ik_lambda, ik_cn) = mu_i * dglambda_dx;
-
-      // dR_lambda/dbeta
-      J(ik_lambda, ik_beta0) = - beta0_i / beta_mod_reg * dglambda_dx;
-      J(ik_lambda, ik_beta1) = - beta1_i / beta_mod_reg * dglambda_dx;
-
-      // dR_lambda/dlambda
-      J(ik_lambda, ik_lambda) = dglambda_dy;
-    } // ic
-  } // if (num_contacts >0 )
-  return R;
-}
-
-template<>
-template<typename U>
-VectorX<U> MultibodyPlant<double>::CalcFischerBurmeisterSolverResidual(
-    // state at t0
-    const VectorX<double>& v0,
-    const MatrixX<double>& M0,
-    // External forces (consider making them on <T>)
-    const VectorX<double>& tau0,
-    // Normal velocity Jacobian (at either tstar or t0)
-    const MatrixX<double>& N,
-    // Variables
-    const VectorX<U>& v, const VectorX<U>& cn) const {
-  using std::sqrt;
-
-  const double dt = time_step_;  // shorter alias.
-
-  const int nv = v.size();
-  const int num_contacts = cn.size();
-  const int num_unknowns = nv + num_contacts;
-
-  VectorX<U> R(num_unknowns);
-
-  MatrixX<U> M0_on_U = M0.template cast<U>();
-  VectorX<U> v0_on_U = v0.template cast<U>();
-  VectorX<U> tau0_on_U = tau0.template cast<U>();
-
-  R.segment(0, nv) = M0_on_U * (v - v0_on_U) / dt + tau0_on_U;
-
-#if 0
-  if (std::is_same<U, AutoDiffXd>::value) {
-    PRINT_VAR("CalcFischerBurmeisterSolverResidual: AutoDiffXd");
-    PRINT_VAR(v(0).derivatives().transpose());
-    PRINT_VAR(v(1).derivatives().transpose());
-    PRINT_VAR(v(2).derivatives().transpose());
-    PRINT_VAR(v(3).derivatives().transpose());
-    PRINT_VAR(v(4).derivatives().transpose());
-    PRINT_VAR(v(5).derivatives().transpose());
-
-    PRINT_VAR(M0_on_U(0, 0).value());
-    PRINT_VAR(M0_on_U(1, 1).value());
-    PRINT_VAR(M0_on_U(2, 2).value());
-  }
-#endif
-
-  // nv + num_contacts + num_betas + num_lambdas)
-
-  if (num_contacts >0 ) {
-#if 0
-    const int num_betas = 4 * num_contacts;
-    const int num_lambda = 2 * num_contacts;
-    const int betas_start = nv + num_contacts;
-    const int lambdas_start = betas_start + num_betas;
-#endif
-
-    MatrixX<U> N_on_U = N.template cast<U>();
-    R.segment(0, nv) -= N_on_U.transpose() * cn;
-
-    // Add Fischer-Burmeister terms to residual R.
-    for (int icontact = 0; icontact < num_contacts; ++icontact) {
-      int inormal_impulse = nv + icontact;
-
-      // Normal velocitty complementary to normal force
-      const U vn = N_on_U.row(icontact) * v;
-      R(inormal_impulse) = FischerBurmeisterFunction(vn, cn(icontact));
-
-#if 0
-      // Friction direction
-      const int ibeta1_plus  = betas_start + 4 * icontact;
-      const int ibeta1_minus = betas_start + 4 * icontact + 1;
-      const int ibeta2_plus  = betas_start + 4 * icontact + 2;
-      const int ibeta2_minus = betas_start + 4 * icontact + 3;
-      const U vf1 = T_on_U.row(2 * icontact + 0) * v;
-      const U vf2 = T_on_U.row(2 * icontact + 1) * v;
-      const U lambda1 = lambda(2 * icontact + 0);
-      const U lambda2 = lambda(2 * icontact + 1);
-      const U beta1_plus  = beta(4 * icontact + 0);
-      const U beta1_minus = beta(4 * icontact + 1);
-      const U beta2_plus  = beta(4 * icontact + 2);
-      const U beta2_minus = beta(4 * icontact + 3);
-      R(ibeta1_plus)  = FischerBurmeisterFunction(lambda1 + vf1, beta1_plus);
-      R(ibeta1_minus) = FischerBurmeisterFunction(lambda1 - vf1, beta1_minus);
-      R(ibeta2_plus)  = FischerBurmeisterFunction(lambda2 + vf2, beta2_plus);
-      R(ibeta2_minus) = FischerBurmeisterFunction(lambda2 - vf2, beta2_minus);
-
-      // Sliding vs rolling.
-      const int ilambda1 = lambdas_start + 2 * icontact + 0;
-      const int ilambda2 = lambdas_start + 2 * icontact + 1;
-      const U ff_norm = sqrt(
-          (beta1_plus + beta1_minus) * (beta1_plus + beta1_minus) +
-          (beta2_plus + beta2_minus) * (beta2_plus + beta2_minus));
-      const U mu = contact_friction(icontact);
-      const U gamma = mu * cn(icontact) - ff_norm;
-      R(ilambda1) = FischerBurmeisterFunction(gamma, lambda1);
-      R(ilambda2) = FischerBurmeisterFunction(gamma, lambda2);
-#endif
-    }
-  }
-
-  return R;
-}
-
-template<typename T>
-template<typename U>
-VectorX<U> MultibodyPlant<T>::CalcFischerBurmeisterSolverResidual(
-    // state at t0
-    const VectorX<double>& v0,
-    const MatrixX<double>& M0,
-    // External forces (consider making them on <T>)
-    const VectorX<double>& tau0,
-    // Normal velocity Jacobian (at either tstar or t0)
-    const MatrixX<double>& N,
-    // Variables
-    const VectorX<U>& v, const VectorX<U>& cn) const {
-  DRAKE_ABORT_MSG("T != double not supported");
-}
-
-template<>
-MatrixX<double> MultibodyPlant<double>::CalcFischerBurmeisterSolverJacobian(
-    // state at t0
-    const VectorX<double>& v0,
-    const MatrixX<double>& M0,
-    // External forces (consider making them on <T>)
-    const VectorX<double> tau0,
-    // Normal velocity Jacobian (at either tstar or t0)
-    const MatrixX<double> N,
-    const VectorX<double>& v, const VectorX<double>& cn,
-    VectorX<double>* R, MatrixX<double>* J) const {
-  const int nv = v.size();
-  const int num_contacts = cn.size();
-  const int num_unknowns = nv + num_contacts;
-
-  VectorX<AutoDiffXd> v_autodiff(nv);
-  math::initializeAutoDiff(v, v_autodiff, num_unknowns, 0);
-
-#if 0
-  PRINT_VAR(v_autodiff(0).derivatives().transpose());
-  PRINT_VAR(v_autodiff(1).derivatives().transpose());
-  PRINT_VAR(v_autodiff(2).derivatives().transpose());
-  PRINT_VAR(v_autodiff(3).derivatives().transpose());
-  PRINT_VAR(v_autodiff(4).derivatives().transpose());
-  PRINT_VAR(v_autodiff(5).derivatives().transpose());
-#endif
-
-  VectorX<AutoDiffXd> cn_autodiff(num_contacts);
-  math::initializeAutoDiff(cn, cn_autodiff, num_unknowns, nv);
-
-#if 0
-  PRINT_VAR(num_contacts);
-  PRINT_VAR(num_unknowns);
-  PRINT_VAR(cn_autodiff.size());
-#endif
-
-  VectorX<AutoDiffXd> R_autodiff(num_unknowns);
-
-  R_autodiff = CalcFischerBurmeisterSolverResidual(
-      v0, M0, tau0, N, v_autodiff, cn_autodiff);
-
-  *R = math::autoDiffToValueMatrix(R_autodiff);
-  *J = math::autoDiffToGradientMatrix(R_autodiff);
-
-#if 0
-  PRINT_VAR(R_autodiff(0).value());
-  PRINT_VAR(R_autodiff(1).value());
-  PRINT_VAR(R_autodiff(2).value());
-  PRINT_VAR(R_autodiff(3).value());
-  PRINT_VAR(R_autodiff(4).value());
-  PRINT_VAR(R_autodiff(5).value());
-
-  PRINT_VAR(R_autodiff(0).derivatives().transpose());
-  PRINT_VAR(R_autodiff(1).derivatives().transpose());
-  PRINT_VAR(R_autodiff(2).derivatives().transpose());
-  PRINT_VAR(R_autodiff(3).derivatives().transpose());
-  PRINT_VAR(R_autodiff(4).derivatives().transpose());
-  PRINT_VAR(R_autodiff(5).derivatives().transpose());
-
-  PRINT_VARn(*J);
-#endif
-
-  DRAKE_DEMAND(J->rows() == num_unknowns);
-  DRAKE_DEMAND(J->cols() == num_unknowns);
-
-  return *J;
-}
-
 template <>
 std::vector<PenetrationAsPointPair<double>>
 MultibodyPlant<double>::CalcPointPairPenetrations(
@@ -994,20 +606,6 @@ void MultibodyPlant<T>::CalcAndAddContactForcesByPenaltyMethod(
   DRAKE_ABORT_MSG("Only <double> is supported.");
 }
 
-template<typename T>
-MatrixX<double> MultibodyPlant<T>::CalcFischerBurmeisterSolverJacobian(
-    // state at t0
-    const VectorX<double>& v0,
-    const MatrixX<double>& M0,
-    // External forces (consider making them on <T>)
-    const VectorX<double> tau0,
-    // Normal velocity Jacobian (at either tstar or t0)
-    const MatrixX<double> N,
-    const VectorX<double>& v, const VectorX<double>& cn,
-    VectorX<double>* R, MatrixX<double>* J) const {
-  DRAKE_ABORT_MSG("T != double not supported.");
-}
-
 template<>
 void MultibodyPlant<double>::DoCalcDiscreteVariableUpdatesImplStribeck(
     const drake::systems::Context<double>& context0,
@@ -1016,7 +614,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdatesImplStribeck(
   using std::sqrt;
   using std::max;
   // If plant state is continuous, no discrete state to update.
-  if (!is_state_discrete()) return;
+  if (!is_discrete()) return;
 
   const double& dt = time_step_;  // shorter alias.
 
@@ -1120,7 +718,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdatesImplStribeck(
   VectorX<double> vtstar(2*num_contacts);
   //Eigen::LDLT<MatrixX<double>> W_ldlt;
   if (num_contacts > 0) {
-    D = ComputeTangentVelocityJacobianMatrix(context0, point_pairs0);
+    D = CalcTangentVelocitiesJacobian(context0, point_pairs0);
     vtstar = D * v_star;
 
     // M0^{-1} * D^{T}
@@ -1401,7 +999,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdatesPGS(
   using std::sqrt;
   using std::max;
   // If plant state is continuous, no discrete state to update.
-  if (!is_state_discrete()) return;
+  if (!is_discrete()) return;
 
   const double& dt = time_step_;  // shorter alias.
 
@@ -1505,7 +1103,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdatesPGS(
   VectorX<double> vtstar(2*num_contacts);
   //Eigen::LDLT<MatrixX<double>> W_ldlt;
   if (num_contacts > 0) {
-    D = ComputeTangentVelocityJacobianMatrix(context0, point_pairs0);
+    D = CalcTangentVelocitiesJacobian(context0, point_pairs0);
     vtstar = D * v_star;
 
     // M0^{-1} * D^{T}

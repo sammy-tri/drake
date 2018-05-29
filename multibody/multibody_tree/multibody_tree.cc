@@ -718,9 +718,12 @@ void MultibodyTree<T>::CalcAcrossNodeGeometricJacobianExpressedInWorld(
 template <typename T>
 void MultibodyTree<T>::CalcPointsGeometricJacobianExpressedInWorld(
     const systems::Context<T>& context,
-    const Frame<T>& frame_B, const Eigen::Ref<const MatrixX<T>>& p_WQi_set,
-    EigenPtr<MatrixX<T>> Jv_WQi) const {
-  const int num_points = p_WQi_set.cols();
+    const Frame<T>& frame_B, const Eigen::Ref<const MatrixX<T>>& p_BQi_set,
+    EigenPtr<MatrixX<T>> p_WQi_set, EigenPtr<MatrixX<T>> Jv_WQi) const {
+  DRAKE_THROW_UNLESS(p_BQi_set.rows() == 3);
+  const int num_points = p_BQi_set.cols();
+  DRAKE_THROW_UNLESS(p_WQi_set != nullptr);
+  DRAKE_THROW_UNLESS(p_WQi_set->cols() == num_points);
   DRAKE_THROW_UNLESS(Jv_WQi != nullptr);
   DRAKE_THROW_UNLESS(Jv_WQi->rows() == 3 * num_points);
   DRAKE_THROW_UNLESS(Jv_WQi->cols() == num_velocities());
@@ -734,7 +737,11 @@ void MultibodyTree<T>::CalcPointsGeometricJacobianExpressedInWorld(
 
   // Do nothing for the world body and return a zero Jacobian.
   // That is, Jv_WQi * v = 0, always, for the world body.
-  if (body_B.index() == world_index()) return;
+  if (body_B.index() == world_index()) {
+    // Since B = W, we must set p_WQi_set = p_BQi_set.
+    *p_WQi_set = p_BQi_set;
+    return;
+  }
 
   // Compute p_WQi for each point Qi in the set P_BQi_set.
   CalcPointsPositions(context,
@@ -816,33 +823,6 @@ void MultibodyTree<T>::CalcPointsGeometricJacobianExpressedInWorld(
       Hv_PBqi_W = Hv_PB_W + Hw_PB_W.colwise().cross(p_BiQi_W);
     }  // ipoint.
   }  // body_node_index
-}
-
-template <typename T>
-void MultibodyTree<T>::CalcPointsGeometricJacobianExpressedInWorld(
-    const systems::Context<T>& context,
-    const Frame<T>& frame_B, const Eigen::Ref<const MatrixX<T>>& p_BQi_set,
-    EigenPtr<MatrixX<T>> p_WQi_set, EigenPtr<MatrixX<T>> Jv_WQi) const {
-  DRAKE_THROW_UNLESS(p_BQi_set.rows() == 3);
-  const int num_points = p_BQi_set.cols();
-  DRAKE_THROW_UNLESS(p_WQi_set != nullptr);
-  DRAKE_THROW_UNLESS(p_WQi_set->cols() == num_points);
-  DRAKE_THROW_UNLESS(Jv_WQi != nullptr);
-  DRAKE_THROW_UNLESS(Jv_WQi->rows() == 3 * num_points);
-  DRAKE_THROW_UNLESS(Jv_WQi->cols() == num_velocities());
-  // Do nothing for the world body and return a zero Jacobian.
-  // That is, Jv_WQi * v = 0, always, for the world body.
-  if (frame_B.body().index() == world_index()) {
-    // Since B = W, we must set p_WQi_set = p_BQi_set.
-    *p_WQi_set = p_BQi_set;
-    Jv_WQi->setZero();
-    return;
-  }
-  CalcPointsPositions(context,
-                      frame_B, p_BQi_set,        /* From frame B */
-                      world_frame(), p_WQi_set); /* To world frame W */
-  CalcPointsGeometricJacobianExpressedInWorld(
-      context, frame_B, *p_WQi_set, Jv_WQi);
 }
 
 template <typename T>
