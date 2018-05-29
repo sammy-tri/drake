@@ -53,9 +53,11 @@ const char kSdfPath[] =
     "drake/manipulation/models/iiwa_description/sdf/"
         "iiwa14_no_collision.sdf";
 
+/*
 const char kSdfPathTable[] =
     "drake/manipulation/models/iiwa_description/sdf/"
         "iiwa14_no_collision_table.sdf";
+*/
 
 int DoMain() {
   systems::DiagramBuilder<double> builder;
@@ -65,7 +67,7 @@ int DoMain() {
 
   // Make and add the kuka robot model.
   MultibodyPlant<double>& kuka_plant = *builder.AddSystem<MultibodyPlant>();
-  AddModelFromSdfFile(FindResourceOrThrow(kSdfPathTable), &kuka_plant, &scene_graph);
+  AddModelFromSdfFile(FindResourceOrThrow(kSdfPath), &kuka_plant, &scene_graph);
 
   // Add gravity to the model.
   kuka_plant.AddForceElement<UniformGravityFieldElement>(
