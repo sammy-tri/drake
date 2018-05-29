@@ -736,6 +736,39 @@ void MultibodyTree<T>::CalcPointsGeometricJacobianExpressedInWorld(
   // That is, Jv_WQi * v = 0, always, for the world body.
   if (body_B.index() == world_index()) return;
 
+  // Compute p_WQi for each point Qi in the set P_BQi_set.
+  CalcPointsPositions(context,
+                      frame_B, p_BQi_set,        /* From frame B */
+                      world_frame(), p_WQi_set); /* To world frame W */
+
+  CalcPointsGeometricJacobianExpressedInWorld(
+      context, frame_B, *p_WQi_set, Jv_WQi);
+}
+
+template <typename T>
+void MultibodyTree<T>::CalcPointsGeometricJacobianExpressedInWorld(
+    const systems::Context<T>& context,
+    const Frame<T>& frame_B, const Eigen::Ref<const MatrixX<T>>& p_WQi_set,
+    EigenPtr<MatrixX<T>> Jv_WQi) const {
+  DRAKE_THROW_UNLESS(p_WQi_set.rows() == 3);
+  const int num_points = p_WQi_set.cols();
+  DRAKE_THROW_UNLESS(Jv_WQi != nullptr);
+  DRAKE_THROW_UNLESS(Jv_WQi->rows() == 3 * num_points);
+  DRAKE_THROW_UNLESS(Jv_WQi->cols() == num_velocities());
+
+  // If a user is re-using this Jacobian within a loop the first thing we'll
+  // want to do is to re-initialize it to zero.
+  Jv_WQi->setZero();
+
+  // Body to which frame B is attached to:
+  const Body<T>& body_B = frame_B.body();
+
+  // Do nothing for the world body and return a zero Jacobian.
+  // That is, Jv_WQi * v = 0, always, for the world body.
+  if (body_B.index() == world_index()) {
+    return;
+  }
+
   // Compute kinematic path from body B to the world:
   std::vector<BodyNodeIndex> path_to_world;
   topology_.GetKinematicPathToWorld(body_B.node_index(), &path_to_world);

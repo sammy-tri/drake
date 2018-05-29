@@ -61,6 +61,7 @@ MultibodyPlant<T>::MultibodyPlant(double time_step) :
     systems::LeafSystem<T>(systems::SystemTypeTag<
         drake::multibody::multibody_plant::MultibodyPlant>()),
     time_step_(time_step) {
+  DRAKE_THROW_UNLESS(time_step >= 0);
   model_ = std::make_unique<MultibodyTree<T>>();
   visual_geometries_.emplace_back();  // Entries for the "world" body.
   collision_geometries_.emplace_back();
@@ -225,7 +226,7 @@ std::unique_ptr<systems::LeafContext<T>>
 MultibodyPlant<T>::DoMakeLeafContext() const {
   DRAKE_THROW_UNLESS(is_finalized());
   return std::make_unique<MultibodyTreeContext<T>>(
-      model_->get_topology(), is_state_discrete());
+      model_->get_topology(), is_discrete());
 }
 
 template<typename T>
@@ -233,7 +234,7 @@ void MultibodyPlant<T>::DoCalcTimeDerivatives(
     const systems::Context<T>& context,
     systems::ContinuousState<T>* derivatives) const {
   // No derivatives to compute if state is discrete.
-  if (is_state_discrete()) return;
+  if (is_discrete()) return;
 
   const auto x =
       dynamic_cast<const systems::BasicVector<T>&>(
@@ -311,6 +312,122 @@ void MultibodyPlant<T>::DoCalcTimeDerivatives(
   model_->MapVelocityToQDot(context, v, &qdot);
   xdot << qdot, vdot;
   derivatives->SetFromVector(xdot);
+}
+
+template<typename T>
+MatrixX<T> MultibodyPlant<T>::CalcNormalSeparationVelocitiesJacobian(
+    const Context<T>& context,
+    const std::vector<PenetrationAsPointPair<T>>& point_pairs_set) const {
+  const int num_contacts = point_pairs_set.size();
+  MatrixX<T> N(num_contacts, num_velocities());
+
+  for (int icontact = 0; icontact < num_contacts; ++icontact) {
+    const auto& point_pair = point_pairs_set[icontact];
+
+    const GeometryId geometryA_id = point_pair.id_A;
+    const GeometryId geometryB_id = point_pair.id_B;
+
+    BodyIndex bodyA_index = geometry_id_to_body_index_.at(geometryA_id);
+    const Body<T>& bodyA = model().get_body(bodyA_index);
+    BodyIndex bodyB_index = geometry_id_to_body_index_.at(geometryB_id);
+    const Body<T>& bodyB = model().get_body(bodyB_index);
+
+    // Penetration depth, > 0 if bodies interpenetrate.
+    const Vector3<T>& nhat_BA_W = point_pair.nhat_BA_W;
+    const Vector3<T>& p_WCa = point_pair.p_WCa;
+    const Vector3<T>& p_WCb = point_pair.p_WCb;
+
+    // Geometric Jacobian for the velocity of the contact point C as moving with
+    // body A, s.t.: v_WAc = Jv_WAc * v
+    // where v is the vector of generalized velocities.
+    MatrixX<T> Jv_WAc(3, this->num_velocities());
+    model().CalcPointsGeometricJacobianExpressedInWorld(
+        context, bodyA.body_frame(), p_WCa, &Jv_WAc);
+
+    // Geometric Jacobian for the velocity of the contact point C as moving with
+    // body B, s.t.: v_WBc = Jv_WBc * v.
+    MatrixX<T> Jv_WBc(3, this->num_velocities());
+    model().CalcPointsGeometricJacobianExpressedInWorld(
+        context, bodyB.body_frame(), p_WCb, &Jv_WBc);
+
+    // The velocity of Bc relative to Ac is
+    //   v_AcBc_W = v_WBc - v_WAc.
+    // From where the separation velocity is computed as
+    //   vn = -v_AcBc_W.dot(nhat_BA_W) = -nhat_BA_Wᵀ⋅v_AcBc_W
+    // where the negative sign stems from the sign convention for vn and xdot.
+    // This can be written in terms of the Jacobians as
+    //   vn = -nhat_BA_Wᵀ⋅(Jv_WBc - Jv_WAc)⋅v
+
+    N.row(icontact) = nhat_BA_W.transpose() * (Jv_WAc - Jv_WBc);
+  }
+
+  return N;
+}
+
+template<typename T>
+MatrixX<T> MultibodyPlant<T>::CalcTangentVelocitiesJacobian(
+    const Context<T>& context,
+    const std::vector<PenetrationAsPointPair<T>>& point_pairs_set,
+    std::vector<Matrix3<T>>* R_WC_set) const {
+  const int num_contacts = point_pairs_set.size();
+  // D is defined such that vt = D * v, with vt of size 2nc.
+  MatrixX<T> D(2 * num_contacts, num_velocities());
+
+  if (R_WC_set != nullptr) R_WC_set->reserve(point_pairs_set.size());
+  for (int icontact = 0; icontact < num_contacts; ++icontact) {
+    const auto& point_pair = point_pairs_set[icontact];
+
+    const GeometryId geometryA_id = point_pair.id_A;
+    const GeometryId geometryB_id = point_pair.id_B;
+
+    BodyIndex bodyA_index = geometry_id_to_body_index_.at(geometryA_id);
+    const Body<T>& bodyA = model().get_body(bodyA_index);
+    BodyIndex bodyB_index = geometry_id_to_body_index_.at(geometryB_id);
+    const Body<T>& bodyB = model().get_body(bodyB_index);
+
+    // Penetration depth, > 0 if bodies interpenetrate.
+    const T& x = point_pair.depth;
+    DRAKE_ASSERT(x >= 0);
+    const Vector3<T>& nhat_BA_W = point_pair.nhat_BA_W;
+    const Vector3<T>& p_WCa = point_pair.p_WCa;
+    const Vector3<T>& p_WCb = point_pair.p_WCb;
+
+    // Compute the orientation of a contact frame C at the contact point such
+    // that the z-axis Cz equals to nhat_BA_W. The tangent vectors are
+    // arbitrary, with the only requirement being that they form a valid right
+    // handed basis with nhat_BA.
+    const Matrix3<T> R_WC = math::ComputeBasisFromAxis(2, nhat_BA_W);
+    if (R_WC_set != nullptr) {
+      R_WC_set->push_back(R_WC);
+    }
+
+    const Vector3<T> that1_W = R_WC.col(0);  // that1 = Cx.
+    const Vector3<T> that2_W = R_WC.col(1);  // that2 = Cy.
+
+    // TODO(amcastro-tri): Consider using the midpoint between Ac and Bc for
+    // stability reasons. Besides that, there is no other reason to use the
+    // midpoint (or any other point between Ac and Bc for that matter) since,
+    // in the limit to rigid contact, Ac = Bc.
+
+    MatrixX<T> Jv_WAc(3, this->num_velocities());  // s.t.: v_WAc = Jv_WAc * v.
+    model().CalcPointsGeometricJacobianExpressedInWorld(
+        context, bodyA.body_frame(), p_WCa, &Jv_WAc);
+
+    MatrixX<T> Jv_WBc(3, this->num_velocities());  // s.t.: v_WBc = Jv_WBc * v.
+    model().CalcPointsGeometricJacobianExpressedInWorld(
+        context, bodyB.body_frame(), p_WCb, &Jv_WBc);
+
+    // The velocity of Bc relative to Ac is
+    //   v_AcBc_W = v_WBc - v_WAc.
+    // The first two components of this velocity in C corresponds to the
+    // tangential velocities in a plane normal to nhat_BA.
+    //   vx_AcBc_C = that1⋅v_AcBc = that1ᵀ⋅(Jv_WBc - Jv_WAc)⋅v
+    //   vy_AcBc_C = that2⋅v_AcBc = that2ᵀ⋅(Jv_WBc - Jv_WAc)⋅v
+
+    D.row(2 * icontact)     = that1_W.transpose() * (Jv_WBc - Jv_WAc);
+    D.row(2 * icontact + 1) = that2_W.transpose() * (Jv_WBc - Jv_WAc);
+  }
+  return D;
 }
 
 template<typename T>
@@ -856,19 +973,12 @@ void MultibodyPlant<double>::CalcAndAddContactForcesByPenaltyMethod(
           // Spatial force on body A at Ao, expressed in W.
           const SpatialForce<double> F_AAo_W = F_AC_W.Shift(p_CoAo_W);
           F_BBo_W_array->at(bodyA_node_index) += F_AAo_W;
-
-          //PRINT_VAR(model().get_body(bodyA_index).name());
-          //PRINT_VAR(F_AAo_W);
-
         }
 
         if (bodyB_index != world_index()) {
           // Spatial force on body B at Bo, expressed in W.
           const SpatialForce<double> F_BBo_W = -F_AC_W.Shift(p_CoBo_W);
           F_BBo_W_array->at(bodyB_node_index) += F_BBo_W;
-
-          //PRINT_VAR(model().get_body(bodyB_index).name());
-          //PRINT_VAR(F_BBo_W);
         }
       }
     }
@@ -1547,191 +1657,6 @@ void MultibodyPlant<T>::DoCalcDiscreteVariableUpdates(
   DoCalcDiscreteVariableUpdatesImplStribeck(context0, events, updates);
 }
 
-// This method is assuming that we are giving a compatible `context` with a
-// `contact_penetrations`, where each contact pair, in theory,
-// has point_pair.depth = 0. That is, each contact pair is "exactly" at contact.
-// However in practice these are usually computed with some finite penetration.
-template<typename T>
-MatrixX<T> MultibodyPlant<T>::ComputeNormalVelocityJacobianMatrix(
-    const Context<T>& context,
-    std::vector<PenetrationAsPointPair<T>>& contact_penetrations) const {
-  const int num_contacts = contact_penetrations.size();
-  MatrixX<T> N(num_contacts, num_velocities());
-
-  for (int icontact = 0; icontact < num_contacts; ++icontact) {
-    const auto& point_pair = contact_penetrations[icontact];
-
-    const GeometryId geometryA_id = point_pair.id_A;
-    const GeometryId geometryB_id = point_pair.id_B;
-
-    // TODO(amcastro-tri): Request GeometrySystem to do this filtering for us
-    // when that capability lands.
-    // TODO(amcastro-tri): consider allowing this id's to belong to a third
-    // external system when they correspond to anchored geometry.
-    if (!is_collision_geometry(geometryA_id) ||
-        !is_collision_geometry(geometryB_id))
-      continue;
-
-    BodyIndex bodyA_index = geometry_id_to_body_index_.at(geometryA_id);
-    const Body<T>& bodyA = model().get_body(bodyA_index);
-    BodyIndex bodyB_index = geometry_id_to_body_index_.at(geometryB_id);
-    const Body<T>& bodyB = model().get_body(bodyB_index);
-
-    // Penetration depth, > 0 during point_pair.
-    const T& x = point_pair.depth;
-    DRAKE_ASSERT(x >= 0);
-    const Vector3<T>& nhat_BA_W = point_pair.nhat_BA_W;
-    const Vector3<T>& p_WCa = point_pair.p_WCa;
-    const Vector3<T>& p_WCb = point_pair.p_WCb;
-
-    // Approximate the position of the contact point as:
-    // In theory p_WC = p_WCa = p_WCb.
-    const Vector3<T> p_WC = 0.5 * (p_WCa + p_WCb);  // notice this is at t_star.
-    // TODO(amcastro-tri): for each contact point, consider computing
-    // dtc = phi / phidot and then estimate the contact point as:
-    //  p_WCa = p_WCa_star + dtc * v0_WCa
-    //  p_WCb = p_WCb_star + dtc * v0_WCb
-    // In theory, these two estimations should be very close to the actual p_WC.
-    // Then do:
-    //  p_WC = 0.5 * (p_WCa + p_WCb);
-
-    MatrixX<T> Jv_WAc(3, this->num_velocities());  // s.t.: v_WAc = Jv_WAc * v.
-    model().CalcPointsGeometricJacobianExpressedInWorld(
-        context, bodyA.body_frame(), p_WC, &Jv_WAc);
-
-    MatrixX<T> Jv_WBc(3, this->num_velocities());  // s.t.: v_WBc = Jv_WBc * v.
-    model().CalcPointsGeometricJacobianExpressedInWorld(
-        context, bodyB.body_frame(), p_WC, &Jv_WBc);
-
-    // Therefore v_AcBc_W = v_WBc - v_WAc.
-    // if xdot = vn > 0 ==> they are getting closer.
-    // vn = v_AcBc_W.dot(nhat_BA_W);
-    // vn = (nhat^T * J) * v
-    //N.row(icontact) = nhat_BA_W.transpose() * (Jv_WBc - Jv_WAc);
-#if 0
-    PRINT_VAR(icontact);
-    PRINT_VAR(nhat_BA_W.transpose());
-    PRINT_VAR(bodyA.name());
-    PRINT_VARn(Jv_WAc);
-    PRINT_VAR(bodyB.name());
-    PRINT_VARn(Jv_WBc);
-    PRINT_VARn(N.row(icontact));
-#endif
-
-    N.row(icontact) = nhat_BA_W.transpose() * (Jv_WAc - Jv_WBc);
-
-    //PRINT_VARn(N.row(icontact));
-  }
-
-  return N;
-}
-
-// This method is assuming that we are giving a compatible `context` with a
-// `contact_penetrations`, where each contact pair, in theory,
-// has point_pair.depth = 0. That is, each contact pair is "exactly" at contact.
-// However in practice these are usually computed with some finite penetration.
-template<typename T>
-MatrixX<T> MultibodyPlant<T>::ComputeTangentVelocityJacobianMatrix(
-    const Context<T>& context,
-    std::vector<PenetrationAsPointPair<T>>& contact_penetrations) const {
-  const int num_contacts = contact_penetrations.size();
-  // Per contact we have two betas, one per each tangential direction.
-  // betas can be either positive or negative.
-
-  // D is defined such that vf = D * v, with vf of size 2nc.
-  MatrixX<T> D(2 * num_contacts, num_velocities());
-
-  const PositionKinematicsCache<T>& pc = EvalPositionKinematics(context);
-
-  for (int icontact = 0; icontact < num_contacts; ++icontact) {
-    const auto& point_pair = contact_penetrations[icontact];
-
-    const GeometryId geometryA_id = point_pair.id_A;
-    const GeometryId geometryB_id = point_pair.id_B;
-
-    // TODO(amcastro-tri): Request GeometrySystem to do this filtering for us
-    // when that capability lands.
-    // TODO(amcastro-tri): consider allowing this id's to belong to a third
-    // external system when they correspond to anchored geometry.
-    if (!is_collision_geometry(geometryA_id) ||
-        !is_collision_geometry(geometryB_id))
-      continue;
-
-    BodyIndex bodyA_index = geometry_id_to_body_index_.at(geometryA_id);
-    const Body<T>& bodyA = model().get_body(bodyA_index);
-    BodyIndex bodyB_index = geometry_id_to_body_index_.at(geometryB_id);
-    const Body<T>& bodyB = model().get_body(bodyB_index);
-
-    // Penetration depth, > 0 during point_pair.
-    const T& x = point_pair.depth;
-    DRAKE_ASSERT(x >= 0);
-    const Vector3<T>& nhat_BA_W = point_pair.nhat_BA_W;
-    const Vector3<T>& p_WCa = point_pair.p_WCa;
-    const Vector3<T>& p_WCb = point_pair.p_WCb;
-
-    const Isometry3<T>& X_WA = pc.get_X_WB(bodyA.node_index());
-    const Isometry3<T>& X_WB = pc.get_X_WB(bodyB.node_index());
-
-    const Vector3<T>& p_ACa = X_WA.inverse() * p_WCa;
-    const Vector3<T>& p_BCb = X_WB.inverse() * p_WCb;
-
-    // Approximate the position of the contact point as:
-    // In theory p_WC = p_WCa = p_WCb.
-    //const Vector3<T> p_WC = 0.5 * (p_WCa + p_WCb);  // notice this is at t_star.
-    // TODO(amcastro-tri): for each contact point, consider computing
-    // dtc = phi / phidot and then estimate the contact point as:
-    //  p_WCa = p_WCa_star + dtc * v0_WCa
-    //  p_WCb = p_WCb_star + dtc * v0_WCb
-    // In theory, these two estimations should be very close to the actual p_WC.
-    // Then do:
-    //  p_WC = 0.5 * (p_WCa + p_WCb);
-
-    // Compute the orientation of a contact frame C at the contact point such
-    // that the z-axis is aligned to nhat_BA_W. The tangent vectors are
-    // arbitrary.
-    // nhat_BA_W points outwards from B. Therefore we define frame Bc at contac
-    // point C with z-axis pointing along nhat_BA_W.
-    const Matrix3<T> R_WBc = math::ComputeBasisFromAxis(2, nhat_BA_W);
-    const Vector3<T> that1_W = R_WBc.col(0);
-    const Vector3<T> that2_W = R_WBc.col(1);
-    Vector3<T> dummy;
-
-    MatrixX<T> Jv_WAc(3, this->num_velocities());  // s.t.: v_WAc = Jv_WAc * v.
-    model().CalcPointsGeometricJacobianExpressedInWorld(
-        context, bodyA.body_frame(), p_ACa, &dummy, &Jv_WAc);
-
-    MatrixX<T> Jv_WBc(3, this->num_velocities());  // s.t.: v_WBc = Jv_WBc * v.
-    model().CalcPointsGeometricJacobianExpressedInWorld(
-        context, bodyB.body_frame(), p_BCb, &dummy, &Jv_WBc);
-
-    // Therefore v_AcBc_W = v_WBc - v_WAc.
-    // if xdot = vn > 0 ==> they are getting closer.
-    // vn = v_AcBc_W.dot(nhat_BA_W);
-    // vn = (nhat^T * J) * v
-    //N.row(icontact) = nhat_BA_W.transpose() * (Jv_WBc - Jv_WAc);
-#if 0
-    PRINT_VAR(icontact);
-    PRINT_VAR(nhat_BA_W.transpose());
-    PRINT_VAR(bodyA.name());
-    PRINT_VARn(Jv_WAc);
-    PRINT_VAR(bodyB.name());
-    PRINT_VARn(Jv_WBc);
-    PRINT_VARn(N.row(icontact));
-#endif
-
-    // We deinfe D such that it gives us v_AcBc projected on the tangent
-    // components of frame Bc on contact point C with z-axis outwards from B.
-    // beta0
-    D.row(2 * icontact + 0) = that1_W.transpose() * (Jv_WBc - Jv_WAc);
-    // beta1
-    D.row(2 * icontact + 1) = that2_W.transpose() * (Jv_WBc - Jv_WAc);
-
-    //PRINT_VARn(N.row(icontact));
-  }
-
-  return D;
-}
-
 template<typename T>
 void MultibodyPlant<T>::set_penetration_allowance(
     double penetration_allowance) {
@@ -1835,7 +1760,7 @@ void MultibodyPlant<T>::DeclareStateAndPorts() {
   // The model must be finalized.
   DRAKE_DEMAND(this->is_finalized());
 
-  if (is_state_discrete()) {
+  if (is_discrete()) {
     this->DeclarePeriodicDiscreteUpdate(time_step_);
     this->DeclareDiscreteState(num_multibody_states());
   } else {

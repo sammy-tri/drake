@@ -45,6 +45,11 @@ DEFINE_double(target_realtime_rate, 1.0,
 DEFINE_double(simulation_time, 10.0,
               "Desired duration of the simulation in seconds.");
 
+DEFINE_double(time_step, 0,
+            "If greater than zero, the plant is modeled as a system with "
+            "discrete updates and period equal to this time_step. "
+            "If 0, the plant is modeled as a continuous system.");
+
 int do_main() {
   systems::DiagramBuilder<double> builder;
 
@@ -52,10 +57,10 @@ int do_main() {
   scene_graph.set_name("scene_graph");
 
   // Make and add the cart_pole model.
-  const std::string full_name =
-      FindResourceOrThrow(
-          "drake/examples/contact_model/mbp/rigid_mug_gripper.sdf");
-  MultibodyPlant<double>& cart_pole = *builder.AddSystem<MultibodyPlant>();
+  const std::string full_name = FindResourceOrThrow(
+      "drake/examples/multibody/cart_pole/cart_pole.sdf");
+  MultibodyPlant<double>& cart_pole =
+      *builder.AddSystem<MultibodyPlant>(FLAGS_time_step);
   AddModelFromSdfFile(full_name, &cart_pole, &scene_graph);
 
   // Add gravity to the model.
