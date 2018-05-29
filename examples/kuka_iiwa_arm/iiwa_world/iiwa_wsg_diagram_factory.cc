@@ -67,6 +67,10 @@ IiwaAndWsgPlantWithStateEstimator<T>::IiwaAndWsgPlantWithStateEstimator(
         ComputeLumpedGripperInertiaInEndEffectorFrame(
             plant_->get_rigid_body_tree(), iiwa_instances[i].instance_id,
             kEndEffectorLinkName, wsg_instances[i].instance_id);
+    std::cerr << "lumped interia:\n"
+              << lumped_gripper_inertia_EE
+              << "\n";
+
     RigidBody<T>* controller_ee =
         iiwa_controller->get_robot_for_control().FindBody(kEndEffectorLinkName);
     controller_ee->set_spatial_inertia(lumped_gripper_inertia_EE);
