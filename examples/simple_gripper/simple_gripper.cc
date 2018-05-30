@@ -167,7 +167,8 @@ int do_main() {
   SceneGraph<double>& scene_graph = *builder.AddSystem<SceneGraph>();
   scene_graph.set_name("scene_graph");
 
-  MultibodyPlant<double>& plant = *builder.AddSystem<MultibodyPlant>();
+  MultibodyPlant<double>& plant =
+      *builder.AddSystem<MultibodyPlant>(FLAGS_max_time_step);
   std::string full_name =
       FindResourceOrThrow("drake/examples/simple_gripper/simple_gripper.sdf");
   AddModelFromSdfFile(full_name, &plant, &scene_graph);
