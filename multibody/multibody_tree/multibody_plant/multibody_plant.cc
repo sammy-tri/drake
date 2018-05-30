@@ -680,6 +680,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdatesImplStribeck(
       CalcPointPairPenetrations(context0);
   const int num_contacts = point_pairs0.size();
   VectorX<double> fn(num_contacts);
+  fn.setZero();
 
   // Compute contact forces on each body by penalty method. No friction, only normal forces.
   if (num_collision_geometries() > 0) {
@@ -770,6 +771,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdatesImplStribeck(
   const int num_unknowns = 2 * num_contacts;
 
   VectorX<double> ftk(num_unknowns);
+  ftk.setZero();
   if (num_contacts > 0) {
 
     const int max_iterations = 200;
@@ -975,8 +977,12 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdatesImplStribeck(
 
   // Save generalized contact forces.
   tau_contact_.resize(nv);
-  // ftk does not include the minus sign.
-  tau_contact_ = -D.transpose() * ftk + N.transpose() * fn;
+  if (num_contacts == 0) {
+    tau_contact_.setZero();
+  } else {
+    // ftk does not include the minus sign.
+    tau_contact_ = -D.transpose() * ftk + N.transpose() * fn;
+  }
 
   // Compute solution
   vn = v_star;
@@ -1393,6 +1399,8 @@ void MultibodyPlant<T>::DeclareStateAndPorts() {
       this->DeclareVectorOutputPort(
           BasicVector<T>(num_velocities()),
           &MultibodyPlant::CopyGeneralizedContactOut).get_index();
+  tau_contact_.resize(num_velocities());
+  tau_contact_.setZero();
 }
 
 template <typename T>
