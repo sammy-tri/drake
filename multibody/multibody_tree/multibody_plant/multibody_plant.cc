@@ -713,6 +713,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdatesImplStribeck(
 
   // Compute normal and tangential velocity Jacobians at tstar.
   MatrixX<double> D(2*num_contacts, nv);  // of size (2nc) x nv
+  MatrixX<double> N(num_contacts, nv);  // of size nc x nv
   MatrixX<double> Minv_times_Dtrans(nv, 2*num_contacts);  // of size nv x (2nc).
   MatrixX<double> Wtt(2*num_contacts, 2*num_contacts);  // of size (2nc) x (2*nc)
   VectorX<double> vtstar(2*num_contacts);
@@ -725,6 +726,9 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdatesImplStribeck(
     Minv_times_Dtrans = M0_ldlt.solve(D.transpose());
     // Wtt = D * M0^{-1} * D^{T}:
     Wtt = D * Minv_times_Dtrans;
+
+    // We need N to compute tau_contact_ at the end.
+    N = CalcNormalSeparationVelocitiesJacobian(context0, point_pairs0);
 
 #if 0
     PRINT_VARn(M0);
@@ -971,7 +975,8 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdatesImplStribeck(
 
   // Save generalized contact forces.
   tau_contact_.resize(nv);
-  tau_contact_ = D.transpose() * ftk;
+  // ftk does not include the minus sign.
+  tau_contact_ = -D.transpose() * ftk + N.transpose() * fn;
 
   // Compute solution
   vn = v_star;
