@@ -1388,6 +1388,11 @@ void MultibodyPlant<T>::DeclareStateAndPorts() {
       this->DeclareVectorOutputPort(
           BasicVector<T>(num_multibody_states()),
           &MultibodyPlant::CopyContinuousStateOut).get_index();
+
+  generalized_contact_output_port_ =
+      this->DeclareVectorOutputPort(
+          BasicVector<T>(num_velocities()),
+          &MultibodyPlant::CopyGeneralizedContactOut).get_index();
 }
 
 template <typename T>
@@ -1399,6 +1404,13 @@ void MultibodyPlant<T>::CopyContinuousStateOut(
   } else {
     state_vector->SetFrom(context.get_continuous_state_vector());
   }
+}
+
+template <typename T>
+void MultibodyPlant<T>::CopyGeneralizedContactOut(
+    const Context<T>& context, BasicVector<T>* out) const {
+  DRAKE_MBP_THROW_IF_NOT_FINALIZED();
+  out->set_value(tau_contact_);
 }
 
 template <typename T>
@@ -1414,6 +1426,13 @@ const systems::OutputPort<T>&
 MultibodyPlant<T>::get_continuous_state_output_port() const {
   DRAKE_MBP_THROW_IF_NOT_FINALIZED();
   return this->get_output_port(continuous_state_output_port_);
+}
+
+template <typename T>
+const systems::OutputPort<T>&
+MultibodyPlant<T>::get_generalized_contact_output_port() const {
+  DRAKE_MBP_THROW_IF_NOT_FINALIZED();
+  return this->get_output_port(generalized_contact_output_port_);
 }
 
 template <typename T>

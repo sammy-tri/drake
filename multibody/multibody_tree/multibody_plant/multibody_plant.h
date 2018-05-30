@@ -702,6 +702,11 @@ class MultibodyPlant : public systems::LeafSystem<T> {
   /// @throws std::exception if called pre-finalize.
   const systems::OutputPort<T>& get_continuous_state_output_port() const;
 
+  /// Returns a constant reference to the output port for the
+  /// generalized contact forces.
+  /// @throws std::exception if called pre-finalize.
+  const systems::OutputPort<T>& get_generalized_contact_output_port() const;
+
   /// Returns a constant reference to the *world* body.
   const RigidBody<T>& world_body() const {
     return model_->world_body();
@@ -1027,6 +1032,9 @@ class MultibodyPlant : public systems::LeafSystem<T> {
   void CopyContinuousStateOut(
       const systems::Context<T>& context, systems::BasicVector<T>* state) const;
 
+  void CopyGeneralizedContactOut(
+      const systems::Context<T>& context, systems::BasicVector<T>* out) const;
+
   // Helper method to declare output ports used by this plant to communicate
   // with a SceneGraph.
   void DeclareSceneGraphPorts();
@@ -1279,6 +1287,7 @@ class MultibodyPlant : public systems::LeafSystem<T> {
   // Input/Output port indexes:
   int actuation_port_{-1};
   int continuous_state_output_port_{-1};
+  int generalized_contact_output_port_{-1};
 
   // If the plant is modeled as a discrete system with periodic updates,
   // time_step_ corresponds to the period of those updates. Otherwise, if the
