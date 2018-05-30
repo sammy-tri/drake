@@ -1289,6 +1289,8 @@ class MultibodyPlant : public systems::LeafSystem<T> {
   // TODO(amcastro-tri): Remove these when caching lands.
   std::unique_ptr<PositionKinematicsCache<T>> pc_;
   std::unique_ptr<VelocityKinematicsCache<T>> vc_;
+
+  mutable VectorX<T> tau_contact_;
 };
 
 /// @cond

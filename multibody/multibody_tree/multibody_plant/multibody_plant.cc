@@ -834,6 +834,7 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdatesImplStribeck(
         // Changes due to mu stribeck, in the direction of that.
         dft_dv[ic] += P_ic * dmudv(ic);
 
+        // Note: dft_dv is symmetric, PD?
         dft_dv[ic] *= fn(ic);
       }
 
@@ -967,6 +968,10 @@ void MultibodyPlant<double>::DoCalcDiscreteVariableUpdatesImplStribeck(
           fmt::format("{0:14.6e} {1:d} {2:d} {3:d} {4:14.6e}\n",
                       context0.get_time(), istep, iter, num_contacts,residual);
   outfile.close();
+
+  // Save generalized contact forces.
+  tau_contact_.resize(nv);
+  tau_contact_ = D.transpose() * ftk;
 
   // Compute solution
   vn = v_star;
