@@ -35,6 +35,7 @@ drake_cc_library(
         "//common:default_scalars",
         "//geometry:geometry_ids",
         "//geometry:scene_graph",
+        "//math:gradient",
         "//math:orthonormal_basis",
         "//multibody/multibody_tree",
         "//systems/framework:leaf_system",

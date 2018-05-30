@@ -15,6 +15,13 @@
 #include "drake/systems/lcm/serializer.h"
 #include "drake/systems/rendering/pose_bundle_to_draw_message.h"
 
+#include <fstream>
+#include <iostream>
+#define PRINT_VAR(a) std::cout << #a": " << a << std::endl;
+#define PRINT_VARn(a) std::cout << #a":\n" << a << std::endl;
+//#define PRINT_VAR(a) (void) a;
+//#define PRINT_VARn(a) (void) a;
+
 namespace drake {
 namespace examples {
 namespace multibody {
@@ -58,11 +65,13 @@ int do_main() {
   const double mass = 0.1;      // kg
   const double g = 9.81;        // m/s^2
   const double slope = 15.0 / 180 * M_PI;  // rad.
+  const double time_step = 1e-4;
   const CoulombFriction<double> surface_friction(FLAGS_static_friction,
                                                  FLAGS_dynamic_friction);
 
   MultibodyPlant<double>& plant = *builder.AddSystem(MakeInclinedPlanePlant(
-      radius, mass, slope, surface_friction, g, &scene_graph));
+      radius, mass, slope, surface_friction, g, time_step,
+      &scene_graph));
   const MultibodyTree<double>& model = plant.model();
   // Set how much penetration (in meters) we are willing to accept.
   plant.set_penetration_allowance(0.001);
@@ -74,6 +83,10 @@ int do_main() {
   // time scale.
   const double max_time_step =
       plant.get_contact_penalty_method_time_scale() / 30;
+
+  PRINT_VAR(time_step);
+  PRINT_VAR(max_time_step);
+  PRINT_VAR(plant.is_time_stepping());
 
   DRAKE_DEMAND(plant.num_velocities() == 6);
   DRAKE_DEMAND(plant.num_positions() == 7);

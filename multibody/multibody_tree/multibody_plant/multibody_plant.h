@@ -888,6 +888,8 @@ class MultibodyPlant : public systems::LeafSystem<T> {
   }
   /// @}
 
+  bool is_time_stepping() const { return time_step_ != 0; }
+
   /// Sets the state in `context` so that generalized positions and velocities
   /// are zero.
   /// @throws if called pre-finalize. See Finalize().
@@ -957,6 +959,16 @@ class MultibodyPlant : public systems::LeafSystem<T> {
       const std::vector<const drake::systems::DiscreteUpdateEvent<T>*>& events,
       drake::systems::DiscreteValues<T>* updates) const override;
 
+  void DoCalcDiscreteVariableUpdatesImplStribeck(
+      const drake::systems::Context<T>& context0,
+      const std::vector<const drake::systems::DiscreteUpdateEvent<T>*>& events,
+      drake::systems::DiscreteValues<T>* updates) const;
+
+  void DoCalcDiscreteVariableUpdatesPGS(
+      const drake::systems::Context<T>& context0,
+      const std::vector<const drake::systems::DiscreteUpdateEvent<T>*>& events,
+      drake::systems::DiscreteValues<T>* updates) const;
+
   void DoMapQDotToVelocity(
       const systems::Context<T>& context,
       const Eigen::Ref<const VectorX<T>>& qdot,
@@ -986,13 +998,14 @@ class MultibodyPlant : public systems::LeafSystem<T> {
   //    GeometryId with the body FrameId.
   // This assumes:
   // 1. Finalize() was not called on `this` plant.
-  // 2. RegisterAsSourceForSceneGraph() was called on `this` plant.
-  // 3. `scene_graph` points to the same SceneGraph instance previously
-  //    passed to RegisterAsSourceForSceneGraph().
-  geometry::GeometryId RegisterGeometry(const Body<T>& body,
-                                        const Isometry3<double>& X_BG,
-                                        const geometry::Shape& shape,
-                                        geometry::SceneGraph<T>* scene_graph);
+  // 2. RegisterAsSourceForGeometrySystem() was called on `this` plant.
+  // 3. `geometry_system` points to the same GeometrySystem instance previously
+  //    passed to RegisterAsSourceForGeometrySystem().
+  geometry::GeometryId RegisterGeometry(
+      const Body<T>& body,
+      const Isometry3<double>& X_BG, const geometry::Shape& shape,
+      geometry::VisualMaterial& color,
+      geometry::SceneGraph<T>* scene_graph);
 
   // Helper method to register anchored geometry to the world, either visual or
   // collision. This associates a GeometryId with the world body.
@@ -1032,7 +1045,59 @@ class MultibodyPlant : public systems::LeafSystem<T> {
       const systems::Context<T>& context,
       const PositionKinematicsCache<T>& pc,
       const VelocityKinematicsCache<T>& vc,
-      std::vector<SpatialForce<T>>* F_BBo_W_array) const;
+      std::vector<SpatialForce<T>>* F_BBo_W_array, bool include_friction,
+      const std::vector<geometry::PenetrationAsPointPair<double>>& penetrations,
+      VectorX<double>* fn) const;
+
+  template<typename U>
+  static U FischerBurmeisterFunction(const U& x, const U& y) {
+    using std::sqrt;
+    return sqrt(x * x + y * y) - x - y;
+  }
+
+  static T FischerBurmeisterGradX(const T& x, const T& y) {
+    using std::sqrt;
+    return x / (sqrt(x * x + y * y) + 1e-14) - 1;
+  }
+
+  static T FischerBurmeisterGradY(const T& x, const T& y) {
+    using std::sqrt;
+    return y / (sqrt(x * x + y * y) + 1e-14) - 1;
+  }
+
+  // Evaluate F-B component-wise.
+  static VectorX<T> FischerBurmeisterFunction(
+      const VectorX<T>& x, const VectorX<T>& y) {
+    using std::sqrt;
+    return sqrt(x.array() * x.array() + y.array() * y.array()) - x.array() - y.array();
+  }
+
+  static VectorX<T> FischerBurmeisterGradX(const VectorX<T>& x, const VectorX<T>& y) {
+    using std::sqrt;
+    return x.array() / (sqrt(x.array() * x.array() + y.array() * y.array()) + 1e-14) - 1;
+  }
+
+  static VectorX<T> FischerBurmeisterGradY(const VectorX<T>& x, const VectorX<T>& y) {
+    using std::sqrt;
+    return y.array() / (sqrt(x.array() * x.array() + y.array() * y.array()) + 1e-14) - 1;
+  }
+
+  static VectorX<T> FischerBurmeisterFunctionAndGrad(
+      const VectorX<T>& x, const VectorX<T>& y,
+      VectorX<T>* dgdx, VectorX<T>* dgdy) {
+    using std::sqrt;
+    VectorX<T> norm = sqrt(x.array() * x.array() + y.array() * y.array());
+    *dgdx = x.array() / (norm.array() + 1e-14) - 1;
+    *dgdy = y.array() / (norm.array() + 1e-14) - 1;
+    return norm.array()  - x.array() - y.array();
+  }
+
+  std::vector<geometry::PenetrationAsPointPair<double>>
+  CalcPointPairPenetrations(const systems::Context<T>& context) const;
+
+  void DoPublish(
+      const systems::Context<T>&,
+      const std::vector<const systems::PublishEvent<T>*>&) const override;
 
   // Given a set of point pairs in `point_pairs_set`, this method computes the
   // Jacobian N(q) such that:
@@ -1131,6 +1196,12 @@ class MultibodyPlant : public systems::LeafSystem<T> {
     T ComputeFrictionCoefficient(
         const T& speed_BcAc,
         const CoulombFriction<T>& friction) const;
+
+    T ComputeFrictionCoefficient2(
+        const T& speed_BcAc, const T& mu) const;
+
+    T ComputeFrictionCoefficient2Prime(
+        const T& speed_BcAc, const T& mu) const;
 
     /// Evaluates an S-shaped quintic curve, f(x), mapping the domain [0, 1] to
     /// the range [0, 1] where f(0) = f''(0) = f''(1) = f'(0) = f'(1) = 0 and
