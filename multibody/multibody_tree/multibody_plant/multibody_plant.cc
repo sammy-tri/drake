@@ -1384,7 +1384,11 @@ template <typename T>
 void MultibodyPlant<T>::CopyContinuousStateOut(
     const Context<T>& context, BasicVector<T>* state_vector) const {
   DRAKE_MBP_THROW_IF_NOT_FINALIZED();
-  state_vector->SetFrom(context.get_continuous_state_vector());
+  if (is_discrete()) {
+    state_vector->SetFrom(context.get_discrete_state(0));
+  } else {
+    state_vector->SetFrom(context.get_continuous_state_vector());
+  }
 }
 
 template <typename T>
