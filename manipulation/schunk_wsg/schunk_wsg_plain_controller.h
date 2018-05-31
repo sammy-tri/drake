@@ -16,76 +16,85 @@ enum class ControlMode { kPosition = 0, kForce = 1 };
  * ControlMode::kPosition or ControlMode::kForce. In both cases, the overall
  * layout of the diagram is:
  *```
- *            ┌─────────────┐
- * joint      │Joint State  │   ┌──────────┐
- * state ────▶│To Control   ├──▶│          │
- *            │State        │   │          │  ┌───────────┐
- *            └─────────────┘   │PID       │  │Controller │
- *            ╔═════════════╗   │Controller├─▶│Output To  ├─┐
- * desired    ║Generate     ║   │          │  │Joint Force│ │
- * grip   ───▶║Desired      ╟──▶│          │  └───────────┘ │
- * state      ║Control State║   └──────────┘                │
- *            ╚═════════════╝                               │
- *                                                          │
- *        ┌─────────────────────────────────────────────────┘
- *        │
- *        │   ╔════════════╗                          ┌──────────┐
- *        └──▶║Handle      ║               ┌─────────▶│          │
- * feed       ║Feed-Forward╟─────────────────────────▶│Saturation├────▶ control
- * forward───▶║Force       ║               │       ┌─▶│          │
- * force      ╚════════════╝               │       │  └──────────┘
- *                                         │  ┌──┐ │
- * max force ──────────────────────────────┴─▶│-1├─┘
- *                                            └──┘
+ *             ┌─────────────┐
+ * joint       │Joint State  │   ┌──────────┐
+ * state ─────▶│To Control   ├──▶│          │
+ *             │State        │   │          │
+ *             └─────────────┘   │PID       │   ╔════════════╗
+ *             ╔═════════════╗   │Controller├──▶║            ╟─────┐
+ * desired     ║Generate     ║   │          │   ║            ║     │
+ * grip ──────▶║Desired      ╟──▶│          │   ║Handle      ║     │
+ * state       ║Control State║   └──────────┘   ║Feed-Forward║     │
+ *             ╚═════════════╝                  ║Force       ║     │
+ * feed                                         ║            ║     │
+ * forward ────────────────────────────────────▶║            ╟──┐  │
+ * force                                        ╚════════════╝  │  │
+ *                                                              │  │
+ *                           ┌──────────────────────────────────┘  │
+ *                           │              ┌──────────────────────┘
+ *                           │              │
+ *                           │              │   ┌───────────┐
+ *                           │              │   │Mean Finger│   ┌───┐
+ *                           │              └──▶│Force To   ├──▶│   │
+ *                           │                  │Joint Force│   │   │
+ *                           │                  └───────────┘   │   │
+ *                           │                                  │ + ├──▶ control
+ *                           │   ┌──────────┐   ┌───────────┐   │   │
+ *                 ┌─────────│──▶│          │   │Grip Force │   │   │
+ *                 │   ┌──┐  └──▶│Saturation├──▶│To Joint   ├──▶│   │
+ * max force ──────┴──▶│-1├─────▶│          │   │Force      │   └───┘
+ *                     └──┘      └──────────┘   └───────────┘
  *```
  * The blocks with double outlines (══) differ between the two control modes:
  *  - Generate Desired Control State
  *    - ControlMode::kPosition
  *```
- *         desired
- *         grip   ────────▶█
- *         state           █   ┌─────────────┐
- *                         █   │Muxed States │    desired
- *                         █──▶│To Control   ├──▶ control
- *        ┌───────────┐    █   │State        │    state
- *        │Desired    │    █   └─────────────┘
- *        │Mean Finger├───▶█
- *        │State      │
- *        └───────────┘
+ *        ┌───────────┐
+ *        │Desired    │
+ *        │Mean Finger├──▶█
+ *        │State      │   █   ┌─────────────┐
+ *        └───────────┘   █   │Muxed States │    desired
+ *                        █──▶│To Control   ├──▶ control
+ *                        █   │State        │    state
+ *         desired        █   └─────────────┘
+ *         grip   ───────▶█
+ *         state
+ *
  *```
  *    - ControlMode::kForce
  *```
- *         desired       ┌────────┐
- *         grip   ──────▶│IGNORED │
- *         state         └────────┘
- *
  *        ┌───────────┐
- *        │Desired    │           desired
- *        │Mean Finger├─────────▶ control
- *        │State      │           state
+ *        │Desired    │                          desired
+ *        │Mean Finger├────────────────────────▶ control
+ *        │State      │                          state
  *        └───────────┘
+ *
+ *         desired        ┌────────┐
+ *         grip   ───────▶│IGNORED │
+ *         state          └────────┘
  *```
  *  - Handle Feed-Forward Force
  *    - ControlMode::kPosition
  *```
- *         joint force
- *         from pid   ──────────▶ joint force
- *         controller
- *
- *         feed       ┌────────┐
- *         forward ──▶│IGNORED │
- *         force      └────────┘
+ *                                     █────▶ mean finger force
+ *         pid                         █
+ *         controller ────────────────▶█
+ *         output                      █
+ *                                     █────▶ grip force
+ *         feed           ┌────────┐
+ *         forward ──────▶│IGNORED │
+ *         force          └────────┘
  *```
  *    - ControlMode::kForce
  *```
- *         joint force               ┌───┐
- *         from pid   ──────────────▶│   │
- *         controller                │   │
- *                    ┌──────────┐   │ + ├──▶ joint force
- *         feed       │Grip Force│   │   │
- *         forward ──▶│To Joint  ├──▶│   │
- *         force      │Force     │   └───┘
- *                    └──────────┘
+ *         pid
+ *         controller ──────────────────────▶ mean finger force
+ *         output
+ *
+ *         feed
+ *         forward ─────────────────────────▶ grip force
+ *         force
+ *
  *```
  * The remaining blocks differ only in their numerical parameters.
  *
@@ -98,11 +107,10 @@ class SchunkWsgPlainController
       public systems::controllers::StateFeedbackControllerInterface<double> {
  public:
   DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(SchunkWsgPlainController)
-  SchunkWsgPlainController(ControlMode control_mode = ControlMode::kPosition,
-                           double kp = 2000, double ki = 0, double kd = 5);
-
-  SchunkWsgPlainController(double kp, double ki, double kd)
-      : SchunkWsgPlainController(ControlMode::kPosition, kp, ki, kd) {}
+  /** Specify control gains and mode. Mode defaults to position control. */
+  explicit SchunkWsgPlainController(
+      ControlMode control_mode = ControlMode::kPosition, double kp = 2000,
+      double ki = 0, double kd = 5);
 
   /** Returns the descriptor for the feed-forward force input port.
    * @pre `this` was constructed with `control_mode` set to
@@ -117,7 +125,7 @@ class SchunkWsgPlainController
     return this->get_input_port(max_force_input_port_);
   }
 
-  // Implement StateFeedbackControllerInterface
+  // These methods implement StateFeedbackControllerInterface.
   const systems::InputPortDescriptor<double>& get_input_port_estimated_state()
       const override {
     return this->get_input_port(state_input_port_);

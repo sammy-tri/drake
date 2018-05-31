@@ -27,13 +27,14 @@ SchunkWsgController::SchunkWsgController(double kp, double ki, double kd) {
   command_input_port_ =
       builder.ExportInput(wsg_trajectory_generator->get_command_input_port());
 
-  auto wsg_controller = builder.AddSystem<SchunkWsgPlainController>(kp, ki, kd);
+  auto wsg_controller = builder.AddSystem<SchunkWsgPlainController>(
+      ControlMode::kPosition, kp, ki, kd);
   builder.Connect(state_pass_through->get_output_port(),
                   wsg_controller->get_input_port_estimated_state());
   builder.Connect(wsg_trajectory_generator->get_target_output_port(),
-      wsg_controller->get_input_port_desired_state());
+                  wsg_controller->get_input_port_desired_state());
   builder.Connect(wsg_trajectory_generator->get_max_force_output_port(),
-      wsg_controller->get_input_port_max_force());
+                  wsg_controller->get_input_port_max_force());
 
   builder.ExportOutput(wsg_controller->get_output_port_control());
   builder.BuildInto(this);

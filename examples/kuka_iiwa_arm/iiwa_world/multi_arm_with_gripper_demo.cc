@@ -146,7 +146,7 @@ void main() {
         diagram_builder->AddSystem<systems::ConstantVectorSource<double>>(
             max_force);
     diagram_builder->Connect(max_force_source->get_output_port(),
-                    controller->get_input_port_max_force());
+                             controller->get_input_port_max_force());
   }
 
   // Simulates.
@@ -154,7 +154,7 @@ void main() {
   systems::Simulator<double> simulator(*diagram);
   simulator.Initialize();
   simulator.set_target_realtime_rate(1.0);
-  simulator.StepTo(5);
+  simulator.StepTo(FLAGS_simulation_sec);
 }
 
 }  // namespace

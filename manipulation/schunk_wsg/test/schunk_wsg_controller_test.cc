@@ -15,8 +15,9 @@ namespace manipulation {
 namespace schunk_wsg {
 namespace {
 
-/// Runs the controller for a brief period with the specified initial
-/// conditions and returns the commanded force.
+/// Runs the controller for a brief period with the specified initial conditions
+/// and returns the commanded forces on the gripper's fingers (left finger
+/// first).
 std::pair<double, double> RunWsgControllerTestStep(
     const lcmt_schunk_wsg_command& wsg_command, double wsg_position) {
   SchunkWsgController dut;
@@ -59,7 +60,7 @@ GTEST_TEST(SchunkWsgControllerTest, SchunkWsgControllerTest) {
 
   // Set the position to something near the target and observe zero force.
   commanded_force = RunWsgControllerTestStep(
-      wsg_command, wsg_command.target_position_mm * 0.99);
+      wsg_command, wsg_command.target_position_mm * 0.999);
   EXPECT_NEAR(commanded_force.first, 0, 1);
   EXPECT_NEAR(commanded_force.second, 0, 1);
 }

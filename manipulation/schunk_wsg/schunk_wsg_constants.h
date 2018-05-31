@@ -2,10 +2,7 @@
  * @file
  *
  * Constants defined in this file are for the Schunk WSG gripper modeled in
- * models/schunk_wsg_50.sdf. Although the gripper only has one actuator, the
- * model has a number of constrained linkages to mimic two fingers moving
- * in a coordinated manner. This results in more states than actuators, and
- * a need for a selection matrix for state feedback control.
+ * models/schunk_wsg_50.sdf.
  */
 
 #pragma once
@@ -29,8 +26,7 @@ constexpr double kSchunkWsgLcmStatusPeriod = 0.05;
 
 /**
  * Returns the position vector corresponding to the open position of the
- * gripper. This is more complicated than one might expect due to the linkage in
- * our model of the gripper.
+ * gripper.
  */
 template <typename T>
 VectorX<T> GetSchunkWsgOpenPosition() {
