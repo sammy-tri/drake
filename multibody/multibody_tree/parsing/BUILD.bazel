@@ -253,6 +253,7 @@ drake_cc_googletest(
     name = "multibody_plant_urdf_parser_test",
     data = [
         ":test_models",
+        "//examples/atlas:models",
         "//multibody/benchmarks/acrobot:models",
     ],
     deps = [

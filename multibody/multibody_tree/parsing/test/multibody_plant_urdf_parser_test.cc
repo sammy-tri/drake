@@ -326,6 +326,23 @@ GTEST_TEST(MultibodyPlantUrdfParserTest, DoublePendulum) {
   EXPECT_EQ(link2_com.body().index(), tree.GetBodyByName("link2").index());
 }
 
+// This test verifies that we're able to successfully look up meshes using the
+// "package://" syntax internally to the URDF (at least for packages which are
+// successfully found in the same directory at the URDF.
+GTEST_TEST(MultibodyPlantUrdfParserTest, TestAtlasMinimalContact) {
+  MultibodyPlant<double> plant;
+  SceneGraph<double> scene_graph;
+  std::string full_name = FindResourceOrThrow(
+      "drake/examples/atlas/urdf/atlas_minimal_contact.urdf");
+
+  AddModelFromUrdfFile(full_name, &plant, &scene_graph);
+  plant.Finalize(&scene_graph);
+
+  EXPECT_EQ(plant.num_positions(), 37);
+  EXPECT_EQ(plant.num_velocities(), 36);
+}
+
+
 }  // namespace
 }  // namespace multibody_plant
 }  // namespace multibody
