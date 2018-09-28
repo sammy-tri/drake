@@ -3,6 +3,7 @@
 #include <limits>
 #include <memory>
 #include <stdexcept>
+#include <unordered_map>
 
 #include <Eigen/Dense>
 #include <tinyxml2.h>
@@ -137,6 +138,114 @@ bool ParseBody(const PackageMap& package_map,
   return true;
 }
 
+const Body<double>& GetBodyForElement(
+    const std::string& element_name,
+    const std::string& link_name,
+    ModelInstanceIndex model_instance,
+    multibody_plant::MultibodyPlant<double>* plant) {
+  if (link_name == kWorldName) {
+    return plant->world_body();
+  }
+
+  if (!plant->HasBodyNamed(link_name, model_instance)) {
+    throw std::runtime_error(
+        std::string(__FILE__) + ": " + __func__ + ": ERROR: Could not find "
+        "link named \"" + link_name + "\" with model instance ID " +
+        std::to_string(model_instance) + " for element " + element_name + ".");
+  }
+  return plant->GetBodyByName(link_name, model_instance);
+}
+
+void ParseCollisionFilterGroups(
+    ModelInstanceIndex,
+    XMLElement*,
+    multibody_plant::MultibodyPlant<double>*,
+    geometry::SceneGraph<double>*) {
+#if 0
+  std::unordered_map<std::string, geometry::GeometrySet> group_geoms;
+  std::unordered_map<std::string, std::vector<std::string>> group_ignores;
+
+  for (XMLElement* group_node =
+           node->FirstChildElement("collision_filter_group");
+       group_node;
+       group_node = group_node->NextSiblingElement("collision_filter_group")) {
+    const char* attr = node->Attribute("drake_ignore");
+    if (attr && (std::strcmp(attr, "true") == 0)) return;
+
+    // TODO(SeanCurtis-TRI): After upgrading to newest tinyxml, add line numbers
+    // to error messages.
+    attr = node->Attribute("name");
+    if (!attr) {
+      throw std::runtime_error(
+          std::string(__FILE__) + ": " + __func__ + ": ERROR: "
+          "Collision filter group specification missing name attribute.");
+    }
+    std::string group_name(attr);
+
+    if (group_geoms.count(group_name) > 0) {
+      throw std::runtime_error(
+          std::string(__FILE__) + ": " + __func__ + ": ERROR: "
+          "Duplicate collision filter group " + group_name);
+    }
+
+    std::vector<const Body<double>*> bodies;
+    for (XMLElement* member_node = node->FirstChildElement("member");
+         member_node;
+         member_node = member_node->NextSiblingElement("member")) {
+      const char* link_name = member_node->Attribute("link");
+      if (!link_name) {
+        throw std::runtime_error(
+            std::string(__FILE__) + ": " + __func__ + ": Collision "
+            "filter group " + group_name + " provides a member tag without "
+            "specifying the \"link\" attribute.");
+      }
+      const Body<double>& body = GetBodyForElement(
+          group_name, link_name, model_instance, plant);
+      bodies.push_back(&body);
+    }
+
+    group_geoms[group_name] = plant->CollectRegisteredGeometries(bodies);
+
+    std::vector<std::string> ignores;
+    for (XMLElement* ignore_node =
+             node->FirstChildElement("ignored_collision_filter_group");
+         ignore_node; ignore_node = ignore_node->NextSiblingElement(
+             "ignored_collision_filter_group")) {
+      const char* target_name =
+          ignore_node->Attribute("collision_filter_group");
+      if (!target_name) {
+        throw std::runtime_error(
+            std::string(__FILE__) + ": " + __func__ + ": Collision filter "
+            "group provides a tag specifying a group to ignore without "
+            "specifying the \"collision_filter_group\" attribute.");
+      }
+      ignores.push_back(std::string(target_name));
+    }
+    group_ignores[group_name] = ignores;
+  }
+
+  // Now that we've loaded the group information for all of the groups,
+  // actually ignore things.
+  for (const auto it : group_ignores) {
+    const geometry::GeometrySet& this_group = group_geoms.at(it.first);
+    for (const auto& group_name : it.second) {
+      if (group_name == it.first) {
+        scene_graph->ExcludeCollisionsWithin(this_group);
+      } else {
+        if (group_geoms.count(group_name) == 0) {
+          throw std::runtime_error(
+            std::string(__FILE__) + ": " + __func__ + ": Collision "
+            "filter group " + it.first + " ignores non-existent group " +
+            group_name);
+        }
+        scene_graph->ExcludeCollisionsBetween(
+            this_group, group_geoms.at(group_name));
+      }
+    }
+  }
+#endif
+}
+
 /**
  * Parses a joint URDF specification to obtain the names of the joint, parent
  * link, child link, and the joint type. An exception is thrown if any of these
@@ -239,24 +348,6 @@ void ParseJointDynamics(const std::string& joint_name,
                          "not supported by MultibodyPlant", joint_name);
     }
   }
-}
-
-const Body<double>& GetBodyForElement(
-    const std::string& element_name,
-    const std::string& link_name,
-    ModelInstanceIndex model_instance,
-    multibody_plant::MultibodyPlant<double>* plant) {
-  if (link_name == kWorldName) {
-    return plant->world_body();
-  }
-
-  if (!plant->HasBodyNamed(link_name, model_instance)) {
-    throw std::runtime_error(
-        std::string(__FILE__) + ": " + __func__ + ": ERROR: Could not find "
-        "link named \"" + link_name + "\" with model instance ID " +
-        std::to_string(model_instance) + " for element " + element_name + ".");
-  }
-  return plant->GetBodyByName(link_name, model_instance);
 }
 
 void ParseJoint(ModelInstanceIndex model_instance,
@@ -485,15 +576,9 @@ ModelInstanceIndex ParseUrdf(
     }
   }
 
-#if 0
-  // Parses the collision filter groups.
-  for (XMLElement* group_node =
-           node->FirstChildElement("collision_filter_group");
-       group_node;
-       group_node = group_node->NextSiblingElement("collision_filter_group")) {
-    ParseCollisionFilterGroup(tree, group_node, model_instance_id);
-  }
-#endif
+  // Parses the collision filter groups.  The collision filter groups can
+  // refer to one another and thus need to be parsed as a batch.
+  ParseCollisionFilterGroups(model_instance, node, plant, scene_graph);
 
   // Parses the model's joint elements.
   for (XMLElement* joint_node = node->FirstChildElement("joint"); joint_node;
@@ -511,9 +596,10 @@ ModelInstanceIndex ParseUrdf(
 
   if (node->FirstChildElement("loop_joint")) {
     throw std::runtime_error(
-        std::string(__FILE__) + ": " + __func__ + ": ERROR: "
-        "loop joints are not supported in MultibodyTree");
+            std::string(__FILE__) + ": " + __func__ + ": ERROR: "
+            "loop joints are not supported in MultibodyTree");
   }
+
   // Parses the model's Drake frame elements.
   for (XMLElement* frame_node = node->FirstChildElement("frame"); frame_node;
        frame_node = frame_node->NextSiblingElement("frame"))
