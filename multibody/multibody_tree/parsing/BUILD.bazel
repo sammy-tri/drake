@@ -192,6 +192,7 @@ drake_cc_library(
     ],
     deps = [
         ":multibody_plant_sdf_parser",
+        ":multibody_plant_urdf_parser",
         ":parser_common",
         "//common:find_resource",
     ],
