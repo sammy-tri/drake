@@ -545,7 +545,10 @@ drake_cc_library(
 drake_cc_library(
     name = "diagram_builder",
     srcs = ["diagram_builder.cc"],
-    hdrs = ["diagram_builder.h"],
+    hdrs = [
+        "diagram_builder.h",
+        "diagram_builder-inl.h",
+    ],
     deps = [
         ":diagram",
         "//common:default_scalars",
