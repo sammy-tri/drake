@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include "drake/systems/framework/leaf_system.h"
+#include "drake/systems/framework/system-inl.h"
 #include "drake/systems/framework/test_utilities/my_vector.h"
 
 namespace drake {

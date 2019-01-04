@@ -85,10 +85,7 @@ class System : public SystemBase {
   /// Returns a Context<T> suitable for use with this System<T>.
   // This is just an intentional shadowing of the base class method to return
   // a more convenient type.
-  std::unique_ptr<Context<T>> AllocateContext() const {
-    return dynamic_pointer_cast_or_throw<Context<T>>(
-        SystemBase::AllocateContext());
-  }
+  std::unique_ptr<Context<T>> AllocateContext() const;
 
   /// Allocates a CompositeEventCollection for this system. The allocated
   /// instance is used for registering events; for example, Simulator passes
@@ -100,37 +97,18 @@ class System : public SystemBase {
   /// Given an input port, allocates the vector storage.  The @p input_port
   /// must match a port declared via DeclareInputPort.
   std::unique_ptr<BasicVector<T>> AllocateInputVector(
-      const InputPort<T>& input_port) const {
-    DRAKE_THROW_UNLESS(input_port.get_data_type() == kVectorValued);
-    const int index = input_port.get_index();
-    DRAKE_ASSERT(index >= 0 && index < get_num_input_ports());
-    DRAKE_ASSERT(get_input_port(index).get_data_type() == kVectorValued);
-    std::unique_ptr<AbstractValue> value = DoAllocateInput(input_port);
-    return value->GetMutableValue<BasicVector<T>>().Clone();
-  }
+      const InputPort<T>& input_port) const;
 
   /// Given an input port, allocates the abstract storage.  The @p input_port
   /// must match a port declared via DeclareInputPort.
   std::unique_ptr<AbstractValue> AllocateInputAbstract(
-      const InputPort<T>& input_port) const {
-    const int index = input_port.get_index();
-    DRAKE_ASSERT(index >= 0 && index < get_num_input_ports());
-    return DoAllocateInput(input_port);
-  }
+      const InputPort<T>& input_port) const;
 
   /// Returns a container that can hold the values of all of this System's
   /// output ports. It is sized with the number of output ports and uses each
   /// output port's allocation method to provide an object of the right type
   /// for that port.
-  std::unique_ptr<SystemOutput<T>> AllocateOutput() const {
-    // make_unique can't invoke this private constructor.
-    auto output = std::unique_ptr<SystemOutput<T>>(new SystemOutput<T>());
-    for (int i = 0; i < this->get_num_output_ports(); ++i) {
-      const OutputPort<T>& port = this->get_output_port(i);
-      output->add_port(port.Allocate());
-    }
-    return output;
-  }
+  std::unique_ptr<SystemOutput<T>> AllocateOutput() const;
 
   /// Returns a ContinuousState of the same size as the continuous_state
   /// allocated in CreateDefaultContext. The simulator will provide this state
@@ -153,11 +131,7 @@ class System : public SystemBase {
 
   /// This convenience method allocates a context using AllocateContext() and
   /// sets its default values using SetDefaultContext().
-  std::unique_ptr<Context<T>> CreateDefaultContext() const {
-    std::unique_ptr<Context<T>> context = AllocateContext();
-    SetDefaultContext(context.get());
-    return context;
-  }
+  std::unique_ptr<Context<T>> CreateDefaultContext() const;
 
   /// Assigns default values to all elements of the state. Overrides must not
   /// change the number of state variables.
@@ -171,25 +145,7 @@ class System : public SystemBase {
 
   // Sets Context fields to their default values.  User code should not
   // override.
-  void SetDefaultContext(Context<T>* context) const {
-    // Set the default state, checking that the number of state variables does
-    // not change.
-    const int n_xc = context->get_continuous_state().size();
-    const int n_xd = context->get_num_discrete_state_groups();
-    const int n_xa = context->get_num_abstract_states();
-
-    SetDefaultState(*context, &context->get_mutable_state());
-
-    DRAKE_DEMAND(n_xc == context->get_continuous_state().size());
-    DRAKE_DEMAND(n_xd == context->get_num_discrete_state_groups());
-    DRAKE_DEMAND(n_xa == context->get_num_abstract_states());
-
-    // Set the default parameters, checking that the number of parameters does
-    // not change.
-    const int num_params = context->num_numeric_parameter_groups();
-    SetDefaultParameters(*context, &context->get_mutable_parameters());
-    DRAKE_DEMAND(num_params == context->num_numeric_parameter_groups());
-  }
+  void SetDefaultContext(Context<T>* context) const;
 
   /// Assigns random values to all elements of the state.
   /// This default implementation calls SetDefaultState; override this method to
@@ -228,41 +184,12 @@ class System : public SystemBase {
 
   // Sets Context fields to random values.  User code should not
   // override.
-  void SetRandomContext(Context<T>* context, RandomGenerator* generator) const {
-    // Set the default state, checking that the number of state variables does
-    // not change.
-    const int n_xc = context->get_continuous_state().size();
-    const int n_xd = context->get_num_discrete_state_groups();
-    const int n_xa = context->get_num_abstract_states();
-
-    SetRandomState(*context, &context->get_mutable_state(), generator);
-
-    DRAKE_DEMAND(n_xc == context->get_continuous_state().size());
-    DRAKE_DEMAND(n_xd == context->get_num_discrete_state_groups());
-    DRAKE_DEMAND(n_xa == context->get_num_abstract_states());
-
-    // Set the default parameters, checking that the number of parameters does
-    // not change.
-    const int num_params = context->num_numeric_parameter_groups();
-    SetRandomParameters(*context, &context->get_mutable_parameters(),
-                        generator);
-    DRAKE_DEMAND(num_params == context->num_numeric_parameter_groups());
-  }
+  void SetRandomContext(Context<T>* context, RandomGenerator* generator) const;
 
   /// For each input port, allocates a fixed input of the concrete type
   /// that this System requires, and binds it to the port, disconnecting any
   /// prior input. Does not assign any values to the fixed inputs.
-  void AllocateFixedInputs(Context<T>* context) const {
-    for (InputPortIndex i(0); i < get_num_input_ports(); ++i) {
-      const InputPort<T>& port = get_input_port(i);
-      if (port.get_data_type() == kVectorValued) {
-        context->FixInputPort(port.get_index(), AllocateInputVector(port));
-      } else {
-        DRAKE_DEMAND(port.get_data_type() == kAbstractValued);
-        context->FixInputPort(port.get_index(), AllocateInputAbstract(port));
-      }
-    }
-  }
+  void AllocateFixedInputs(Context<T>* context) const;
 
   /// Reports all direct feedthroughs from input ports to output ports. For
   /// a system with m input ports: `I = i₀, i₁, ..., iₘ₋₁`, and n output ports,
@@ -283,24 +210,12 @@ class System : public SystemBase {
 
   /// Returns true if there might be direct-feedthrough from any input port to
   /// the given @p output_port, and false otherwise.
-  bool HasDirectFeedthrough(int output_port) const {
-    std::multimap<int, int> pairs = GetDirectFeedthroughs();
-    for (const auto& pair : pairs) {
-      if (pair.second == output_port) return true;
-    }
-    return false;
-  }
+  bool HasDirectFeedthrough(int output_port) const;
 
   /// Returns true if there might be direct-feedthrough from the given
   /// @p input_port to the given @p output_port, and false otherwise.
-  bool HasDirectFeedthrough(int input_port, int output_port) const {
-    std::multimap<int, int> pairs = GetDirectFeedthroughs();
-    auto range = pairs.equal_range(input_port);
-    for (auto i = range.first; i != range.second; ++i) {
-      if (i->second == output_port) return true;
-    }
-    return false;
-  }
+  bool HasDirectFeedthrough(int input_port, int output_port) const;
+
   //@}
 
   //----------------------------------------------------------------------------
@@ -381,11 +296,7 @@ class System : public SystemBase {
   ///               continuous state.
   /// @see CalcTimeDerivatives()
   const ContinuousState<T>& EvalTimeDerivatives(
-      const Context<T>& context) const {
-    const CacheEntry& entry =
-        this->get_cache_entry(time_derivatives_cache_index_);
-    return entry.Eval<ContinuousState<T>>(context);
-  }
+      const Context<T>& context) const;
 
   /// Returns a reference to the cached value of the potential energy (PE),
   /// evaluating first if necessary using CalcPotentialEnergy().
@@ -405,11 +316,7 @@ class System : public SystemBase {
   /// @retval PE The potential energy in joules (J) represented by the
   ///            configuration given in `context`.
   /// @see CalcPotentialEnergy()
-  const T& EvalPotentialEnergy(const Context<T>& context) const {
-    const CacheEntry& entry =
-        this->get_cache_entry(potential_energy_cache_index_);
-    return entry.Eval<T>(context);
-  }
+  const T& EvalPotentialEnergy(const Context<T>& context) const;
 
   /// Returns a reference to the cached value of the kinetic energy (KE),
   /// evaluating first if necessary using CalcKineticEnergy().
@@ -428,11 +335,7 @@ class System : public SystemBase {
   /// @retval KE The kinetic energy in joules (J) represented by the
   ///            configuration and velocity given in `context`.
   /// @see CalcKineticEnergy()
-  const T& EvalKineticEnergy(const Context<T>& context) const {
-    const CacheEntry& entry =
-        this->get_cache_entry(kinetic_energy_cache_index_);
-    return entry.Eval<T>(context);
-  }
+  const T& EvalKineticEnergy(const Context<T>& context) const;
 
   /// Returns a reference to the cached value of the conservative power (Pc),
   /// evaluating first if necessary using CalcConservativePower().
@@ -459,11 +362,7 @@ class System : public SystemBase {
   ///            contents of the given `context`.
   /// @see CalcConservativePower(), EvalNonConservativePower(),
   ///      EvalPotentialEnergy(), EvalKineticEnergy()
-  const T& EvalConservativePower(const Context<T>& context) const {
-    const CacheEntry& entry =
-        this->get_cache_entry(conservative_power_cache_index_);
-    return entry.Eval<T>(context);
-  }
+  const T& EvalConservativePower(const Context<T>& context) const;
 
   /// Returns a reference to the cached value of the non-conservative power
   /// (Pnc), evaluating first if necessary using CalcNonConservativePower().
@@ -485,11 +384,7 @@ class System : public SystemBase {
   /// @retval Pnc The non-conservative power in watts (W or J/s) represented by
   ///             the contents of the given `context`.
   /// @see CalcNonConservativePower(), EvalConservativePower()
-  const T& EvalNonConservativePower(const Context<T>& context) const {
-    const CacheEntry& entry =
-        this->get_cache_entry(nonconservative_power_cache_index_);
-    return entry.Eval<T>(context);
-  }
+  const T& EvalNonConservativePower(const Context<T>& context) const;
 
   /// Returns the value of the vector-valued input port with the given
   /// `port_index` as a BasicVector or a specific subclass `Vec` derived from
@@ -543,18 +438,8 @@ class System : public SystemBase {
   ///
   /// @see EvalVectorInput()
   Eigen::VectorBlock<const VectorX<T>> EvalEigenVectorInput(
-      const Context<T>& context, int port_index) const {
-    if (port_index < 0)
-      ThrowNegativePortIndex(__func__, port_index);
-    const InputPortIndex port(port_index);
+      const Context<T>& context, int port_index) const;
 
-    const BasicVector<T>* const basic_value =
-        EvalBasicVectorInputImpl(__func__, context, port);
-    if (basic_value == nullptr)
-      ThrowCantEvaluateInputPort(__func__, port);
-
-    return basic_value->get_value();
-  }
   //@}
 
   //----------------------------------------------------------------------------
@@ -705,25 +590,7 @@ class System : public SystemBase {
   void CalcUnrestrictedUpdate(
       const Context<T>& context,
       const EventCollection<UnrestrictedUpdateEvent<T>>& events,
-      State<T>* state) const {
-    DRAKE_ASSERT_VOID(CheckValidContext(context));
-    const int continuous_state_dim = state->get_continuous_state().size();
-    const int discrete_state_dim = state->get_discrete_state().num_groups();
-    const int abstract_state_dim = state->get_abstract_state().size();
-
-    // Copy current state to the passed-in state, as specified in the
-    // documentation for DoCalcUnrestrictedUpdate().
-    state->CopyFrom(context.get_state());
-
-    DispatchUnrestrictedUpdateHandler(context, events, state);
-
-    if (continuous_state_dim != state->get_continuous_state().size() ||
-        discrete_state_dim != state->get_discrete_state().num_groups() ||
-        abstract_state_dim != state->get_abstract_state().size())
-      throw std::logic_error(
-          "State variable dimensions cannot be changed "
-          "in CalcUnrestrictedUpdate().");
-  }
+      State<T>* state) const;
 
   /// This method forces an unrestricted update on the system given a
   /// @p context, and the updated state is stored in @p state. The
@@ -802,22 +669,7 @@ class System : public SystemBase {
   /// @returns optional<PeriodicEventData> Contains the periodic trigger
   /// attributes if the unique periodic attribute exists, otherwise `nullopt`.
   optional<PeriodicEventData>
-      GetUniquePeriodicDiscreteUpdateAttribute() const {
-    optional<PeriodicEventData> saved_attr;
-    auto periodic_events = GetPeriodicEvents();
-    for (const auto& saved_attr_and_vector : periodic_events) {
-      for (const auto& event : saved_attr_and_vector.second) {
-        if (event->is_discrete_update()) {
-          if (saved_attr)
-            return nullopt;
-          saved_attr = saved_attr_and_vector.first;
-          break;
-        }
-      }
-    }
-
-    return saved_attr;
-  }
+    GetUniquePeriodicDiscreteUpdateAttribute() const;
 
   /// Gets all periodic triggered events for a system. Each periodic attribute
   /// (offset and period, in seconds) is mapped to one or more update events
@@ -835,18 +687,7 @@ class System : public SystemBase {
   /// input ports, parameters, and state variables. The result is written to
   /// `outputs` which must already have been allocated to have the right number
   /// of entries of the right types.
-  void CalcOutput(const Context<T>& context, SystemOutput<T>* outputs) const {
-    DRAKE_DEMAND(outputs != nullptr);
-    DRAKE_ASSERT_VOID(CheckValidContext(context));
-    DRAKE_ASSERT_VOID(CheckValidOutput(outputs));
-    for (OutputPortIndex i(0); i < get_num_output_ports(); ++i) {
-      // TODO(sherm1) Would be better to use Eval() here but we don't have
-      // a generic abstract assignment capability that would allow us to
-      // copy into existing memory in `outputs` (rather than clone). User
-      // code depends on memory stability in SystemOutput.
-      get_output_port(i).Calc(context, outputs->GetMutableData(i));
-    }
-  }
+  void CalcOutput(const Context<T>& context, SystemOutput<T>* outputs) const;
 
   /// Calculates and returns the potential energy represented by the current
   /// configuration provided in `context`. Prefer EvalPotentialEnergy() to
@@ -1050,10 +891,7 @@ class System : public SystemBase {
   /// and should not be used for behavioral logic, because the stringification
   /// of the type name may produce differing results across platforms and
   /// because the address can vary from run to run.
-  std::string GetMemoryObjectName() const {
-    return SystemImpl::GetMemoryObjectName(NiceTypeName::Get(*this),
-                                           GetGraphvizId());
-  }
+  std::string GetMemoryObjectName() const;
 
   // So we don't have to keep writing this->get_num_input_ports().
   using SystemBase::get_num_input_ports;
@@ -1061,47 +899,23 @@ class System : public SystemBase {
 
   /// Returns the typed input port at index @p port_index.
   // TODO(sherm1) Make this an InputPortIndex.
-  const InputPort<T>& get_input_port(int port_index) const {
-    return dynamic_cast<const InputPort<T>&>(
-        this->GetInputPortBaseOrThrow(__func__, port_index));
-  }
+  const InputPort<T>& get_input_port(int port_index) const;
 
   /// Returns the typed input port with the unique name @p port_name.
   /// The current implementation performs a linear search over strings; prefer
   /// get_input_port() when performance is a concern.
   /// @throws std::logic_error if port_name is not found.
-  const InputPort<T>& GetInputPort(const std::string& port_name) const {
-    for (InputPortIndex i{0}; i < get_num_input_ports(); i++) {
-      if (port_name == get_input_port_base(i).get_name()) {
-        return get_input_port(i);
-      }
-    }
-    throw std::logic_error("System " + GetSystemName() +
-                           " does not have an input port named " +
-                           port_name);
-  }
+  const InputPort<T>& GetInputPort(const std::string& port_name) const;
 
   /// Returns the typed output port at index @p port_index.
   // TODO(sherm1) Make this an OutputPortIndex.
-  const OutputPort<T>& get_output_port(int port_index) const {
-    return dynamic_cast<const OutputPort<T>&>(
-        this->GetOutputPortBaseOrThrow(__func__, port_index));
-  }
+  const OutputPort<T>& get_output_port(int port_index) const;
 
   /// Returns the typed output port with the unique name @p port_name.
   /// The current implementation performs a linear search over strings; prefer
   /// get_output_port() when performance is a concern.
   /// @throws std::logic_error if port_name is not found.
-  const OutputPort<T>& GetOutputPort(const std::string& port_name) const {
-    for (OutputPortIndex i{0}; i < get_num_output_ports(); i++) {
-      if (port_name == get_output_port_base(i).get_name()) {
-        return get_output_port(i);
-      }
-    }
-    throw std::logic_error("System " + GetSystemName() +
-                           " does not have an output port named " +
-                           port_name);
-  }
+  const OutputPort<T>& GetOutputPort(const std::string& port_name) const;
 
   /// Returns the number of constraints specified for the system.
   int get_num_constraints() const {
@@ -1116,60 +930,19 @@ class System : public SystemBase {
   /// Returns the constraint at index @p constraint_index.
   /// @throws std::out_of_range for an invalid constraint_index.
   const SystemConstraint<T>& get_constraint(
-      SystemConstraintIndex constraint_index) const {
-    if (constraint_index < 0 || constraint_index >= get_num_constraints()) {
-      throw std::out_of_range("System " + get_name() + ": Constraint index " +
-                              std::to_string(constraint_index) +
-                              " is out of range. There are only " +
-                              std::to_string(get_num_constraints()) +
-                              " constraints.");
-    }
-    return *constraints_[constraint_index];
-  }
+      SystemConstraintIndex constraint_index) const;
 
   /// Returns true if @p context satisfies all of the registered
   /// SystemConstraints with tolerance @p tol.  @see
   /// SystemConstraint::CheckSatisfied.
   boolean<T> CheckSystemConstraintsSatisfied(
-      const Context<T>& context, double tol) const {
-    DRAKE_DEMAND(tol >= 0.0);
-    boolean<T> result{true};
-    for (const auto& constraint : constraints_) {
-      result = result && constraint->CheckSatisfied(context, tol);
-      // If T is a real number (not a symbolic expression), we can bail out
-      // early with a diagnostic when the first constraint fails.
-      if (scalar_predicate<T>::is_bool && !result) {
-        SPDLOG_DEBUG(drake::log(),
-                     "Context fails to satisfy SystemConstraint {}",
-                     constraint->description());
-        return result;
-      }
-    }
-    return result;
-  }
+      const Context<T>& context, double tol) const;
 
   /// Checks that @p output is consistent with the number and size of output
   /// ports declared by the system.
   /// @throws std::exception unless `output` is non-null and valid for this
   /// system.
-  void CheckValidOutput(const SystemOutput<T>* output) const {
-    DRAKE_THROW_UNLESS(output != nullptr);
-
-    // Checks that the number of output ports in the system output is consistent
-    // with the number of output ports declared by the System.
-    DRAKE_THROW_UNLESS(output->get_num_ports() == get_num_output_ports());
-
-    // Checks the validity of each output port.
-    for (int i = 0; i < get_num_output_ports(); ++i) {
-      // TODO(sherm1): consider adding (very expensive) validation of the
-      // abstract ports also.
-      if (get_output_port(i).get_data_type() == kVectorValued) {
-        const BasicVector<T>* output_vector = output->get_vector_data(i);
-        DRAKE_THROW_UNLESS(output_vector != nullptr);
-        DRAKE_THROW_UNLESS(output_vector->size() == get_output_port(i).size());
-      }
-    }
-  }
+  void CheckValidOutput(const SystemOutput<T>* output) const;
 
   /// Checks that @p context is consistent for this System template. Supports
   /// any scalar type, but expects T by default.
@@ -1223,15 +996,7 @@ class System : public SystemBase {
   /// @param max_depth Sets a limit to the depth of nested diagrams to
   // visualize.  Set to zero to render a diagram as a single system block.
   std::string GetGraphvizString(
-      int max_depth = std::numeric_limits<int>::max()) const {
-    DRAKE_DEMAND(max_depth >= 0);
-    std::stringstream dot;
-    dot << "digraph _" << this->GetGraphvizId() << " {" << std::endl;
-    dot << "rankdir=LR" << std::endl;
-    GetGraphvizFragment(max_depth, &dot);
-    dot << "}" << std::endl;
-    return dot.str();
-  }
+      int max_depth = std::numeric_limits<int>::max()) const;
 
   /// Appends a Graphviz fragment to the @p dot stream.  The fragment must be
   /// valid Graphviz when wrapped in a `digraph` or `subgraph` stanza.  Does
@@ -1284,9 +1049,7 @@ class System : public SystemBase {
   ///
   /// See @ref system_scalar_conversion for detailed background and examples
   /// related to scalar-type conversion support.
-  std::unique_ptr<System<AutoDiffXd>> ToAutoDiffXd() const {
-    return System<T>::ToAutoDiffXd(*this);
-  }
+  std::unique_ptr<System<AutoDiffXd>> ToAutoDiffXd() const;
 
   /// Creates a deep copy of `from`, transmogrified to use the autodiff scalar
   /// type, with a dynamic-sized vector of partial derivatives.  The result is
@@ -1320,9 +1083,7 @@ class System : public SystemBase {
   /// Creates a deep copy of this system exactly like ToAutoDiffXd(), but
   /// returns nullptr if this System does not support autodiff, instead of
   /// throwing an exception.
-  std::unique_ptr<System<AutoDiffXd>> ToAutoDiffXdMaybe() const {
-    return system_scalar_converter_.Convert<AutoDiffXd, T>(*this);
-  }
+  std::unique_ptr<System<AutoDiffXd>> ToAutoDiffXdMaybe() const;
   //@}
 
   //----------------------------------------------------------------------------
@@ -1340,9 +1101,7 @@ class System : public SystemBase {
   ///
   /// See @ref system_scalar_conversion for detailed background and examples
   /// related to scalar-type conversion support.
-  std::unique_ptr<System<symbolic::Expression>> ToSymbolic() const {
-    return System<T>::ToSymbolic(*this);
-  }
+  std::unique_ptr<System<symbolic::Expression>> ToSymbolic() const;
 
   /// Creates a deep copy of `from`, transmogrified to use the symbolic scalar
   /// type. The result is never nullptr.
@@ -1375,9 +1134,8 @@ class System : public SystemBase {
   /// Creates a deep copy of this system exactly like ToSymbolic(), but returns
   /// nullptr if this System does not support symbolic, instead of throwing an
   /// exception.
-  std::unique_ptr<System<symbolic::Expression>> ToSymbolicMaybe() const {
-    return system_scalar_converter_.Convert<symbolic::Expression, T>(*this);
-  }
+  std::unique_ptr<System<symbolic::Expression>> ToSymbolicMaybe() const;
+
   //@}
 
   //----------------------------------------------------------------------------
@@ -1391,38 +1149,7 @@ class System : public SystemBase {
   /// disconnected inputs.
   void FixInputPortsFrom(const System<double>& other_system,
                          const Context<double>& other_context,
-                         Context<T>* target_context) const {
-    DRAKE_ASSERT_VOID(CheckValidContextT(other_context));
-    DRAKE_ASSERT_VOID(CheckValidContext(*target_context));
-    DRAKE_ASSERT_VOID(other_system.CheckValidContext(other_context));
-    DRAKE_ASSERT_VOID(other_system.CheckValidContextT(*target_context));
-
-    for (int i = 0; i < get_num_input_ports(); ++i) {
-      const auto& input_port = get_input_port(i);
-
-      if (input_port.get_data_type() == kVectorValued) {
-        // For vector-valued input ports, we placewise initialize a fixed input
-        // vector using the explicit conversion from double to T.
-        const BasicVector<double>* other_vec =
-            other_system.EvalVectorInput(other_context, i);
-        if (other_vec == nullptr) continue;
-        auto our_vec = this->AllocateInputVector(input_port);
-        for (int j = 0; j < our_vec->size(); ++j) {
-          our_vec->SetAtIndex(j, T(other_vec->GetAtIndex(j)));
-        }
-        target_context->FixInputPort(i, *our_vec);
-      } else if (input_port.get_data_type() == kAbstractValued) {
-        // For abstract-valued input ports, we just clone the value and fix
-        // it to the port.
-        const AbstractValue* other_value =
-            other_system.EvalAbstractInput(other_context, i);
-        if (other_value == nullptr) continue;
-        target_context->FixInputPort(i, other_value->Clone());
-      } else {
-        DRAKE_ABORT_MSG("Unknown input port type.");
-      }
-    }
-  }
+                         Context<T>* target_context) const;
 
   /// (Advanced) Returns the SystemScalarConverter for this object.  This is an
   /// expert-level API intended for framework authors.  Most users should
@@ -1582,71 +1309,7 @@ class System : public SystemBase {
   ///
   /// See @ref system_scalar_conversion for detailed background and examples
   /// related to scalar-type conversion support.
-  explicit System(SystemScalarConverter converter)
-      : system_scalar_converter_(std::move(converter)) {
-    // Note that configuration and kinematics tickets also include dependence
-    // on parameters and accuracy, but not time or input ports.
-
-    // Potential and kinetic energy, and conservative power that measures
-    // the transfer between them, must _not_ be (explicitly) time dependent.
-    // See API documentation above for Eval{Potential|Kinetic}Energy() and
-    // EvalConservativePower() to see why.
-
-    // TODO(sherm1) Due to issue #9171 we cannot always recognize which
-    // variables contribute to configuration so we'll invalidate on all changes.
-    // Use configuration, kinematics, and mass tickets when #9171 is resolved.
-    potential_energy_cache_index_ =
-        DeclareCacheEntry("potential energy",
-            &System<T>::CalcPotentialEnergy,
-            {all_sources_ticket()})  // After #9171: configuration + mass.
-            .cache_index();
-
-    kinetic_energy_cache_index_ =
-        DeclareCacheEntry("kinetic energy",
-            &System<T>::CalcKineticEnergy,
-            {all_sources_ticket()})  // After #9171: kinematics + mass.
-            .cache_index();
-
-    conservative_power_cache_index_ =
-        DeclareCacheEntry("conservative power",
-            &System<T>::CalcConservativePower,
-            {all_sources_ticket()})  // After #9171: kinematics + mass.
-            .cache_index();
-
-    // Only non-conservative power can have an explicit time or input
-    // port dependence. See API documentation above for
-    // EvalNonConservativePower() to see why.
-    nonconservative_power_cache_index_ =
-        DeclareCacheEntry("non-conservative power",
-                          &System<T>::CalcNonConservativePower,
-                          {all_sources_ticket()})  // This is correct.
-            .cache_index();
-
-    // For the time derivative cache we need to use the general form for
-    // cache creation because we're dealing with pre-defined allocator and
-    // calculator method signatures.
-    CacheEntry::AllocCallback alloc_derivatives = [this]() {
-      return std::make_unique<Value<ContinuousState<T>>>(
-          this->AllocateTimeDerivatives());
-    };
-    CacheEntry::CalcCallback calc_derivatives = [this](
-        const ContextBase& context_base, AbstractValue* result) {
-      DRAKE_DEMAND(result != nullptr);
-      ContinuousState<T>& state = result->GetMutableValue<ContinuousState<T>>();
-      const Context<T>& context = dynamic_cast<const Context<T>&>(context_base);
-      CalcTimeDerivatives(context, &state);
-    };
-
-    // We must assume that time derivatives can depend on *any* context source.
-    time_derivatives_cache_index_ =
-        this->DeclareCacheEntryWithKnownTicket(
-                xcdot_ticket(), "time derivatives",
-                std::move(alloc_derivatives), std::move(calc_derivatives),
-                {all_sources_ticket()})
-            .cache_index();
-
-    // TODO(sherm1) Allocate and use discrete update cache.
-  }
+  explicit System(SystemScalarConverter converter);
 
   /// Adds a port with the specified @p type and @p size to the input topology.
   ///
@@ -1665,15 +1328,7 @@ class System : public SystemBase {
   /// @returns the declared port.
   const InputPort<T>& DeclareInputPort(
       variant<std::string, UseDefaultName> name, PortDataType type, int size,
-      optional<RandomDistribution> random_type = nullopt) {
-    const InputPortIndex port_index(get_num_input_ports());
-
-    const DependencyTicket port_ticket(this->assign_next_dependency_ticket());
-    this->AddInputPort(std::make_unique<InputPort<T>>(
-        this, this, NextInputPortName(std::move(name)), port_index, port_ticket,
-        type, size, random_type));
-    return get_input_port(port_index);
-  }
+      optional<RandomDistribution> random_type = nullopt);
 
   //@}
 
@@ -1893,18 +1548,7 @@ class System : public SystemBase {
   /// Context, and that `generalized_velocity` is non-null.
   virtual void DoMapQDotToVelocity(const Context<T>& context,
                                    const Eigen::Ref<const VectorX<T>>& qdot,
-                                   VectorBase<T>* generalized_velocity) const {
-    unused(context);
-    // In the particular case where generalized velocity and generalized
-    // configuration are not even the same size, we detect this error and abort.
-    // This check will thus not identify cases where the generalized velocity
-    // and time derivative of generalized configuration are identically sized
-    // but not identical!
-    const int n = qdot.size();
-    // You need to override System<T>::DoMapQDottoVelocity!
-    DRAKE_THROW_UNLESS(generalized_velocity->size() == n);
-    generalized_velocity->SetFromVector(qdot);
-  }
+                                   VectorBase<T>* generalized_velocity) const;
 
   /// Provides the substantive implementation of MapVelocityToQDot().
   ///
@@ -1927,18 +1571,8 @@ class System : public SystemBase {
   virtual void DoMapVelocityToQDot(
       const Context<T>& context,
       const Eigen::Ref<const VectorX<T>>& generalized_velocity,
-      VectorBase<T>* qdot) const {
-    unused(context);
-    // In the particular case where generalized velocity and generalized
-    // configuration are not even the same size, we detect this error and abort.
-    // This check will thus not identify cases where the generalized velocity
-    // and time derivative of generalized configuration are identically sized
-    // but not identical!
-    const int n = generalized_velocity.size();
-    // You need to override System<T>::DoMapVelocityToQDot!
-    DRAKE_THROW_UNLESS(qdot->size() == n);
-    qdot->SetFromVector(generalized_velocity);
-  }
+      VectorBase<T>* qdot) const;
+
   //@}
 
   //----------------------------------------------------------------------------
@@ -2067,6 +1701,7 @@ class System : public SystemBase {
     forced_unrestricted_update_ = std::move(forced);
   }
 
+
  private:
   // Attorney-Client idiom to expose a subset of private elements of System.
   // Refer to SystemImpl comments for details.
@@ -2078,73 +1713,10 @@ class System : public SystemBase {
       const InputPort<T>& input_port) const = 0;
 
   // SystemBase override checks a Context of same type T.
-  void DoCheckValidContext(const ContextBase& context_base) const final {
-    const Context<T>* context = dynamic_cast<const Context<T>*>(&context_base);
-    DRAKE_THROW_UNLESS(context != nullptr);
-    CheckValidContextT(*context);
-  }
+  void DoCheckValidContext(const ContextBase& context_base) const final;
 
   std::function<void(const AbstractValue&)> MakeFixInputPortTypeChecker(
-      InputPortIndex port_index) const final {
-    const InputPort<T>& port = this->get_input_port(port_index);
-    const std::string pathname = this->GetSystemPathname();
-
-    // Note that our lambdas below will capture all necessary items by-value,
-    // so that they do not rely on this System still being alive.  (We do not
-    // allow a Context and System to have pointers to each other.)
-    switch (port.get_data_type()) {
-      case kAbstractValued: {
-        // For abstract inputs, we only need to ensure that both runtime values
-        // share the same base T in the Value<T>. Even if the System declared a
-        // model_value that was a subtype of T, there is no EvalInputValue
-        // sugar that allows the System to evaluate the input by downcasting to
-        // that subtype, so here we should not insist that some dynamic_cast
-        // would succeed. If the user writes the downcast on their own, it's
-        // fine to let them also handle detailed error reporting on their own.
-        const std::type_info& expected_type =
-            this->AllocateInputAbstract(port)->static_type_info();
-        return [&expected_type, port_index, pathname](
-            const AbstractValue& actual) {
-          if (actual.static_type_info() != expected_type) {
-            SystemBase::ThrowInputPortHasWrongType(
-                "FixInputPortTypeCheck", pathname, port_index,
-                NiceTypeName::Get(expected_type),
-                NiceTypeName::Get(actual.type_info()));
-          }
-        };
-      }
-      case kVectorValued: {
-        // For vector inputs, check that the size is the same.
-        // TODO(jwnimmer-tri) We should type-check the vector, eventually.
-        const std::unique_ptr<BasicVector<T>> model_vector =
-            this->AllocateInputVector(port);
-        const int expected_size = model_vector->size();
-        return [expected_size, port_index, pathname](
-            const AbstractValue& actual) {
-          const BasicVector<T>* const actual_vector =
-              actual.MaybeGetValue<BasicVector<T>>();
-          if (actual_vector == nullptr) {
-            SystemBase::ThrowInputPortHasWrongType(
-                "FixInputPortTypeCheck", pathname, port_index,
-                NiceTypeName::Get<Value<BasicVector<T>>>(),
-                NiceTypeName::Get(actual));
-          }
-          // Check that vector sizes match.
-          if (actual_vector->size() != expected_size) {
-            SystemBase::ThrowInputPortHasWrongType(
-                "FixInputPortTypeCheck", pathname, port_index,
-                fmt::format("{} with size={}",
-                            NiceTypeName::Get<BasicVector<T>>(),
-                            expected_size),
-                fmt::format("{} with size={}",
-                            NiceTypeName::Get(*actual_vector),
-                            actual_vector->size()));
-          }
-        };
-      }
-    }
-    DRAKE_ABORT();
-  }
+      InputPortIndex port_index) const final;
 
   // Shared code for updating a vector input port and returning a pointer to its
   // value as a BasicVector<T>, or nullptr if the port is not connected. Throws
@@ -2153,32 +1725,7 @@ class System : public SystemBase {
   // function name obtained with __func__.
   const BasicVector<T>* EvalBasicVectorInputImpl(
       const char* func, const Context<T>& context,
-      InputPortIndex port_index) const {
-    // Make sure this is the right kind of port before worrying about whether
-    // it is connected up properly.
-    const InputPortBase& port = GetInputPortBaseOrThrow(func, port_index);
-    if (port.get_data_type() != kVectorValued)
-      ThrowNotAVectorInputPort(func, port_index);
-
-    // If there is no value at all, the port is not connected which is not
-    // a problem here.
-    const AbstractValue* const abstract_value =
-        EvalAbstractInputImpl(func, context, port_index);
-    if (abstract_value == nullptr) {
-      return nullptr;
-    }
-
-    // We have a vector port with a value, it better be a BasicVector!
-    const BasicVector<T>* const basic_value =
-        abstract_value->MaybeGetValue<BasicVector<T>>();
-    DRAKE_DEMAND(basic_value != nullptr);
-
-    // Shouldn't have been possible to create this vector-valued port with
-    // the wrong size.
-    DRAKE_DEMAND(basic_value->size() == port.size());
-
-    return basic_value;
-  }
+      InputPortIndex port_index) const;
 
   std::vector<std::unique_ptr<SystemConstraint<T>>> constraints_;
 

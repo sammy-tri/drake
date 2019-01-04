@@ -377,6 +377,7 @@ drake_cc_library(
     ],
     hdrs = [
         "system.h",
+        "system-inl.h",
         "witness_function.h",
     ],
     deps = [

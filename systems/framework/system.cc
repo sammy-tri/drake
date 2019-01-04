@@ -6,6 +6,7 @@
 
 #include "drake/common/autodiff.h"
 #include "drake/common/default_scalars.h"
+#include "drake/systems/framework/system-inl.h"
 
 namespace drake {
 namespace systems {
