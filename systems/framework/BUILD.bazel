@@ -452,7 +452,10 @@ drake_cc_library(
 drake_cc_library(
     name = "leaf_system",
     srcs = ["leaf_system.cc"],
-    hdrs = ["leaf_system.h"],
+    hdrs = [
+        "leaf_system.h",
+        "leaf_system-inl.h",
+    ],
     deps = [
         ":leaf_context",
         ":leaf_output_port",

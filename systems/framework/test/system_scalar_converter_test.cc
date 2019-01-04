@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 
 #include "drake/common/test_utilities/is_dynamic_castable.h"
+#include "drake/systems/framework/leaf_system-inl.h"
 #include "drake/systems/framework/leaf_system.h"
 #include "drake/systems/framework/test_utilities/scalar_conversion.h"
 

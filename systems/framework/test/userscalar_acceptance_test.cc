@@ -3,9 +3,8 @@
 // scalar type other than one of Drake's built-in scalars.
 
 #include <gtest/gtest.h>
-
+#include "drake/systems/framework/leaf_system-inl.h"
 #include "drake/systems/framework/leaf_system.h"
-#include "drake/systems/framework/system-inl.h"
 #include "drake/systems/framework/test_utilities/my_vector.h"
 
 namespace drake {
