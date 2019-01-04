@@ -498,7 +498,10 @@ drake_cc_library(
 drake_cc_library(
     name = "diagram_context",
     srcs = ["diagram_context.cc"],
-    hdrs = ["diagram_context.h"],
+    hdrs = [
+        "diagram_context.h",
+        "diagram_context-inl.h",
+    ],
     deps = [
         ":context",
         ":diagram_continuous_state",
