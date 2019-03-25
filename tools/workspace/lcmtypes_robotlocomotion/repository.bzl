@@ -7,9 +7,9 @@ def lcmtypes_robotlocomotion_repository(
         mirrors = None):
     github_archive(
         name = "lcmtypes_robotlocomotion",
-        repository = "RobotLocomotion/lcmtypes",
-        commit = "821ff4b463a9cb8f616914d87289714fcb356a92",
-        sha256 = "1407f8197950a6798908bd26c2e6186cf781f7e13ce91510da2b4823f4564953",  # noqa
+        repository = "sammy-tri/lcmtypes",
+        commit = "d750ff71e21f2c424cb119d4a184af75f8ad82ac",
+        sha256 = "42e8dc7a86e01ae671f0d07721a73478a220d65ed70fd1f3494d9f0c953596e8",  # noqa
         build_file = "@drake//tools/workspace/lcmtypes_robotlocomotion:package.BUILD.bazel",  # noqa
         mirrors = mirrors,
     )
