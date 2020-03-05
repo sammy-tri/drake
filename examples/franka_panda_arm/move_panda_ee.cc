@@ -66,9 +66,11 @@ class MoveDemoRunner {
     params_ = manipulation::planner::DifferentialInverseKinematicsParameters(
         plant_.num_positions(), plant_.num_velocities());
     params_.set_joint_position_limits(std::make_pair(
-        plant_.GetPositionLowerLimits(), plant_.GetPositionUpperLimits()));
+        plant_.GetPositionLowerLimits() * 0.9,
+	plant_.GetPositionUpperLimits() * 0.9));
     params_.set_joint_velocity_limits(std::make_pair(
-        plant_.GetVelocityLowerLimits(), plant_.GetVelocityUpperLimits()));
+        plant_.GetVelocityLowerLimits() * 0.2,
+	plant_.GetVelocityUpperLimits() * 0.2));
     params_.set_joint_acceleration_limits(std::make_pair(
         plant_.GetAccelerationLowerLimits(),
         plant_.GetAccelerationUpperLimits()));
@@ -136,6 +138,7 @@ class MoveDemoRunner {
       bot_core::joint_state_t command{};
       command.utime = status->utime;
       command.num_joints = status->num_joints;
+      command.joint_name.resize(status->num_joints);
       command.joint_position.resize(status->num_joints);
       command.joint_velocity.resize(status->num_joints);
       command.joint_effort.resize(status->num_joints);
