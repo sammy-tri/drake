@@ -1,0 +1,33 @@
+# -*- python -*-
+
+load(
+    "@drake//tools/skylark:drake_cc.bzl",
+    "drake_cc_binary",
+    "drake_cc_googletest",
+    "drake_cc_library",
+)
+load("//tools/lint:lint.bzl", "add_lint_tests")
+
+package(
+    default_visibility = [":__subpackages__"],
+)
+
+drake_cc_binary(
+    name = "move_panda_ee",
+    srcs = ["move_panda_ee.cc"],
+    data = [
+        "//manipulation/models/franka_description:models",
+    ],
+    deps = [
+        "//common:add_text_logging_gflags",
+        "//common:find_resource",
+        "//manipulation/planner:differential_inverse_kinematics",
+        "//math:geometric_transform",
+        "//multibody/parsing",
+        "//multibody/plant",
+        "@lcm",
+        "@lcmtypes_bot2_core",
+    ],
+)
+
+add_lint_tests()
