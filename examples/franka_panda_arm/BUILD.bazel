@@ -30,4 +30,46 @@ drake_cc_binary(
     ],
 )
 
+drake_cc_binary(
+    name = "move_panda_ik",
+    srcs = ["move_panda_ik.cc"],
+    data = [
+        "//manipulation/models/franka_description:models",
+    ],
+    deps = [
+        "//common:add_text_logging_gflags",
+        "//manipulation/planner:constraint_relaxing_ik",
+        "//manipulation/util:robot_plan_utils",
+        "//math:geometric_transform",
+        "//multibody/parsing",
+        "//multibody/plant",
+        "@lcm",
+        "@lcmtypes_bot2_core",
+        "@lcmtypes_robotlocomotion",
+    ],
+)
+
+drake_cc_binary(
+    name = "panda_controller",
+    srcs = ["panda_controller.cc"],
+    data = [
+        "//manipulation/models/franka_description:models",
+    ],
+    deps = [
+        "//common:add_text_logging_gflags",
+        "//common:find_resource",
+        "//lcm",
+        "//manipulation/planner:robot_plan_interpolator",
+        "//systems/analysis:simulator",
+        "//systems/controllers:pid_controller",
+        "//systems/lcm:lcm_pubsub_system",
+        "//systems/primitives:adder",
+        "//systems/primitives:demultiplexer",
+        "//systems/primitives:multiplexer",
+        "@gflags",
+        "@lcmtypes_bot2_core",
+        "@lcmtypes_robotlocomotion",
+    ],
+)
+
 add_lint_tests()
