@@ -66,14 +66,18 @@ class MoveDemoRunner {
     params_ = manipulation::planner::DifferentialInverseKinematicsParameters(
         plant_.num_positions(), plant_.num_velocities());
     params_.set_joint_position_limits(std::make_pair(
-        plant_.GetPositionLowerLimits() * 0.9,
-	plant_.GetPositionUpperLimits() * 0.9));
+        plant_.GetPositionLowerLimits() * 0.95,
+	plant_.GetPositionUpperLimits() * 0.95));
     params_.set_joint_velocity_limits(std::make_pair(
-        plant_.GetVelocityLowerLimits() * 0.2,
-	plant_.GetVelocityUpperLimits() * 0.2));
+        plant_.GetVelocityLowerLimits() * 0.8,
+	plant_.GetVelocityUpperLimits() * 0.8));
     params_.set_joint_acceleration_limits(std::make_pair(
         plant_.GetAccelerationLowerLimits(),
         plant_.GetAccelerationUpperLimits()));
+    Eigen::VectorXd nominal_q = Eigen::VectorXd::Zero(7);
+    nominal_q(3) = -1.5708;
+    nominal_q(5) = 1.8675;
+    params_.set_nominal_joint_position(nominal_q);
   }
 
   void Run() {
