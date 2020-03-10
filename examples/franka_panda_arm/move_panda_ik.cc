@@ -129,18 +129,13 @@ class MoveDemoRunner {
         // arbitrary choice).
         std::vector<double> times{0, 2};
         DRAKE_DEMAND(q_sol.size() == times.size());
-
-        // Convert the resulting waypoints into the format expected by
-        // EncodeKeyFrames.
-        MatrixX<double> q_mat(q_sol.front().size(), q_sol.size());
-        for (size_t i = 0; i < q_sol.size(); ++i) {
-          q_mat.col(i) = q_sol[i];
-        }
+        manipulation::util::ApplyJointVelocityLimits(
+            q_sol, plant_.GetVelocityUpperLimits() * 0.9, &times);
 
         std::vector<int> info{1, 1};
         robotlocomotion::robot_plan_t plan =
             manipulation::util::EncodeKeyFrames(
-                joint_names_, times, info, q_mat);
+                joint_names_, times, info, q_sol);
         lcm_.publish(FLAGS_lcm_plan_channel, &plan);
       }
     }
