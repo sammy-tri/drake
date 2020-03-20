@@ -72,4 +72,27 @@ drake_cc_binary(
     ],
 )
 
+drake_cc_binary(
+    name = "panda_simulation",
+    srcs = ["panda_simulation.cc"],
+    add_test_rule = 1,
+    data = [
+        "//manipulation/models/franka_description:models",
+    ],
+    test_rule_args = ["--simulation_sec=0.1"],
+    deps = [
+        "//common:add_text_logging_gflags",
+        "//common:find_resource",
+        "//geometry:geometry_visualization",
+        "//geometry:scene_graph",
+        "//multibody/parsing",
+        "//multibody/plant",
+        "//systems/analysis:simulator",
+        "//systems/controllers:inverse_dynamics_controller",
+        "@gflags",
+        "@lcmtypes_bot2_core",
+    ],
+
+)
+
 add_lint_tests()
