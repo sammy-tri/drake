@@ -10,6 +10,7 @@
 #include <bot_core/robot_state_t.hpp>
 #include <gflags/gflags.h>
 
+#include "drake/common/drake_assert.h"
 #include "drake/common/find_resource.h"
 #include "drake/geometry/geometry_visualization.h"
 #include "drake/geometry/scene_graph.h"
@@ -72,11 +73,21 @@ class JointStateReceiver : public systems::LeafSystem<double> {
   const systems::OutputPort<double>& get_output_port() const;
   //@}
 
+  /// Sets the initial commanded position of the controlled robot prior to any
+  /// command messages being received.  If this function is not called, the
+  /// starting position will be the zero configuration.  The initial commanded
+  /// torque is always zero and cannot be set.
+  void set_initial_position(systems::Context<double>* context,
+                            const Eigen::Ref<const Eigen::VectorXd>& q) const;
+
  private:
+  void CalcInput(const systems::Context<double>&,
+                 bot_core::joint_state_t*) const;
   void CalcOutput(const systems::Context<double>&,
                   systems::BasicVector<double>*) const;
 
   const int num_joints_;
+  const systems::CacheEntry* groomed_input_{};
 };
 
 using systems::BasicVector;
@@ -84,8 +95,22 @@ using systems::Context;
 
 JointStateReceiver::JointStateReceiver(int num_joints)
     : num_joints_(num_joints) {
+  // Our parameter stores the position when no message has been received.
+  const BasicVector<double> default_position(VectorXd::Zero(num_joints));
+  const systems::NumericParameterIndex param{
+      DeclareNumericParameter(default_position)};
+  DRAKE_DEMAND(param == 0);  // We're depending on that elsewhere.
+
   this->DeclareAbstractInputPort(
       "joint_state_t", Value<bot_core::joint_state_t>{});
+
+  // Our input ports are mutually exclusive; exactly one connected input port
+  // feeds our cache entry. The computation may be dependent on the above
+  // parameter as well.
+  groomed_input_ = &DeclareCacheEntry(
+      "groomed_input", &JointStateReceiver::CalcInput,
+      {all_input_ports_ticket(), numeric_parameter_ticket(param)});
+
   this->DeclareVectorOutputPort(
       "state", BasicVector<double>(num_joints_ * 2),
       &JointStateReceiver::CalcOutput);
@@ -98,27 +123,43 @@ const systems::OutputPort<double>& JointStateReceiver::get_output_port() const {
   return LeafSystem<double>::get_output_port(0);
 }
 
-void JointStateReceiver::CalcOutput(
-    const Context<double>& context, BasicVector<double>* output) const {
-  const auto& status =
-      get_input_port().Eval<bot_core::joint_state_t>(context);
+void JointStateReceiver::set_initial_position(
+    Context<double>* context, const Eigen::Ref<const VectorXd>& q) const {
+  DRAKE_THROW_UNLESS(q.size() == num_joints_);
+  context->get_mutable_numeric_parameter(0).SetFromVector(q);
+}
+
+void JointStateReceiver::CalcInput(
+    const Context<double>& context, bot_core::joint_state_t* result) const {
+  *result = get_input_port().Eval<bot_core::joint_state_t>(context);
 
   // If we're using a default constructed message (i.e., we haven't received
   // any status message yet), output zero.
-  if (status.num_joints == 0) {
-    output->get_mutable_value().setZero();
-  } else {
-    DRAKE_THROW_UNLESS(status.num_joints == num_joints_);
-    DRAKE_THROW_UNLESS(
-        static_cast<int>(status.joint_position.size()) == num_joints_);
-    DRAKE_THROW_UNLESS(
-        static_cast<int>(status.joint_velocity.size()) == num_joints_);
-    auto out = output->get_mutable_value();
+  if (result->num_joints == 0) {
+    const VectorXd param = context.get_numeric_parameter(0).get_value();
+    result->num_joints = param.size();
+    DRAKE_THROW_UNLESS(result->num_joints == num_joints_);
+    result->joint_position = {param.data(), param.data() + param.size()};
+    result->joint_velocity.resize(num_joints_, 0);
+    result->joint_effort.resize(num_joints_, 0);
+  }
+}
 
-    for (int i = 0; i < num_joints_; i++) {
-      out(i) = status.joint_position[i];
-      out(i + num_joints_) = status.joint_velocity[i];
-    }
+void JointStateReceiver::CalcOutput(
+   const Context<double>& context, BasicVector<double>* output) const {
+  const auto& status =
+      groomed_input_->Eval<bot_core::joint_state_t>(context);
+
+  DRAKE_THROW_UNLESS(status.num_joints == num_joints_);
+  DRAKE_THROW_UNLESS(
+      static_cast<int>(status.joint_position.size()) == num_joints_);
+  DRAKE_THROW_UNLESS(
+      static_cast<int>(status.joint_velocity.size()) == num_joints_);
+  auto out = output->get_mutable_value();
+
+  for (int i = 0; i < num_joints_; i++) {
+    out(i) = status.joint_position[i];
+    out(i + num_joints_) = status.joint_velocity[i];
   }
 }
 
@@ -272,9 +313,9 @@ int DoMain() {
   initial_position(3) = -1;
   initial_position(5) = 1;
 
-  // command_receiver->set_initial_position(
-  //     &diagram->GetMutableSubsystemContext(*command_receiver, &root_context),
-  //     initial_position);
+  command_receiver->set_initial_position(
+      &diagram->GetMutableSubsystemContext(*command_receiver, &root_context),
+      initial_position);
   panda_plant->SetPositions(
       &diagram->GetMutableSubsystemContext(*panda_plant, &root_context),
       initial_position);
