@@ -4,7 +4,6 @@
 
 #include <memory>
 
-#include <bot_core/joint_state_t.hpp>
 #include <bot_core/robot_state_t.hpp>
 #include <gflags/gflags.h>
 #include <lcm/lcm-cpp.hpp>
@@ -14,6 +13,7 @@
 #include "drake/common/find_resource.h"
 #include "drake/common/text_logging.h"
 #include "drake/lcm/drake_lcm.h"
+#include "drake/manipulation/franka_panda/panda_command_sender.h"
 #include "drake/manipulation/planner/robot_plan_interpolator.h"
 #include "drake/systems/analysis/simulator.h"
 #include "drake/systems/controllers/pid_controller.h"
@@ -110,76 +110,13 @@ void RobotStateReceiver::CalcOutput(
   }
 }
 
-/// Creates and outputs lcmt_jaco_command messages
-///
-/// Note that this system does not actually send the message an LCM channel. To
-/// send the message, the output of this system should be connected to a
-/// systems::lcm::LcmPublisherSystem::Make<lcmt_iiwa_command>().
-///
-/// This system has one vector-valued input port containing the
-/// desired position and velocity.
-///
-/// This system has one abstract-valued output port of type
-/// bot_core::joint_state_t;
-///
-class JointStateSender : public systems::LeafSystem<double> {
- public:
-  DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(JointStateSender)
-
-  explicit JointStateSender(int num_joints);
-
-  /// @name Named accessors for this System's input and output ports.
-  //@{
-  const systems::InputPort<double>& get_input_port() const;
-  const systems::OutputPort<double>& get_output_port() const;
-  //@}
-
- private:
-  void CalcOutput(const systems::Context<double>&,
-                  bot_core::joint_state_t*) const;
-
-  const int num_joints_;
-};
-
-JointStateSender::JointStateSender(int num_joints)
-    : num_joints_(num_joints) {
-  this->DeclareInputPort(
-      "state", systems::kVectorValued, num_joints_ * 2);
-  this->DeclareAbstractOutputPort(
-      "joint_state_t", &JointStateSender::CalcOutput);
-}
-
-const systems::InputPort<double>& JointStateSender::get_input_port() const {
-  return LeafSystem<double>::get_input_port(0);
-}
-const systems::OutputPort<double>& JointStateSender::get_output_port() const {
-  return LeafSystem<double>::get_output_port(0);
-}
-
-void JointStateSender::CalcOutput(
-    const systems::Context<double>& context,
-    bot_core::joint_state_t* output) const {
-  const auto& state = get_input_port().Eval(context);
-
-  output->utime = context.get_time() * 1e6;
-  output->num_joints = num_joints_;
-  output->joint_name.resize(num_joints_);
-  output->joint_position.resize(num_joints_);
-  output->joint_velocity.resize(num_joints_);
-  output->joint_effort.resize(num_joints_);
-  for (int i = 0; i < num_joints_; ++i) {
-    output->joint_position[i] = state[i];
-    output->joint_velocity[i] = state[i + num_joints_];
-    output->joint_effort[i] = 0;
-  }
-}
-
+using manipulation::franka_panda::PandaCommandSender;
 using manipulation::planner::RobotPlanInterpolator;
 
 const char* const kUrdfPath =
     "drake/manipulation/models/franka_description/urdf/panda_arm.urdf";
 const char* const kLcmStatusChannel = "EST_ROBOT_STATE";
-const char* const kLcmCommandChannel = "FRANKA_COMMAND";
+const char* const kLcmCommandChannel = "PANDA_COMMAND";
 const char* const kLcmPlanChannel = "COMMITTED_ROBOT_PLAN";
 
 int DoMain() {
@@ -256,11 +193,11 @@ int DoMain() {
                   command_mux->get_input_port(1));
 
   auto command_pub = builder.AddSystem(
-      systems::lcm::LcmPublisherSystem::Make<bot_core::joint_state_t>(
+      systems::lcm::LcmPublisherSystem::Make<lcmt_panda_command>(
           kLcmCommandChannel, &lcm));
-  auto command_sender = builder.AddSystem<JointStateSender>(num_joints);
+  auto command_sender = builder.AddSystem<PandaCommandSender>(num_joints);
   builder.Connect(command_mux->get_output_port(0),
-                  command_sender->get_input_port());
+                  command_sender->get_state_input_port());
   builder.Connect(command_sender->get_output_port(),
                   command_pub->get_input_port());
 

@@ -8,7 +8,6 @@
 
 #include <map>
 
-#include <bot_core/joint_state_t.hpp>
 #include <bot_core/robot_state_t.hpp>
 #include <gflags/gflags.h>
 #include <lcm/lcm-cpp.hpp>

@@ -59,6 +59,7 @@ drake_cc_binary(
         "//common:add_text_logging_gflags",
         "//common:find_resource",
         "//lcm",
+        "//manipulation/franka_panda",
         "//manipulation/planner:robot_plan_interpolator",
         "//systems/analysis:simulator",
         "//systems/controllers:pid_controller",
