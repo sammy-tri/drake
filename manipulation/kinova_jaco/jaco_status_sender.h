@@ -18,10 +18,17 @@ namespace kinova_jaco {
 /// This system has many vector-valued input ports. State input ports (q, v)
 /// will have (num_joints + num_fingers) * 2 elements.  Torque, torque
 /// external and current input ports will have num_joints + num_fingers
-/// elements.  If the torque, torque_external, or current input ports are not
-/// connected, the output message will use zeros.  Finger velocities will be
-/// translated to the values used by the Kinova SDK from values appropriate
-/// for the finger joints in the Jaco description (see jaco_constants.h).
+/// elements.  If the actuator_torque, torque_external, or current input ports
+/// are not connected, the output message will use zeros.  Finger velocities
+/// will be translated to the values used by the Kinova SDK from values
+/// appropriate for the finger joints in the Jaco description (see
+/// jaco_constants.h).
+///
+/// The torque input port is the total actuation force being applied at that
+/// joint, not the measured torque at the joint (if the joint is stationary,
+/// this is only a question of what the sign of the force is).  The external
+/// torque input port contains the portion of the actuator torque which is not
+/// from gravity control.
 ///
 /// This system has one abstract-valued output port of type lcmt_jaco_status.
 ///
