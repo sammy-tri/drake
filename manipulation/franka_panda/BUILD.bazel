@@ -14,6 +14,7 @@ package(
 
 drake_cc_package_library(
     name = "franka_panda",
+    visibility = ["//visibility:public"],
     deps = [
         ":panda_constants",
         ":panda_command_sender",

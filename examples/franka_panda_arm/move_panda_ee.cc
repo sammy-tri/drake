@@ -131,7 +131,8 @@ class MoveDemoRunner {
 
       DifferentialInverseKinematicsResult result =
           manipulation::planner::DoDifferentialInverseKinematics(
-              plant_, *context_, X_WE_desired, ee_body.body_frame(), params_);
+              plant_, *context_, X_WE_desired.GetAsIsometry3(),
+              ee_body.body_frame(), params_);
       if (result.status ==
           DifferentialInverseKinematicsStatus::kSolutionFound) {
       } else {

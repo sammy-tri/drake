@@ -7,12 +7,12 @@
 #include <bot_core/robot_state_t.hpp>
 #include <gflags/gflags.h>
 #include <lcm/lcm-cpp.hpp>
-#include <robotlocomotion/robot_plan_t.hpp>
 
 #include "drake/common/drake_assert.h"
 #include "drake/common/find_resource.h"
 #include "drake/common/text_logging.h"
 #include "drake/lcm/drake_lcm.h"
+#include "drake/lcmt_robot_plan.hpp"
 #include "drake/manipulation/franka_panda/panda_command_sender.h"
 #include "drake/manipulation/planner/robot_plan_interpolator.h"
 #include "drake/systems/analysis/simulator.h"
@@ -25,8 +25,6 @@
 #include "drake/systems/primitives/adder.h"
 #include "drake/systems/primitives/demultiplexer.h"
 #include "drake/systems/primitives/multiplexer.h"
-
-using robotlocomotion::robot_plan_t;
 
 DEFINE_string(urdf, "", "Name of urdf to load");
 
@@ -124,8 +122,9 @@ int DoMain() {
   systems::DiagramBuilder<double> builder;
 
   auto plan_sub =
-      builder.AddSystem(systems::lcm::LcmSubscriberSystem::Make<robot_plan_t>(
-          kLcmPlanChannel, &lcm));
+      builder.AddSystem(
+          systems::lcm::LcmSubscriberSystem::Make<lcmt_robot_plan>(
+              kLcmPlanChannel, &lcm));
 
   const std::string urdf =
       (!FLAGS_urdf.empty() ? FLAGS_urdf : FindResourceOrThrow(kUrdfPath));

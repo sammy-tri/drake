@@ -11,11 +11,11 @@
 #include <bot_core/robot_state_t.hpp>
 #include <gflags/gflags.h>
 #include <lcm/lcm-cpp.hpp>
-#include <robotlocomotion/robot_plan_t.hpp>
 
 #include "drake/common/drake_assert.h"
 #include "drake/common/find_resource.h"
 #include "drake/common/text_logging.h"
+#include "drake/lcmt_robot_plan.hpp"
 #include "drake/manipulation/planner/constraint_relaxing_ik.h"
 #include "drake/manipulation/util/robot_plan_utils.h"
 #include "drake/math/rigid_transform.h"
@@ -131,10 +131,9 @@ class MoveDemoRunner {
         manipulation::util::ApplyJointVelocityLimits(
             q_sol, plant_.GetVelocityUpperLimits() * 0.9, &times);
 
-        std::vector<int> info{1, 1};
-        robotlocomotion::robot_plan_t plan =
+        lcmt_robot_plan plan =
             manipulation::util::EncodeKeyFrames(
-                joint_names_, times, info, q_sol);
+                joint_names_, times, q_sol);
         lcm_.publish(FLAGS_lcm_plan_channel, &plan);
       }
     }
