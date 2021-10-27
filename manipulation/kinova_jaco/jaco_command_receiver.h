@@ -23,27 +23,34 @@ namespace kinova_jaco {
 ///
 /// It has one required input port, "lcmt_jaco_command".
 ///
-/// This system has a single output port which contains the commanded position
-/// and velocity for each joint.  Finger velocities will be translated from
-/// the values used by the Kinova SDK to values appropriate for the finger
-/// joints in the Jaco description (see jaco_constants.h).
+/// This system has four total output ports.  There are two output ports for
+/// the commanded position and velocity of the arm joints, and two output
+/// ports for the commanded position and velocity of the finger joints.
+/// Finger velocities will be translated from the values used by the Kinova
+/// SDK to values appropriate for the finger joints in the Jaco description
+/// (see jaco_constants.h).
 ///
 /// @system
 /// name: JacoCommandReceiver
 /// input_ports:
 /// - lcmt_jaco_command
 /// - position_measured (optional)
+/// - finger_position_measured (optional)
 /// output_ports:
-/// - state
+/// - position
+/// - velocity
+/// - finger_position
+/// - finger_velocity
 ///
-/// @par Output prior to receiving a valid lcmt_jaco_command message:
-/// The "position" output initially feeds through from the "position_measured"
+/// @par Output prior to receiving a valid lcmt_jaco_command message: The
+/// "position" output initially feeds through from the "position_measured"
 /// input port -- or if not connected, outputs zero.  When discrete update
 /// events are enabled (e.g., during a simulation), the system latches the
 /// "position_measured" input into state during the first event, and the
 /// "position" output comes from the latched state, no longer fed through from
-/// the "position" input.  Alternatively, the LatchInitialPosition() method is
-/// available to achieve the same effect without using events.
+/// the "position" input. "finger_position" operates in the same fashion.
+/// Alternatively, the LatchInitialPosition() method is available to achieve
+/// the same effect without using events.
 ///
 /// @endsystem
 class JacoCommandReceiver : public systems::LeafSystem<double> {
@@ -53,7 +60,7 @@ class JacoCommandReceiver : public systems::LeafSystem<double> {
   JacoCommandReceiver(int num_joints = kJacoDefaultArmNumJoints,
                       int num_fingers = kJacoDefaultArmNumFingers);
 
-  /// (Advanced) Copies the current "position_measured" input (or zero if not
+  /// (Advanced.) Copies the current "position_measured" input (or zero if not
   /// connected) into Context state, and changes the behavior of the "position"
   /// output to produce the latched state if no message has been received yet.
   /// The latching already happens automatically during the first discrete
@@ -67,9 +74,30 @@ class JacoCommandReceiver : public systems::LeafSystem<double> {
     return *message_input_;
   }
   const systems::InputPort<double>& get_position_measured_input_port() const {
-      return *position_measured_input_;
+    return *position_measured_input_;
   }
-  //@}
+  const systems::InputPort<double>&
+  get_finger_position_measured_input_port() const {
+    return *finger_position_measured_input_;
+  }
+  const systems::OutputPort<double>& get_commanded_position_output_port()
+      const {
+    return *commanded_position_output_;
+  }
+  const systems::OutputPort<double>& get_commanded_velocity_output_port()
+      const {
+    return *commanded_velocity_output_;
+  }
+  const systems::OutputPort<double>&
+  get_commanded_finger_position_output_port() const {
+    return *commanded_finger_position_output_;
+  }
+  const systems::OutputPort<double>&
+  get_commanded_finger_velocity_output_port() const {
+    return *commanded_finger_velocity_output_;
+  }
+//@}
+
 
   DRAKE_DEPRECATED("2022-06-01",
      "To provide position commands prior to receiving the first message, "
@@ -84,6 +112,11 @@ class JacoCommandReceiver : public systems::LeafSystem<double> {
     return get_message_input_port();
   }
 
+  DRAKE_DEPRECATED("2022-02-01", "Use the other output ports instead.")
+  const systems::OutputPort<double>& get_output_port() const {
+    return *state_output_;
+  }
+
  private:
   Eigen::VectorXd input_state(const systems::Context<double>&) const;
   void CalcInput(const systems::Context<double>&, lcmt_jaco_command*) const;
@@ -93,21 +126,39 @@ class JacoCommandReceiver : public systems::LeafSystem<double> {
       systems::CompositeEventCollection<double>*, double*) const final;
   void CalcPositionMeasuredOrZero(
       const systems::Context<double>&, systems::BasicVector<double>*) const;
+  void CalcFingerPositionMeasuredOrZero(
+      const systems::Context<double>&, systems::BasicVector<double>*) const;
 
   // Copies the current "position measured" input (or zero if not connected)
   // into the @p result.
   void LatchInitialPosition(
       const systems::Context<double>&,
-      systems::DiscreteValues<double>* result) const;
+      systems::DiscreteValues<double>*) const;
+  void CalcPositionOutput(
+      const systems::Context<double>&, systems::BasicVector<double>*) const;
+  void CalcVelocityOutput(
+      const systems::Context<double>&, systems::BasicVector<double>*) const;
+  void CalcFingerPositionOutput(
+      const systems::Context<double>&, systems::BasicVector<double>*) const;
+  void CalcFingerVelocityOutput(
+      const systems::Context<double>&, systems::BasicVector<double>*) const;
 
   const int num_joints_;
   const int num_fingers_;
   const systems::InputPort<double>* message_input_{};
   const systems::InputPort<double>* position_measured_input_{};
+  const systems::InputPort<double>* finger_position_measured_input_{};
   const systems::CacheEntry* position_measured_or_zero_{};
+  const systems::CacheEntry* finger_position_measured_or_zero_{};
   systems::DiscreteStateIndex latched_position_measured_is_set_;
   systems::DiscreteStateIndex latched_position_measured_;
+  systems::DiscreteStateIndex latched_finger_position_measured_;
   const systems::CacheEntry* groomed_input_{};
+  const systems::OutputPort<double>* state_output_{};
+  const systems::OutputPort<double>* commanded_position_output_{};
+  const systems::OutputPort<double>* commanded_velocity_output_{};
+  const systems::OutputPort<double>* commanded_finger_position_output_{};
+  const systems::OutputPort<double>* commanded_finger_velocity_output_{};
 };
 
 }  // namespace kinova_jaco
