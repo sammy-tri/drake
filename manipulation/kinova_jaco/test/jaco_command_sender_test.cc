@@ -93,6 +93,18 @@ TEST_F(JacoCommandSenderTest, AcceptanceTestWithFingers) {
   EXPECT_EQ(output().finger_velocity, ToStdVec(f_v0 * kFingerUrdfToSdk));
 }
 
+TEST_F(JacoCommandSenderNoFingersTest, AcceptanceNoFingers) {
+  const VectorXd q0 = VectorXd::LinSpaced(N, 0.2, 0.3);
+  const VectorXd v0 = VectorXd::LinSpaced(N, 0.3, 0.4);
+
+  dut_.get_position_input_port().FixValue(&context_, q0);
+  dut_.get_velocity_input_port().FixValue(&context_, v0);
+
+  EXPECT_EQ(output().num_joints, kJacoDefaultArmNumJoints);
+  EXPECT_EQ(output().joint_position, ToStdVec(q0));
+  EXPECT_EQ(output().joint_velocity, ToStdVec(v0));
+}
+
 }  // namespace
 }  // namespace kinova_jaco
 }  // namespace manipulation
