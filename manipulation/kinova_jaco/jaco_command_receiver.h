@@ -98,7 +98,6 @@ class JacoCommandReceiver : public systems::LeafSystem<double> {
   }
 //@}
 
-
   DRAKE_DEPRECATED("2022-06-01",
      "To provide position commands prior to receiving the first message, "
      "connect the position_measured ports instead of setting this "
