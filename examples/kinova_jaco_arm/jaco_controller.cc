@@ -41,6 +41,8 @@ namespace examples {
 namespace kinova_jaco_arm {
 namespace {
 using manipulation::kinova_jaco::JacoCommandSender;
+using manipulation::kinova_jaco::kJacoDefaultArmNumJoints;
+using manipulation::kinova_jaco::kJacoDefaultArmNumFingers;
 using manipulation::kinova_jaco::JacoStatusReceiver;
 using manipulation::planner::RobotPlanInterpolator;
 
@@ -96,8 +98,18 @@ int DoMain() {
   // subscriber.
   auto status_receiver = builder.AddSystem<JacoStatusReceiver>(
       num_joints, num_fingers);
-
-  builder.Connect(status_receiver->get_state_output_port(),
+  auto status_mux = builder.AddSystem<systems::Multiplexer>(
+      std::vector<int>({kJacoDefaultArmNumJoints, kJacoDefaultArmNumFingers,
+              kJacoDefaultArmNumJoints, kJacoDefaultArmNumFingers}));
+  builder.Connect(status_receiver->get_position_measured_output_port(),
+                  status_mux->get_input_port(0));
+  builder.Connect(status_receiver->get_finger_position_measured_output_port(),
+                  status_mux->get_input_port(1));
+  builder.Connect(status_receiver->get_velocity_measured_output_port(),
+                  status_mux->get_input_port(2));
+  builder.Connect(status_receiver->get_finger_velocity_measured_output_port(),
+                  status_mux->get_input_port(3));
+  builder.Connect(status_mux->get_output_port(),
                   pid_controller->get_input_port_estimated_state());
   builder.Connect(plan_source->get_output_port(0),
                   pid_controller->get_input_port_desired_state());
@@ -108,7 +120,7 @@ int DoMain() {
       builder.AddSystem<systems::Demultiplexer>(
           (num_joints + num_fingers) * 2, num_joints + num_fingers);
   builder.Connect(plan_source->get_output_port(0),
-                  target_demux->get_input_port(0));
+                  target_demux->get_input_port());
 
   // Sum the outputs of the pid controller and v_d.
   auto adder = builder.AddSystem<systems::Adder>(2, num_joints + num_fingers);
@@ -126,12 +138,25 @@ int DoMain() {
   builder.Connect(adder->get_output_port(),
                   command_mux->get_input_port(1));
 
+  auto command_demux =
+      builder.AddSystem<systems::Demultiplexer>(
+  std::vector<int>({kJacoDefaultArmNumJoints, kJacoDefaultArmNumFingers,
+              kJacoDefaultArmNumJoints, kJacoDefaultArmNumFingers}));
+  builder.Connect(command_mux->get_output_port(),
+                  command_demux->get_input_port());
+
   auto command_pub = builder.AddSystem(
       systems::lcm::LcmPublisherSystem::Make<lcmt_jaco_command>(
           kLcmCommandChannel, &lcm, {systems::TriggerType::kForced}));
   auto command_sender = builder.AddSystem<JacoCommandSender>(num_joints);
-  builder.Connect(command_mux->get_output_port(0),
-                  command_sender->get_input_port());
+  builder.Connect(command_demux->get_output_port(0),
+                  command_sender->get_position_input_port());
+  builder.Connect(command_demux->get_output_port(1),
+                  command_sender->get_finger_position_input_port());
+  builder.Connect(command_demux->get_output_port(2),
+                  command_sender->get_velocity_input_port());
+  builder.Connect(command_demux->get_output_port(3),
+                  command_sender->get_finger_velocity_input_port());
   builder.Connect(command_sender->get_output_port(),
                   command_pub->get_input_port());
 
@@ -161,10 +186,15 @@ int DoMain() {
 
   auto& plan_source_context =
       diagram->GetMutableSubsystemContext(*plan_source, &diagram_context);
+  Eigen::VectorXd plan_init(num_joints + num_fingers);
+  plan_init.head(num_joints) =
+      status_receiver->get_position_measured_output_port().Eval(status_context);
+  plan_init.tail(num_fingers) =
+      status_receiver->get_finger_position_measured_output_port().Eval(
+          status_context);
+
   plan_source->Initialize(
-      t0, status_receiver->get_state_output_port().Eval(
-          status_context).head(num_joints + num_fingers),
-      &plan_source_context.get_mutable_state());
+      t0, plan_init, &plan_source_context.get_mutable_state());
 
   // Run forever, using the lcmt_jaco_status message to dictate when simulation
   // time advances.  The lcmt_robot_plan message is handled whenever the next
