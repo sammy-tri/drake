@@ -17,11 +17,10 @@ namespace kinova_jaco {
 /// connected to a
 /// systems::lcm::LcmPublisherSystem::Make<lcmt_jaco_command>().
 ///
-/// This system has four vector-valued input ports containing the desired
+/// This system has two vector-valued input ports containing the desired
 /// position and velocity.  Finger velocities will be translated to the values
 /// used by the Kinova SDK from values appropriate for the finger joints in
-/// the Jaco description (see jaco_constants.h).  The finger input ports do
-/// not need to be connected if `num_fingers` is zero.
+/// the Jaco description (see jaco_constants.h).
 ///
 /// This system has one abstract-valued output port of type lcmt_jaco_command.
 ///
@@ -30,8 +29,6 @@ namespace kinova_jaco {
 /// input_ports:
 /// - position
 /// - velocity
-/// - finger_position
-/// - finger_velocity
 /// output_ports:
 /// - lcmt_jaco_command
 /// @endsystem
@@ -54,12 +51,6 @@ class JacoCommandSender : public systems::LeafSystem<double> {
   }
   const systems::InputPort<double>& get_velocity_input_port() const {
     return *velocity_input_;
-  }
-  const systems::InputPort<double>& get_finger_position_input_port() const {
-    return *finger_position_input_;
-  }
-  const systems::InputPort<double>& get_finger_velocity_input_port() const {
-    return *finger_velocity_input_;
   }
 
  private:

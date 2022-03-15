@@ -20,11 +20,10 @@ namespace kinova_jaco {
 /// This system has one abstract-valued input port of type lcmt_jaco_status.
 ///
 /// This system has many vector-valued output ports.  All output ports are of
-/// size num_joints, except for finger_position and finger_velocity which are
-/// of size num_fingers.  The ports will output zeros until an input message
-/// is received.  Finger velocities will be translated from the values used by
-/// the Kinova SDK to values appropriate for the finger joints in the Jaco
-/// description (see jaco_constants.h.)
+/// size num_joints + num_fingers.  The ports will output zeros until an input
+/// message is received.  Finger velocities will be translated from the values
+/// used by the Kinova SDK to values appropriate for the finger joints in the
+/// Jaco description (see jaco_constants.h.)
 //
 /// @system
 /// name: JacoStatusReceiver
@@ -33,8 +32,6 @@ namespace kinova_jaco {
 /// output_ports:
 /// - position
 /// - velocity
-/// - finger_position
-/// - finger_velocity
 /// - torque
 /// - torque_external
 /// - current
@@ -63,14 +60,6 @@ class JacoStatusReceiver : public systems::LeafSystem<double> {
   const systems::OutputPort<double>& get_velocity_measured_output_port() const {
     return *velocity_measured_output_;
   }
-  const systems::OutputPort<double>&
-  get_finger_position_measured_output_port() const {
-    return *finger_position_measured_output_;
-  }
-  const systems::OutputPort<double>&
-  get_finger_velocity_measured_output_port() const {
-    return *finger_velocity_measured_output_;
-  }
   const systems::OutputPort<double>& get_torque_measured_output_port() const {
     return *torque_measured_output_;
   }
@@ -89,12 +78,11 @@ class JacoStatusReceiver : public systems::LeafSystem<double> {
  private:
   void CalcStateOutput(const systems::Context<double>&,
                        systems::BasicVector<double>*) const;
-  template <std::vector<double> drake::lcmt_jaco_status::*>
+  template <std::vector<double> drake::lcmt_jaco_status::*,
+            std::vector<double> drake::lcmt_jaco_status::*,
+            int>
   void CalcJointOutput(const systems::Context<double>&,
                        systems::BasicVector<double>*) const;
-  template <std::vector<double> drake::lcmt_jaco_status::*>
-  void CalcFingerOutput(const systems::Context<double>&,
-                        systems::BasicVector<double>*) const;
 
   const int num_joints_;
   const int num_fingers_;
@@ -102,8 +90,6 @@ class JacoStatusReceiver : public systems::LeafSystem<double> {
   const systems::OutputPort<double>* state_output_{};
   const systems::OutputPort<double>* position_measured_output_{};
   const systems::OutputPort<double>* velocity_measured_output_{};
-  const systems::OutputPort<double>* finger_position_measured_output_{};
-  const systems::OutputPort<double>* finger_velocity_measured_output_{};
   const systems::OutputPort<double>* torque_measured_output_{};
   const systems::OutputPort<double>* torque_external_output_{};
   const systems::OutputPort<double>* current_output_{};

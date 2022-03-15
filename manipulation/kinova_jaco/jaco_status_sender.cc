@@ -14,40 +14,28 @@ JacoStatusSender::JacoStatusSender(int num_joints, int num_fingers)
   state_input_ = &DeclareInputPort(
       "state", kVectorValued, (num_joints_ + num_fingers_) * 2);
   position_input_ = &DeclareInputPort(
-      "position", kVectorValued, num_joints_);
+      "position", kVectorValued, num_joints_ + num_fingers_);
   velocity_input_ = &DeclareInputPort(
-      "velocity", kVectorValued, num_joints_);
-  finger_position_input_ = &DeclareInputPort(
-      "finger_position", kVectorValued, num_fingers_);
-  finger_velocity_input_ = &DeclareInputPort(
-      "finger_velocity", kVectorValued, num_fingers_);
+      "velocity", kVectorValued, num_joints_ + num_fingers_);
   torque_input_ = &DeclareInputPort(
-      "torque", kVectorValued, num_joints_);
+      "torque", kVectorValued, num_joints_ + num_fingers_);
   torque_external_input_ = &DeclareInputPort(
-      "torque_external", kVectorValued, num_joints_);
+      "torque_external", kVectorValued, num_joints_ + num_fingers_);
   current_input_ = &DeclareInputPort(
-      "current", kVectorValued, num_joints_);
+      "current", kVectorValued, num_joints_ + num_fingers_);
   DeclareAbstractOutputPort(
       "lcmt_jaco_status", &JacoStatusSender::CalcOutput);
 }
 
 const systems::InputPort<double>&
 JacoStatusSender::get_state_input_port() const {
-  if (num_fingers_) {
-    static const logging::Warn log_once(
-        "The state input port on JacoStatusSender is deprecated.  As part "
-        "of this change, the size of the torque, torque_external, and "
-        "current input ports has changed.  If your program is using those "
-        "along with the deprecated API, this may cause problems.");
-  }
-
   return *state_input_;
 }
 
 void JacoStatusSender::CalcOutput(
     const systems::Context<double>& context, lcmt_jaco_status* output) const {
   const Eigen::VectorXd zero_state =
-      Eigen::VectorXd::Zero(num_joints_);
+      Eigen::VectorXd::Zero(num_joints_ + num_fingers_);
   const auto& torque =
       get_torque_input_port().HasValue(context) ?
       get_torque_input_port().Eval(context) :
@@ -95,7 +83,11 @@ void JacoStatusSender::CalcOutput(
       status.finger_position[i] = state(i + num_joints_) * kFingerUrdfToSdk;
       status.finger_velocity[i] =
           state.tail(num_fingers_)(i) * kFingerUrdfToSdk;
+      status.finger_torque[i] = torque(num_joints_ + i);
+      status.finger_torque_external[i] = torque_external(num_joints_ + i);
+      status.finger_current[i] = current(num_joints_ + i);
     }
+
     return;
   }
 
@@ -113,13 +105,12 @@ void JacoStatusSender::CalcOutput(
     status.joint_current[i] = current(i);
   }
 
-  if (num_fingers_) {
-    const auto& finger_position = finger_position_input_->Eval(context);
-    const auto& finger_velocity = finger_velocity_input_->Eval(context);
-    for (int i = 0; i < num_fingers_; ++i) {
-      status.finger_position[i] = finger_position(i) * kFingerUrdfToSdk;
-      status.finger_velocity[i] = finger_velocity(i) * kFingerUrdfToSdk;
-    }
+  for (int i = 0; i < num_fingers_; ++i) {
+    status.finger_position[i] = position(num_joints_ + i) * kFingerUrdfToSdk;
+    status.finger_velocity[i] = velocity(num_joints_ + i) * kFingerUrdfToSdk;
+    status.finger_torque[i] = torque(num_joints_ + i);
+    status.finger_torque_external[i] = torque_external(num_joints_ + i);
+    status.finger_current[i] = current(num_joints_ + i);
   }
 }
 

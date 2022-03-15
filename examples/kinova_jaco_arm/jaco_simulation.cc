@@ -104,16 +104,12 @@ int DoMain() {
                   command_receiver->get_message_input_port());
 
   auto mux = builder.AddSystem<systems::Multiplexer>(
-      std::vector<int>({kJacoDefaultArmNumJoints, kJacoDefaultArmNumFingers,
-              kJacoDefaultArmNumJoints, kJacoDefaultArmNumFingers}));
+      std::vector<int>({kJacoDefaultArmNumJoints + kJacoDefaultArmNumFingers,
+              kJacoDefaultArmNumJoints + kJacoDefaultArmNumFingers}));
   builder.Connect(command_receiver->get_commanded_position_output_port(),
                   mux->get_input_port(0));
-  builder.Connect(command_receiver->get_commanded_finger_position_output_port(),
-                  mux->get_input_port(1));
   builder.Connect(command_receiver->get_commanded_velocity_output_port(),
-                  mux->get_input_port(2));
-  builder.Connect(command_receiver->get_commanded_finger_velocity_output_port(),
-                  mux->get_input_port(3));
+                  mux->get_input_port(1));
   builder.Connect(mux->get_output_port(),
                   jaco_controller->get_input_port_desired_state());
   builder.Connect(jaco_controller->get_output_port_control(),
@@ -128,8 +124,8 @@ int DoMain() {
   // down the simulation significantly.
   auto status_sender = builder.AddSystem<JacoStatusSender>();
   auto demux = builder.AddSystem<systems::Demultiplexer>(
-      std::vector<int>({kJacoDefaultArmNumJoints, kJacoDefaultArmNumFingers,
-              kJacoDefaultArmNumJoints, kJacoDefaultArmNumFingers}));
+      std::vector<int>({kJacoDefaultArmNumJoints + kJacoDefaultArmNumFingers,
+              kJacoDefaultArmNumJoints + kJacoDefaultArmNumFingers}));
   builder.Connect(jaco_plant->get_state_output_port(jaco_id),
                   demux->get_input_port());
   builder.Connect(demux->get_output_port(0),
@@ -137,13 +133,7 @@ int DoMain() {
   builder.Connect(demux->get_output_port(0),
                   command_receiver->get_position_measured_input_port());
   builder.Connect(demux->get_output_port(1),
-                  status_sender->get_finger_position_input_port());
-  builder.Connect(demux->get_output_port(1),
-                  command_receiver->get_finger_position_measured_input_port());
-  builder.Connect(demux->get_output_port(2),
                   status_sender->get_velocity_input_port());
-  builder.Connect(demux->get_output_port(3),
-                  status_sender->get_finger_velocity_input_port());
   builder.Connect(status_sender->get_output_port(),
                   status_pub->get_input_port());
 

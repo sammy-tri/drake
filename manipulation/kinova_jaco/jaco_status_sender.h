@@ -17,13 +17,11 @@ namespace kinova_jaco {
 /// connected to a systems::lcm::LcmPublisherSystem::Make<lcmt_jaco_status>().
 ///
 /// This system has many vector-valued input ports.  All input ports are of
-/// size num_joints, except for finger_position and finger_velocity which are
-/// of size num_fingers.  If the torque, torque_external, or current input
-/// ports are not connected, the output message will use zeros.  Finger
+/// size num_joints + num_fingers.  If the torque, torque_external, or current
+/// input ports are not connected, the output message will use zeros.  Finger
 /// velocities will be translated to the values used by the Kinova SDK from
 /// values appropriate for the finger joints in the Jaco description (see
-/// jaco_constants.h).  The finger input ports do not need to be connected if
-/// `num_fingers` is zero.
+/// jaco_constants.h).
 ///
 /// This system has one abstract-valued output port of type lcmt_jaco_status.
 ///
@@ -35,8 +33,6 @@ namespace kinova_jaco {
 /// input_ports:
 /// - position
 /// - velocity
-/// - finger_position
-/// - finger_velocity
 /// - torque (optional)
 /// - torque_external (optional)
 /// - current (optional)
@@ -63,12 +59,6 @@ class JacoStatusSender : public systems::LeafSystem<double> {
   const systems::InputPort<double>& get_velocity_input_port() const {
     return *velocity_input_;
   }
-  const systems::InputPort<double>& get_finger_position_input_port() const {
-    return *finger_position_input_;
-  }
-  const systems::InputPort<double>& get_finger_velocity_input_port() const {
-    return *finger_velocity_input_;
-  }
   const systems::InputPort<double>& get_torque_input_port() const {
     return *torque_input_;
   }
@@ -80,10 +70,6 @@ class JacoStatusSender : public systems::LeafSystem<double> {
   }
   //@}
 
-  // TODO(sammy-tri) Add input ports for the finger torques and currents if
-  // those values ever become meaningful to simulate.  IIRC the values
-  // reported by the hardware/SDK aren't particularly useful.
-
  private:
   void CalcOutput(const systems::Context<double>&, lcmt_jaco_status*) const;
 
@@ -92,8 +78,6 @@ class JacoStatusSender : public systems::LeafSystem<double> {
   const systems::InputPort<double>* state_input_{};
   const systems::InputPort<double>* position_input_{};
   const systems::InputPort<double>* velocity_input_{};
-  const systems::InputPort<double>* finger_position_input_{};
-  const systems::InputPort<double>* finger_velocity_input_{};
   const systems::InputPort<double>* torque_input_{};
   const systems::InputPort<double>* torque_external_input_{};
   const systems::InputPort<double>* current_input_{};

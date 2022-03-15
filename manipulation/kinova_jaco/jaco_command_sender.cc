@@ -14,13 +14,9 @@ JacoCommandSender::JacoCommandSender(int num_joints, int num_fingers)
   state_input_ = &DeclareInputPort(
       "state", kVectorValued, (num_joints_ + num_fingers_) * 2);
   position_input_ = &DeclareInputPort(
-      "position", kVectorValued, num_joints_);
+      "position", kVectorValued, num_joints_ + num_fingers_);
   velocity_input_ = &DeclareInputPort(
-      "velocity", kVectorValued, num_joints_);
-  finger_position_input_ = &DeclareInputPort(
-      "finger_position", kVectorValued, num_fingers_);
-  finger_velocity_input_ = &DeclareInputPort(
-      "finger_velocity", kVectorValued, num_fingers_);
+      "velocity", kVectorValued, num_joints_ + num_fingers_);
 
   this->DeclareAbstractOutputPort(
       "lcmt_jaco_command", &JacoCommandSender::CalcOutput);
@@ -41,8 +37,6 @@ void JacoCommandSender::CalcOutput(
   if (state_input_->HasValue(context)) {
     DRAKE_DEMAND(!position_input_->HasValue(context));
     DRAKE_DEMAND(!velocity_input_->HasValue(context));
-    DRAKE_DEMAND(!finger_position_input_->HasValue(context));
-    DRAKE_DEMAND(!finger_velocity_input_->HasValue(context));
 
     const auto& state = state_input_->Eval(context);
     for (int i = 0; i < num_joints_; ++i) {
@@ -65,13 +59,11 @@ void JacoCommandSender::CalcOutput(
     output->joint_velocity[i] = velocity(i);
   }
 
-  if (num_fingers_) {
-    const auto& finger_position = finger_position_input_->Eval(context);
-    const auto& finger_velocity = finger_velocity_input_->Eval(context);
-    for (int i = 0; i < num_fingers_; ++i) {
-      output->finger_position[i] = finger_position(i) * kFingerUrdfToSdk;
-      output->finger_velocity[i] = finger_velocity(i) * kFingerUrdfToSdk;
-    }
+  for (int i = 0; i < num_fingers_; ++i) {
+    output->finger_position[i] =
+        position(num_joints_ + i) * kFingerUrdfToSdk;
+    output->finger_velocity[i] =
+        velocity(num_joints_ + i) * kFingerUrdfToSdk;
   }
 }
 

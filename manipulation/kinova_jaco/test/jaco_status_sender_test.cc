@@ -60,9 +60,9 @@ TEST_F(JacoStatusSenderTest, DeprecatedAcceptanceTest) {
   constexpr int total_dof = N + N_F;
 
   const VectorXd state = VectorXd::LinSpaced(total_dof * 2, 0.0, 1.0);
-  const VectorXd torque = VectorXd::LinSpaced(N, 2.0, 3.0);
-  const VectorXd torque_external = VectorXd::LinSpaced(N, 4.0, 5.0);
-  const VectorXd current = VectorXd::LinSpaced(N, 6.0, 7.0);
+  const VectorXd torque = VectorXd::LinSpaced(total_dof, 2.0, 3.0);
+  const VectorXd torque_external = VectorXd::LinSpaced(total_dof, 4.0, 5.0);
+  const VectorXd current = VectorXd::LinSpaced(total_dof, 6.0, 7.0);
 
   // Fix only the required inputs ...
   Fix(dut_.get_state_input_port(), state);
@@ -105,29 +105,33 @@ TEST_F(JacoStatusSenderTest, DeprecatedAcceptanceTest) {
             ToStdVec(torque_external.head(kJacoDefaultArmNumJoints)));
   EXPECT_EQ(output().joint_current,
             ToStdVec(current.head(kJacoDefaultArmNumJoints)));
+  EXPECT_EQ(output().finger_torque,
+            ToStdVec(torque.tail(kJacoDefaultArmNumFingers)));
+  EXPECT_EQ(output().finger_torque_external,
+            ToStdVec(torque_external.tail(kJacoDefaultArmNumFingers)));
+  EXPECT_EQ(output().finger_current,
+            ToStdVec(current.tail(kJacoDefaultArmNumFingers)));
 }
 
 #pragma GCC diagnostic pop
 
 TEST_F(JacoStatusSenderTest, AcceptanceTestWithFingers) {
-  const VectorXd q0 = VectorXd::LinSpaced(N, 0.2, 0.3);
-  const VectorXd v0 = VectorXd::LinSpaced(N, 0.3, 0.4);
-  const VectorXd f_q0 = VectorXd::LinSpaced(N_F, 1.2, 0.3);
-  const VectorXd f_v0 = VectorXd::LinSpaced(N_F, 1.3, 0.4);
+  const VectorXd q0 = VectorXd::LinSpaced(N + N_F, 0.2, 0.3);
+  const VectorXd v0 = VectorXd::LinSpaced(N + N_F, 0.3, 0.4);
   const VectorXd zero = VectorXd::Zero(N);
   const VectorXd finger_zero = VectorXd::Zero(N_F);
 
   dut_.get_position_input_port().FixValue(&context_, q0);
   dut_.get_velocity_input_port().FixValue(&context_, v0);
-  dut_.get_finger_position_input_port().FixValue(&context_, f_q0);
-  dut_.get_finger_velocity_input_port().FixValue(&context_, f_v0);
 
   EXPECT_EQ(output().num_joints, kJacoDefaultArmNumJoints);
-  EXPECT_EQ(output().joint_position, ToStdVec(q0));
-  EXPECT_EQ(output().joint_velocity, ToStdVec(v0 / 2));
+  EXPECT_EQ(output().joint_position, ToStdVec(q0.head(N)));
+  EXPECT_EQ(output().joint_velocity, ToStdVec(v0.head(N) / 2));
   EXPECT_EQ(output().num_fingers, kJacoDefaultArmNumFingers);
-  EXPECT_EQ(output().finger_position, ToStdVec(f_q0 * kFingerUrdfToSdk));
-  EXPECT_EQ(output().finger_velocity, ToStdVec(f_v0 * kFingerUrdfToSdk));
+  EXPECT_EQ(output().finger_position,
+            ToStdVec(q0.tail(N_F) * kFingerUrdfToSdk));
+  EXPECT_EQ(output().finger_velocity,
+            ToStdVec(v0.tail(N_F) * kFingerUrdfToSdk));
   EXPECT_EQ(output().joint_torque, ToStdVec(zero));
   EXPECT_EQ(output().joint_torque_external, ToStdVec(zero));
   EXPECT_EQ(output().joint_current, ToStdVec(zero));
@@ -135,18 +139,20 @@ TEST_F(JacoStatusSenderTest, AcceptanceTestWithFingers) {
   EXPECT_EQ(output().finger_torque_external, ToStdVec(finger_zero));
   EXPECT_EQ(output().finger_current, ToStdVec(finger_zero));
 
-  // Fix the optional inputs and see that
-  const VectorXd t1 = VectorXd::LinSpaced(N, 0.4, 0.5);
-  const VectorXd t_ext1 = VectorXd::LinSpaced(N, 0.5, 0.6);
-  const VectorXd current1 = VectorXd::LinSpaced(N, 0.6, 0.7);
+  const VectorXd t1 = VectorXd::LinSpaced(N + N_F, 0.4, 0.5);
+  const VectorXd t_ext1 = VectorXd::LinSpaced(N + N_F, 0.5, 0.6);
+  const VectorXd current1 = VectorXd::LinSpaced(N + N_F, 0.6, 0.7);
 
   dut_.get_torque_input_port().FixValue(&context_, t1);
   dut_.get_torque_external_input_port().FixValue(&context_, t_ext1);
   dut_.get_current_input_port().FixValue(&context_, current1);
 
-  EXPECT_EQ(output().joint_torque, ToStdVec(t1));
-  EXPECT_EQ(output().joint_torque_external, ToStdVec(t_ext1));
-  EXPECT_EQ(output().joint_current, ToStdVec(current1));
+  EXPECT_EQ(output().joint_torque, ToStdVec(t1.head(N)));
+  EXPECT_EQ(output().joint_torque_external, ToStdVec(t_ext1.head(N)));
+  EXPECT_EQ(output().joint_current, ToStdVec(current1.head(N)));
+  EXPECT_EQ(output().finger_torque, ToStdVec(t1.tail(N_F)));
+  EXPECT_EQ(output().finger_torque_external, ToStdVec(t_ext1.tail(N_F)));
+  EXPECT_EQ(output().finger_current, ToStdVec(current1.tail(N_F)));
 }
 
 TEST_F(JacoStatusSenderNoFingersTest, AcceptanceNoFingers) {
