@@ -48,7 +48,7 @@ class JacoStatusSender : public systems::LeafSystem<double> {
   JacoStatusSender(int num_joints = kJacoDefaultArmNumJoints,
                    int num_fingers = kJacoDefaultArmNumFingers);
 
-  DRAKE_DEPRECATED("2022-02-01", "Use position/velocity input ports instead.")
+  DRAKE_DEPRECATED("2022-07-01", "Use position/velocity input ports instead.")
   const systems::InputPort<double>& get_state_input_port() const;
 
   /// @name Named accessors for this System's input and output ports.

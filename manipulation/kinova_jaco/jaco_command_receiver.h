@@ -23,11 +23,10 @@ namespace kinova_jaco {
 ///
 /// It has one required input port, "lcmt_jaco_command".
 ///
-/// This system has four total output ports.  There are two output ports for
-/// the commanded position and velocity of the arm+finger joints.  Finger
-/// velocities will be translated from the values used by the Kinova SDK to
-/// values appropriate for the finger joints in the Jaco description (see
-/// jaco_constants.h).
+/// This system has two output ports: one each for the commanded position and
+/// velocity of the arm+finger joints.  Finger velocities will be translated
+/// from the values used by the Kinova SDK to values appropriate for the
+/// finger joints in the Jaco description (see jaco_constants.h).
 ///
 /// @system
 /// name: JacoCommandReceiver
@@ -55,7 +54,7 @@ class JacoCommandReceiver : public systems::LeafSystem<double> {
   JacoCommandReceiver(int num_joints = kJacoDefaultArmNumJoints,
                       int num_fingers = kJacoDefaultArmNumFingers);
 
-  /// (Advanced.) Copies the current "position_measured" input (or zero if not
+  /// (Advanced) Copies the current "position_measured" input (or zero if not
   /// connected) into Context state, and changes the behavior of the "position"
   /// output to produce the latched state if no message has been received yet.
   /// The latching already happens automatically during the first discrete
@@ -94,7 +93,7 @@ class JacoCommandReceiver : public systems::LeafSystem<double> {
     return get_message_input_port();
   }
 
-  DRAKE_DEPRECATED("2022-02-01", "Use the other output ports instead.")
+  DRAKE_DEPRECATED("2022-07-01", "Use the other output ports instead.")
   const systems::OutputPort<double>& get_output_port() const {
     return *state_output_;
   }

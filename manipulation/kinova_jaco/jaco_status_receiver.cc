@@ -81,7 +81,7 @@ void JacoStatusReceiver::CalcStateOutput(
   output->get_mutable_value() = state;
 }
 
-template <std::vector<double> drake::lcmt_jaco_status::* field_ptr,
+template <std::vector<double> drake::lcmt_jaco_status::* arm_ptr,
           std::vector<double> drake::lcmt_jaco_status::* finger_ptr,
           int finger_scale>
 void JacoStatusReceiver::CalcJointOutput(
@@ -96,7 +96,7 @@ void JacoStatusReceiver::CalcJointOutput(
   }
 
   Eigen::VectorXd output_vec(num_joints_ + num_fingers_);
-  const auto& arm_field = status.*field_ptr;
+  const auto& arm_field = status.*arm_ptr;
   output_vec.head(num_joints_) = Eigen::Map<const Eigen::VectorXd>(
       arm_field.data(), arm_field.size());
   if (num_fingers_) {

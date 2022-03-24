@@ -45,9 +45,9 @@ class JacoStatusReceiver : public systems::LeafSystem<double> {
   JacoStatusReceiver(int num_joints = kJacoDefaultArmNumJoints,
                      int num_fingers = kJacoDefaultArmNumFingers);
 
-  DRAKE_DEPRECATED("2022-02-01", "Use position/velocity output ports instead.")
+  DRAKE_DEPRECATED("2022-07-01", "Use position/velocity output ports instead.")
   const systems::OutputPort<double>& get_state_output_port() const;
-  DRAKE_DEPRECATED("2022-02-01", "Use torque_measured output port instead.")
+  DRAKE_DEPRECATED("2022-07-01", "Use torque_measured output port instead.")
   const systems::OutputPort<double>& get_torque_output_port() const {
     return *torque_measured_output_;
   }
@@ -70,10 +70,6 @@ class JacoStatusReceiver : public systems::LeafSystem<double> {
     return *current_output_;
   }
   //@}
-
-  // TODO(sammy-tri) Add output ports for the finger torques and currents if
-  // those values ever become interesting.  IIRC the values reported by the
-  // hardware/SDK aren't particularly useful.
 
  private:
   void CalcStateOutput(const systems::Context<double>&,

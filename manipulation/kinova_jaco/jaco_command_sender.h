@@ -41,7 +41,7 @@ class JacoCommandSender : public systems::LeafSystem<double> {
   JacoCommandSender(int num_joints = kJacoDefaultArmNumJoints,
                     int num_fingers = kJacoDefaultArmNumFingers);
 
-  DRAKE_DEPRECATED("2022-02-01", "Use the other input ports instead.")
+  DRAKE_DEPRECATED("2022-07-01", "Use the other input ports instead.")
   const systems::InputPort<double>& get_input_port() const {
     return *state_input_;
   }
