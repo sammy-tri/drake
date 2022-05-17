@@ -37,10 +37,14 @@ namespace lcm {
  * then see drake::systems::lcm::LcmLogPlaybackSystem for a helper to advance
  * the log cursor in concert with the simulation.
  *
+ * If extra output ports are enabled, the message count is also available as
+ * an abstract output port with an integer as the value.
+ *
  * @system
  * name: LcmSubscriberSystem
  * output_ports:
  * - y0
+ * - message_count
  * @endsystem
  *
  * @ingroup message_passing
@@ -77,10 +81,16 @@ class LcmSubscriberSystem : public LeafSystem<double> {
    * and LCM message objects.
    *
    * @param lcm A non-null pointer to the LCM subsystem to subscribe on.
+   *
+   * @param enable_extra_outputs If true, enables the additional output ports.
+   * This defaults to false as enabling additional outputs is a breaking API
+   * change (get_output_port() and `DiagramBuilder::Cascade` no longer work,
+   * for example).
    */
   LcmSubscriberSystem(const std::string& channel,
                       std::unique_ptr<SerializerInterface> serializer,
-                      drake::lcm::DrakeLcmInterface* lcm);
+                      drake::lcm::DrakeLcmInterface* lcm,
+                      bool enable_extra_outputs = false);
 
   ~LcmSubscriberSystem() override;
 
@@ -88,6 +98,15 @@ class LcmSubscriberSystem : public LeafSystem<double> {
   static std::string make_name(const std::string& channel);
 
   const std::string& get_channel_name() const;
+
+  const OutputPort<double>& get_message_output_port() {
+    return *message_output_port_;
+  }
+
+  const OutputPort<double>& get_message_count_output_port() {
+    DRAKE_THROW_UNLESS(message_count_output_port_ != nullptr);
+    return *message_count_output_port_;
+  }
 
   /**
    * Blocks the caller until its internal message count exceeds
@@ -131,6 +150,9 @@ class LcmSubscriberSystem : public LeafSystem<double> {
 
   // The channel on which to receive LCM messages.
   const std::string channel_;
+
+  const OutputPort<double>* message_output_port_{};
+  const OutputPort<double>* message_count_output_port_{};
 
   // Converts LCM message bytes to Value<LcmMessage> objects.
   // Will be non-null iff our output port is abstract-valued.

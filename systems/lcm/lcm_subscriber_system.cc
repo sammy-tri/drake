@@ -24,7 +24,8 @@ constexpr int kMagic = 6832;  // An arbitrary value.
 LcmSubscriberSystem::LcmSubscriberSystem(
     const std::string& channel,
     std::unique_ptr<SerializerInterface> serializer,
-    drake::lcm::DrakeLcmInterface* lcm)
+    drake::lcm::DrakeLcmInterface* lcm,
+    bool enable_extra_outputs)
     : channel_(channel),
       serializer_(std::move(serializer)),
       magic_number_{kMagic} {
@@ -44,10 +45,16 @@ LcmSubscriberSystem::LcmSubscriberSystem(
   auto message_state_index =
       this->DeclareAbstractState(*serializer_->CreateDefaultValue());
   static_assert(kStateIndexMessageCount == 1, "");
-  this->DeclareAbstractState(Value<int>(0));
+  auto message_count_state_index = this->DeclareAbstractState(Value<int>(0));
 
   // Our sole output is the message state.
-  this->DeclareStateOutputPort(kUseDefaultName, message_state_index);
+  message_output_port_ =
+      &this->DeclareStateOutputPort(kUseDefaultName, message_state_index);
+  if (enable_extra_outputs) {
+    message_count_output_port_ =
+        &this->DeclareStateOutputPort(kUseDefaultName,
+                                      message_count_state_index);
+  }
 
   // Declare an unrestricted forced update handler that is invoked when a
   // "forced" trigger occurs. This gives the user flexibility to force update
@@ -206,4 +213,3 @@ int LcmSubscriberSystem::GetInternalMessageCount() const {
 }  // namespace lcm
 }  // namespace systems
 }  // namespace drake
-
