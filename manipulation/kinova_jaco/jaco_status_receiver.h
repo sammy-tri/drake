@@ -19,12 +19,16 @@ namespace kinova_jaco {
 ///
 /// This system has one abstract-valued input port of type lcmt_jaco_status.
 ///
-/// This system has many vector-valued output ports.  All output ports are of
-/// size num_joints + num_fingers.  The ports will output zeros until an input
-/// message is received.  Finger velocities will be translated from the values
-/// used by the Kinova SDK to values appropriate for the finger joints in the
-/// Jaco description (see jaco_constants.h.)
-//
+/// This system has many vector-valued output ports.  All output ports (except
+/// for message_time) are of size num_joints + num_fingers.  The ports will
+/// output zeros until an input message is received.  Finger velocities will
+/// be translated from the values used by the Kinova SDK to values appropriate
+/// for the finger joints in the Jaco description (see jaco_constants.h.)
+///
+/// The message_time output port is a vector valued port of size 1.  It
+/// outputs the timestamp (in seconds) from the most recently received status
+/// message, or -infinity if no message has been received.
+///
 /// @system
 /// name: JacoStatusReceiver
 /// input_ports:
@@ -35,6 +39,7 @@ namespace kinova_jaco {
 /// - torque
 /// - torque_external
 /// - current
+/// - message_time
 /// @endsystem
 ///
 /// @see `lcmt_jaco_status.lcm` for additional documentation.
@@ -69,6 +74,9 @@ class JacoStatusReceiver : public systems::LeafSystem<double> {
   const systems::OutputPort<double>& get_current_output_port() const {
     return *current_output_;
   }
+  const systems::OutputPort<double>& get_message_time_output_port() const {
+    return *message_time_output_;
+  }
   //@}
 
  private:
@@ -79,6 +87,8 @@ class JacoStatusReceiver : public systems::LeafSystem<double> {
             int>
   void CalcJointOutput(const systems::Context<double>&,
                        systems::BasicVector<double>*) const;
+  void CalcMessageTimeOutput(const systems::Context<double>&,
+                             systems::BasicVector<double>*) const;
 
   const int num_joints_;
   const int num_fingers_;
@@ -89,6 +99,7 @@ class JacoStatusReceiver : public systems::LeafSystem<double> {
   const systems::OutputPort<double>* torque_measured_output_{};
   const systems::OutputPort<double>* torque_external_output_{};
   const systems::OutputPort<double>* current_output_{};
+  const systems::OutputPort<double>* message_time_output_{};
 };
 
 }  // namespace kinova_jaco

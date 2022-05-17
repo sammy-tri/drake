@@ -1,5 +1,7 @@
 #include "drake/manipulation/kinova_jaco/jaco_status_receiver.h"
 
+#include <limits>
+
 #include "drake/common/drake_assert.h"
 
 namespace drake {
@@ -42,6 +44,9 @@ JacoStatusReceiver::JacoStatusReceiver(int num_joints, int num_fingers)
       &JacoStatusReceiver::CalcJointOutput<
       &lcmt_jaco_status::joint_current,
       &lcmt_jaco_status::finger_current, 0>);
+  message_time_output_ = &DeclareVectorOutputPort(
+      "message_time", 1,
+      &JacoStatusReceiver::CalcMessageTimeOutput);
 }
 
 const systems::OutputPort<double>&
@@ -106,6 +111,18 @@ void JacoStatusReceiver::CalcJointOutput(
         finger_field.data(), finger_field.size()) * scale_factor;
   }
   output->SetFromVector(output_vec);
+}
+
+void JacoStatusReceiver::CalcMessageTimeOutput(
+    const Context<double>& context, BasicVector<double>* output) const {
+  const auto& status = get_input_port().Eval<lcmt_jaco_status>(context);
+
+  if (status.num_joints == 0) {
+    output->get_mutable_value()(0) = -std::numeric_limits<double>::infinity();
+    return;
+  }
+
+  output->get_mutable_value()(0) = status.utime / 1e6;
 }
 
 }  // namespace kinova_jaco

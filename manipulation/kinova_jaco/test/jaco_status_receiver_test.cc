@@ -107,8 +107,16 @@ TEST_F(JacoStatusReceiverTest, ZeroOutputTest) {
   for (int i = 0; i < num_output_ports; ++i) {
     const systems::LeafSystem<double>& leaf = dut_;
     const auto& port = leaf.get_output_port(i);
-    EXPECT_TRUE(CompareMatrices(
-        port.Eval(context_), VectorXd::Zero(port.size())));
+    // Confirm that output is zero for uninitialized lcm input, except for the
+    // message time output, which should be -infinity.
+    if (i != dut_.get_message_time_output_port().get_index()) {
+      EXPECT_TRUE(CompareMatrices(
+          port.Eval(context_), VectorXd::Zero(port.size())));
+    } else {
+      EXPECT_EQ(port.size(), 1);
+      EXPECT_EQ(port.Eval(context_)(0),
+                -std::numeric_limits<double>::infinity());
+    }
   }
 }
 
@@ -124,7 +132,7 @@ TEST_F(JacoStatusReceiverTest, AcceptanceTest) {
   const VectorXd f_t_ext0 = VectorXd::LinSpaced(N_F, 1.5, 1.6);
   const VectorXd f_current0 = VectorXd::LinSpaced(N_F, 1.6, 1.7);
 
-  status_.utime = 1;
+  status_.utime = 123456;
   status_.num_joints = N;
   status_.num_fingers = N_F;
   Copy(q0, &status_.joint_position);
@@ -148,6 +156,9 @@ TEST_F(JacoStatusReceiverTest, AcceptanceTest) {
   velocity_expected.head(N) = v0;
   velocity_expected.tail(N_F) = f_v0 * kFingerSdkToUrdf;
 
+  VectorXd time_expected(1);
+  time_expected(0) = status_.utime / 1e6;
+
   EXPECT_TRUE(CompareMatrices(
       dut_.get_position_measured_output_port().Eval(context_),
       position_expected));
@@ -167,6 +178,8 @@ TEST_F(JacoStatusReceiverTest, AcceptanceTest) {
       dut_.get_current_output_port().Eval(context_).head(N), current0));
   EXPECT_TRUE(CompareMatrices(
       dut_.get_current_output_port().Eval(context_).tail(N_F), f_current0));
+  EXPECT_TRUE(CompareMatrices(
+      dut_.get_message_time_output_port().Eval(context_), time_expected));
 }
 
 TEST_F(JacoStatusReceiverNoFingersTest, AcceptanceTestNoFingers) {
