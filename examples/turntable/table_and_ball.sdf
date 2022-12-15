@@ -1,0 +1,162 @@
+<?xml version="1.0"?>
+<sdf version="1.7">
+  <model name="turntable">
+    <link name="table">
+      <inertial>
+        <pose>0 0 0.00915 0 0 0</pose>
+        <mass>0.375</mass>
+        <inertia>
+          <ixx>0.000860</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>0.000860</iyy>
+          <iyz>0</iyz>
+          <izz>0.00171</izz>
+        </inertia>
+      </inertial>
+      <visual name="visual_cylinder">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.101</radius>
+            <length>0.002</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <diffuse>0.0 0 1.0 1.0</diffuse>
+        </material>
+      </visual>
+      <visual name="visual_box">
+        <pose>0 0 0.001 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>0.202 0.001 0.001</size>
+          </box>
+        </geometry>
+        <material>
+          <diffuse>1 1 1.0 1.0</diffuse>
+        </material>
+      </visual>
+      <visual name="visual_cylinder_base">
+        <pose>0 0 -0.001 0 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.080</radius>
+            <length>0.002</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <diffuse>0.0 0 1.0 1.0</diffuse>
+        </material>
+      </visual>
+      <collision name="collision_cylinder">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.101</radius>
+            <length>0.002</length>
+          </cylinder>
+        </geometry>
+        <surface>
+          <friction>
+            <ode>
+              <mu>0.9</mu>
+              <mu2>0.9</mu2>
+            </ode>
+          </friction>
+        </surface>
+      </collision>
+      <collision name="collision_cylinder_base">
+        <pose>0 0 -0.001 0 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.080</radius>
+            <length>0.002</length>
+          </cylinder>
+        </geometry>
+      </collision>
+    </link>
+    <joint name="table_to_world" type="revolute">
+      <parent>world</parent>
+      <child>table</child>
+      <axis>
+        <xyz>0 0 1</xyz>
+        <limit>
+          <effort>100</effort>
+        </limit>
+        <dynamics>
+          <damping>0.1</damping>
+          <friction>0</friction>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+      </axis>
+    </joint>
+    <link name="ball">
+      <pose>0 0.04 0.002 0 0 0</pose>
+      <inertial>
+        <pose>0 0 0.01 0 0 0</pose>
+        <mass>0.028</mass>
+        <inertia>
+          <ixx>1.17e-5</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>1.9e-5</iyy>
+          <iyz>0</iyz>
+          <izz>1.9e-5</izz>
+        </inertia>
+      </inertial>
+      <visual name="sphere_visual">
+        <pose>0 0 0.01 0 0 0</pose>
+        <geometry>
+          <sphere>
+            <radius>0.02</radius>
+          </sphere>
+        </geometry>
+        <material>
+          <diffuse>0.53 0.01 0.53 1.0</diffuse>
+        </material>
+      </visual>
+      <visual name="cylinder_visual_1">
+        <pose>0 0 0.01 0 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.021</radius>
+            <length>0.002</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <diffuse>0.0 0.01 0.53 1.0</diffuse>
+        </material>
+      </visual>
+      <visual name="cylinder_visual_2">
+        <pose>0 0 0.01 0 1.57 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.021</radius>
+            <length>0.002</length>
+          </cylinder>
+        </geometry>
+        <material>
+          <diffuse>0.53 0.01 0 1.0</diffuse>
+        </material>
+      </visual>
+      <collision name="sphere_collision">
+        <pose>0 0 0.01 0 0 0</pose>
+        <geometry>
+          <sphere>
+            <radius>0.02</radius>
+          </sphere>
+        </geometry>
+        <surface>
+          <friction>
+            <ode>
+              <mu>0.9</mu>
+              <mu2>0.9</mu2>
+            </ode>
+          </friction>
+        </surface>
+      </collision>
+    </link>
+  </model>
+</sdf>

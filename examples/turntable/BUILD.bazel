@@ -1,0 +1,38 @@
+# -*- python -*-
+# This file contains rules for Bazel; see drake/doc/bazel.rst.
+
+load(
+    "@drake//tools/skylark:drake_cc.bzl",
+    "drake_cc_binary",
+)
+load("//tools/install:install_data.bzl", "install_data")
+load("//tools/lint:lint.bzl", "add_lint_tests")
+
+package(default_visibility = ["//visibility:public"])
+
+drake_cc_binary(
+    name = "table_and_ball_simulation",
+    srcs = ["table_and_ball_simulation.cc"],
+    add_test_rule = 1,
+    data = ["table_and_ball.sdf"],
+    test_rule_args = [
+        "--simulation_time=0.1",
+        "--target_realtime_rate=0.0",
+    ],
+    deps = [
+        "//common:add_text_logging_gflags",
+        "//common:find_resource",
+        "//multibody/parsing",
+        "//multibody/plant",
+        "//systems/analysis:simulator",
+        "//systems/framework:diagram",
+        "//systems/controllers:pid_controller",
+        "//systems/primitives:matrix_gain",
+        "//visualization:visualization_config_functions",
+        "@gflags",
+    ],
+)
+
+install_data()
+
+add_lint_tests()
