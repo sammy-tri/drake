@@ -5,6 +5,7 @@
 
 #include "drake/common/drake_assert.h"
 #include "drake/common/find_resource.h"
+#include "drake/common/text_logging.h"
 #include "drake/geometry/scene_graph.h"
 #include "drake/multibody/math/spatial_algebra.h"
 #include "drake/multibody/parsing/parser.h"
@@ -61,7 +62,7 @@ int do_main() {
 
   Vector1d kp(0);
   Vector1d ki(0);
-  Vector1d kd(1);
+  Vector1d kd(4);
 
   auto pid_controller = builder.AddSystem<systems::controllers::PidController>(
       kp, ki, kd);
@@ -102,7 +103,12 @@ int do_main() {
   simulator.set_publish_every_time_step(false);
   simulator.set_target_realtime_rate(FLAGS_target_realtime_rate);
   simulator.Initialize();
-  simulator.AdvanceTo(FLAGS_simulation_time);
+  //simulator.AdvanceTo(FLAGS_simulation_time);
+  while(true) {
+    const double time = simulator.get_context().get_time();
+    drake::log()->info("{}", plant.GetVelocities(plant_context).transpose());
+    simulator.AdvanceTo(time + 1.);
+  }
 
   return 0;
 }
