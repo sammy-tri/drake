@@ -461,3 +461,12 @@ class TestSensors(unittest.TestCase):
             file_name_format="/tmp/{port_name}-{time_usec}",
             publish_period=0.125,
             start_time=0.0)
+
+    def test_optitrack_receiver(self):
+        frames = dict()
+        frames[1] = "bar"
+        frames[3] = "foo"
+
+        dut = mut.OptitrackReceiver(frames)
+        self._check_output(dut.GetOutputPort("bar"))
+        self._check_output(dut.GetOutputPort("foo"))

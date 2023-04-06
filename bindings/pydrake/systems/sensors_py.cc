@@ -23,6 +23,7 @@
 #include "drake/systems/sensors/image_to_lcm_image_array_t.h"
 #include "drake/systems/sensors/image_writer.h"
 #include "drake/systems/sensors/lcm_image_array_to_images.h"
+#include "drake/systems/sensors/optitrack_receiver.h"
 #include "drake/systems/sensors/pixel_types.h"
 #include "drake/systems/sensors/rgbd_sensor.h"
 
@@ -396,6 +397,18 @@ PYBIND11_MODULE(sensors, m) {
             py::arg("file_name_format"), py::arg("publish_period"),
             py::arg("start_time"), py_rvp::reference_internal,
             cls_doc.DeclareImageInputPort.doc);
+  }
+
+  {
+    using Class = OptitrackReceiver;
+    constexpr auto& cls_doc = doc.OptitrackReceiver;
+    py::class_<Class, LeafSystem<double>> cls(
+        m, "OptitrackReceiver", cls_doc.doc);
+    cls  // BR
+        .def(py::init<const std::map<int, std::string>&,
+                 const RigidTransformd&>(),
+            py::arg("frame_map"), py::arg("X_WO") = RigidTransformd(),
+            cls_doc.ctor.doc);
   }
 }
 
